@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.nestappprep.orr53g"
+      "bundleIdentifier": "app.emergent.nestappprepb1f16faa"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.nestappprep.orr53g"
+      "package": "app.emergent.nestappprepb1f16faa"
     },
     "web": {
       "bundler": "metro",
