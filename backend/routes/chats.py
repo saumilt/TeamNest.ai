@@ -1328,6 +1328,7 @@ async def send_message(
             ))
 
     parsed = parse_ai_command(payload.body)
+    msg_attachments = (payload.metadata or {}).get("attachments") or []
     if parsed.get("is_ai"):
         models = parsed["models"]
         # Default `@ai` always uses GPT-4o mini for snappy 2-3s replies and
@@ -1337,10 +1338,28 @@ async def send_message(
         # When `compare=True` (user typed `@ai compare …` / `@ai show
         # comparison …`), pass that intent downstream so the answer renders
         # ALL model responses inline instead of just the synthesis.
+        # `msg_attachments` lets @ai read attached documents/images.
         asyncio.create_task(
             handle_ai_command(
                 chat_id, current["id"], parsed["question"], models,
                 compare=parsed.get("compare", False),
+                attachments=msg_attachments,
+            )
+        )
+    elif (
+        chat.get("type") == "personal_ai"
+        and payload.message_type == "text"
+        and msg_attachments
+    ):
+        # In the personal "My AI Assistant" chat, attaching file(s) with any
+        # message auto-triggers research on those files — no explicit @ai needed.
+        auto_q = (payload.body or "").strip() or (
+            "Summarize and extract the key data from the attached file(s)."
+        )
+        asyncio.create_task(
+            handle_ai_command(
+                chat_id, current["id"], auto_q, ["gpt-4o-mini"],
+                attachments=msg_attachments,
             )
         )
 

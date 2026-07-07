@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 89 (file-attachments-for-AI). Backend: 7/7 pytest passing — /api/uploads now accepts docx/xlsx/pptx/md, rejects exe with 400, enforces 30MB with 413, and personal_ai chat auto-triggers AI on file attachment (CSV → AI answer contains the exact marker). Web UI: login succeeds and the auto-triggered AI answer is visible in the chat sidebar preview (confirms end-to-end shared backend), BUT a persistent 'You're almost out of credits' modal blocks all in-chat interaction once credits hit ≤300 — the modal re-mounts on every route change and prevents clicking chats/attaching files via UI. Mobile web preview: login works, no credit modal blocker, opening 'My AI Assistant' renders the CSV attachment chip inside the message bubble AND the AI answer (marker 773311951) — auto-trigger + attachment rendering verified. Composer testIDs (attach-doc-btn / attach-image-btn / chat-composer-input / chat-send-btn) present. NOTE: minor bug — /api/uploads 413 error message says 'File too large (max 20MB)' while MAX_UPLOAD_SIZE is 30MB.",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/uploads", "issue": "413 error message reads 'File too large (max 20MB)' but MAX_UPLOAD_SIZE = 30MB (routes/uploads.py:30). Copy/paste error — update to 30MB."}
+    ]
+  },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [
+        {"component": "CreditGuardModal (or wallet low-balance dialog)", "issue": "'You're almost out of credits' Radix dialog opens on /chats route and re-mounts after each attempted dismissal (X icon click, Escape, DOM removal). Because it has a modal backdrop with pointer-events, users cannot click into any chat, cannot attach files, cannot type/send. Reproduced after fresh amit@demo.team login with balance = 300/300 credits. Blocks the whole file-attachment-for-AI feature via UI.", "selector": "[role='dialog']", "priority": "HIGH"}
+      ],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [
+    {"flow": "Chats page after login (300/300 credits)", "platform": "web", "issue": "Web shows a persistent low-credit modal that blocks chat interactions; mobile does not. Parity is broken for the entire attach-to-AI feature via web UI.", "expected": "Both surfaces let the user open a chat, attach a file, send @ai …", "actual": "Web modal blocks all chat interaction; mobile lets the user proceed."}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration89_attach_ai_research.py",
+    "/app/test_reports/pytest/iteration89.xml"
+  ],
+  "action_items": [
+    "Fix credit-low modal on web so it can be dismissed (persist a dismissed_at in localStorage, or don't re-open on every route change) — this blocks users at 300 credits from using the app at all.",
+    "Fix /api/uploads 413 message string from 'max 20MB' to 'max 30MB' (routes/uploads.py:30).",
+    "Consider: auto top-up the demo workspace to a healthier balance, OR let the modal be closable so demo users can actually test.",
+    "OPTIONAL: expose a testID/data-testid on the credit-modal close (X) button so future tests can reliably dismiss it."
+  ],
+  "critical_code_review_comments": [
+    "uploads.py MAX_UPLOAD_SIZE (30MB) doesn't match the human-readable 'max 20MB' error string. Users will be confused.",
+    "file_extract.py caps at MAX_FILES=30 files but /api/uploads has no per-message cap enforced server-side when messages are POSTed — the 30-file guard only applies during extraction. Consider validating message.metadata.attachments length at message-create time so a rogue client can't reference 200 files.",
+    "file_extract._extract_pdf caps at 30 pages, xlsx at 10 sheets/500 rows/sheet, pptx at 60 slides — these limits are reasonable but not surfaced anywhere in the UI; consider adding a soft warning when truncation happens (the '… (truncated)' hint IS added inline, so acceptable)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration89_attach_ai_research.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "web: BLOCKED by credit modal — cannot exercise attach-@ai from UI; mobile: composer + attachment chip + AI answer rendering verified via prior pytest-created message"},
+  "test_credentials": "amit@demo.team / Demo@2026 (per /app/memory/test_credentials.md).",
+  "seed_data_creation": "Created transient TEST_*.docx/xlsx/pptx/md/txt/csv uploads via /api/uploads and one CSV attached to personal_ai chat. The AI answer message referencing marker 773311951 is now visible in the demo workspace's 'My AI Assistant' chat.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend path is 100% verified via /app/backend/tests/test_iteration89_attach_ai_research.py — do not re-run against a fresh workspace unless you top up credits first (each AI call uses Emergent LLM credits). For web UI retest of @ai + attachment, main agent MUST first fix the persistent credit modal or bump the demo balance; otherwise Playwright cannot click into any chat. Mobile web preview is unblocked and shows the CSV attachment chip + AI answer already — just re-open https://nest-app-prep.expo.preview.emergentagent.com → login → 'My AI Assistant' to see it.",
+  "rca of the issue": "Web credit modal: opens on chats route because workspace_credits <= 300 (a threshold). It uses a Radix Dialog with modal backdrop and no persist-dismiss, so React re-opens it after every route change / re-render. Removing the DOM via JS is not enough — React re-mounts it. Root cause is the trigger condition + missing dismiss persistence. Fix: gate the auto-open on a sessionStorage flag set when the user clicks X; also re-check the threshold (300 is a common demo starting balance and shouldn't cause an auto-block modal)."
+}

@@ -36,7 +36,14 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TeamNest needs access to your photos so you can attach images for the AI to analyze."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

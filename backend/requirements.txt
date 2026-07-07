@@ -30,6 +30,7 @@ ecdsa==0.19.2
 email-validator==2.3.0
 emergentintegrations==0.1.0
 enum-compat==0.0.3
+et_xmlfile==2.0.0
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.29.0
@@ -92,6 +93,7 @@ numpy==2.4.4
 oauthlib==3.3.1
 ofxparse==0.21
 openai==1.99.9
+openpyxl==3.1.5
 packaging==26.2
 pandas==3.0.2
 passlib==1.7.4
@@ -127,6 +129,7 @@ python-docx==1.2.0
 python-dotenv==1.2.2
 python-jose==3.5.0
 python-multipart==0.0.28
+python-pptx==1.0.2
 python-quickbooks==0.9.12
 pytokens==0.4.1
 PyYAML==6.0.3
@@ -164,5 +167,6 @@ watchfiles==1.1.1
 webauthn==2.7.1
 webencodings==0.5.1
 websockets==16.0
+xlsxwriter==3.2.9
 yarl==1.23.0
 zipp==3.23.1

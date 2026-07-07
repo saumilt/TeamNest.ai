@@ -9,8 +9,13 @@ from storage import build_path, get_object, guess_mime, put_object
 
 router = APIRouter()
 
-ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "pdf", "csv", "txt", "json", "mp4", "mp3"}
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+ALLOWED_EXT = {
+    "jpg", "jpeg", "png", "gif", "webp",       # images
+    "pdf", "csv", "txt", "json", "md",          # docs / data
+    "docx", "xlsx", "xls", "pptx",              # office
+    "mp4", "mp3",                                # media
+}
+MAX_UPLOAD_SIZE = 30 * 1024 * 1024  # 30MB
 
 
 @router.post("/uploads")

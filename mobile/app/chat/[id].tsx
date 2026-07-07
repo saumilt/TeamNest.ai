@@ -1,10 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -13,9 +17,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiGet, apiPost, getBase } from "@/src/api";
+import { apiGet, apiPost, apiUpload, getBase } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Markdown } from "@/src/markdown";
+import { MessageAttachments } from "@/src/components/MessageAttachments";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -43,8 +48,11 @@ export default function ChatScreen() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const isPersonalAI = chat?.type === "personal_ai";
 
   const upsertMessage = useCallback((incoming: any) => {
     setMessages((prev) => {
@@ -124,19 +132,87 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
+  const uploadAsset = async (asset: { uri: string; name: string; type: string }) => {
+    setUploading(true);
+    try {
+      const data = await apiUpload("/api/uploads", asset, { chat_id: chatId });
+      setAttachments((prev) => [...prev, data]);
+    } catch (e: any) {
+      Alert.alert("Upload failed", e.message || "Could not upload that file.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const pickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled) return;
+      for (const a of res.assets.slice(0, 30)) {
+        await uploadAsset({
+          uri: a.uri,
+          name: a.name || "file",
+          type: a.mimeType || "application/octet-stream",
+        });
+      }
+    } catch (e: any) {
+      Alert.alert("Could not pick file", e.message || "");
+    }
+  };
+
+  const pickImage = async () => {
+    // Contextual permission flow for the photo library.
+    let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (perm.status !== "granted" && perm.canAskAgain) {
+      perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+    if (perm.status !== "granted") {
+      Alert.alert(
+        "Photo access needed",
+        "Allow photo access to attach images for the AI to analyze.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
+    });
+    if (res.canceled) return;
+    for (const a of res.assets) {
+      const name = a.fileName || a.uri.split("/").pop() || "photo.jpg";
+      await uploadAsset({ uri: a.uri, name, type: a.mimeType || "image/jpeg" });
+    }
+  };
+
   const send = async () => {
     const body = text.trim();
-    if (!body || sending) return;
+    if ((!body && attachments.length === 0) || sending) return;
+    const outAttachments = attachments;
+    const outBody =
+      body || (outAttachments.length ? `Sent ${outAttachments.length} file(s)` : "");
     setText("");
+    setAttachments([]);
     setSending(true);
     try {
       const msg = await apiPost(`/api/chats/${chatId}/messages`, {
-        body,
+        body: outBody,
         message_type: "text",
+        metadata: outAttachments.length ? { attachments: outAttachments } : {},
       });
       upsertMessage(msg);
     } catch (e: any) {
       setText(body);
+      setAttachments(outAttachments);
     } finally {
       setSending(false);
     }
@@ -176,6 +252,7 @@ export default function ChatScreen() {
               {agent ? agentLabel(item) : sender?.name || "Member"}
             </Text>
           )}
+          <MessageAttachments attachments={item.metadata?.attachments} />
           <Markdown
             content={item.body || ""}
             color={mine ? "#faf7ef" : colors.textPrimary}
@@ -234,27 +311,81 @@ export default function ChatScreen() {
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           />
           <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
-            <TextInput
-              testID="chat-composer-input"
-              value={text}
-              onChangeText={setText}
-              placeholder="Message · try @ai or @devmanager"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-              multiline
-            />
-            <TouchableOpacity
-              testID="chat-send-btn"
-              onPress={send}
-              disabled={!text.trim() || sending}
-              style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-            >
-              {sending ? (
-                <ActivityIndicator color="#09090b" size="small" />
-              ) : (
-                <Ionicons name="arrow-up" size={22} color="#09090b" />
-              )}
-            </TouchableOpacity>
+            {attachments.length > 0 && (
+              <View style={styles.chipsRow} testID="composer-attachments">
+                {attachments.map((a, i) => (
+                  <View key={a.id || i} style={styles.attChip}>
+                    <Ionicons
+                      name={a.is_image ? "image" : "document-text"}
+                      size={14}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.attChipText} numberOfLines={1}>
+                      {a.filename}
+                    </Text>
+                    <TouchableOpacity
+                      testID={`remove-attachment-${a.id}`}
+                      onPress={() =>
+                        setAttachments((prev) => prev.filter((x) => x.id !== a.id))
+                      }
+                    >
+                      <Ionicons name="close" size={15} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+            <View style={styles.composerRow}>
+              <TouchableOpacity
+                testID="attach-doc-btn"
+                onPress={pickDocument}
+                disabled={uploading}
+                style={styles.attachBtn}
+              >
+                {uploading ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <Ionicons name="attach" size={23} color={colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-image-btn"
+                onPress={pickImage}
+                disabled={uploading}
+                style={styles.attachBtn}
+              >
+                <Ionicons name="image-outline" size={21} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <TextInput
+                testID="chat-composer-input"
+                value={text}
+                onChangeText={setText}
+                placeholder={
+                  isPersonalAI
+                    ? "Attach a file or ask anything…"
+                    : "Message · try @ai or @devmanager"
+                }
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                multiline
+              />
+              <TouchableOpacity
+                testID="chat-send-btn"
+                onPress={send}
+                disabled={(!text.trim() && attachments.length === 0) || sending}
+                style={[
+                  styles.sendBtn,
+                  ((!text.trim() && attachments.length === 0) || sending) &&
+                    styles.sendBtnDisabled,
+                ]}
+              >
+                {sending ? (
+                  <ActivityIndicator color="#09090b" size="small" />
+                ) : (
+                  <Ionicons name="arrow-up" size={22} color="#09090b" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       )}
@@ -311,14 +442,42 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.bgElevated,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.xs,
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  attChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: 6,
+    maxWidth: 200,
+  },
+  attChipText: { color: colors.textPrimary, fontSize: font.tiny, flexShrink: 1 },
+  attachBtn: {
+    width: 40,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   input: {
     flex: 1,

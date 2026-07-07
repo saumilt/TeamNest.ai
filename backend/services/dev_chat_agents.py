@@ -127,34 +127,23 @@ def parse_role_mentions(body: str) -> List[str]:
 async def _load_attachment_context(
     trigger_msg: Dict[str, Any], workspace_id: str,
 ) -> tuple[List[bytes], List[tuple]]:
-    """Pull attached images (bytes for vision) + small text files (inlined
-    content) from the trigger message's uploads. Best-effort — a broken
-    attachment never blocks the agent reply."""
+    """Pull attached images (bytes for vision) + extracted document text
+    (pdf/docx/xlsx/csv/txt/json/md/pptx, inlined) from the trigger message's
+    uploads. Best-effort — a broken attachment never blocks the agent reply."""
     atts = (trigger_msg.get("metadata") or {}).get("attachments") or []
     images: List[bytes] = []
     texts: List[tuple] = []
     if not atts:
         return images, texts
-    from storage import get_object
-    for a in atts[:4]:
-        rec = await db.files.find_one(
-            {"id": a.get("id"), "workspace_id": workspace_id, "is_deleted": False},
-            {"_id": 0, "storage_path": 1, "content_type": 1, "original_filename": 1},
-        )
-        if not rec:
-            continue
-        try:
-            data, _ = get_object(rec["storage_path"])
-        except Exception:
-            continue
-        ct = rec.get("content_type") or ""
-        if ct.startswith("image/"):
-            images.append(data)
-        elif ct.startswith("text/") or ct in ("application/json", "text/csv"):
-            texts.append((
-                rec.get("original_filename") or "file",
-                data[:4000].decode("utf-8", "ignore"),
-            ))
+    from services.file_extract import extract_attachments
+    try:
+        extracted = await extract_attachments(atts, workspace_id)
+    except Exception as e:
+        logger.warning("[dev-chat] attachment extraction failed: %s", e)
+        return images, texts
+    images = extracted.get("images") or []
+    if extracted.get("text"):
+        texts.append(("attachments", extracted["text"]))
     return images, texts
 
 

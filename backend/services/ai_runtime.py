@@ -175,7 +175,7 @@ async def deduct_credits_for_responses(
 
 async def handle_ai_command(
     chat_id: str, user_id: str, question: str, models: List[str],
-    compare: bool = False,
+    compare: bool = False, attachments: Optional[List[dict]] = None,
 ):
     """Background entry-point for inline `@AI ...` commands in chat messages.
 
@@ -183,6 +183,12 @@ async def handle_ai_command(
     (`@ai compare …` / `@ai show comparison …`). When that's set we render
     every model's answer inline in the chat bubble — no extra click needed
     to see the comparison.
+
+    `attachments` is the message's `metadata.attachments` list. When present we
+    extract text from documents (pdf/docx/xlsx/csv/txt/json/md/pptx) and pass
+    images to vision-capable models, so the AI can *research the data in the
+    attached files*. The displayed question stays clean; only the model prompt
+    is augmented with the extracted content.
     """
     user = await db.users.find_one({"id": user_id}, PROJ)
     favorite = (user or {}).get("preferences", {}).get("favorite_ai_model")
@@ -270,7 +276,29 @@ async def handle_ai_command(
     await db.messages.insert_one(placeholder.copy())
     await _broadcast_message(chat_id, placeholder)
 
-    responses = await ask_models_parallel(question, allowed_models, thread["id"])
+    # ── Attachment research: extract document text + collect images ──────
+    # Documents are inlined into the model prompt; images go to vision-capable
+    # models. The stored thread/placeholder question stays clean for display.
+    prompt_question = question
+    image_bytes: Optional[list] = None
+    if attachments:
+        try:
+            from services.file_extract import extract_attachments
+            extracted = await extract_attachments(attachments, workspace_id)
+            if extracted.get("text"):
+                prompt_question = (
+                    f"{question}\n\n"
+                    "[Attached file contents — use these to answer the question]\n"
+                    f"{extracted['text']}"
+                )
+            if extracted.get("images"):
+                image_bytes = extracted["images"]
+        except Exception as e:
+            logger.warning("[ai] attachment extraction failed: %s", e)
+
+    responses = await ask_models_parallel(
+        prompt_question, allowed_models, thread["id"], image_bytes_list=image_bytes,
+    )
     for r in responses:
         r["id"] = new_id()
         r["research_thread_id"] = thread["id"]
