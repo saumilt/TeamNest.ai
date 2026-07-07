@@ -26,9 +26,9 @@ function isAgent(senderId: string) {
 function agentLabel(msg: any) {
   const role = msg?.metadata?.role_label;
   if (role) return role;
-  if (msg.sender_id === "ai-system") return "System";
   if (msg.message_type === "ai_answer") return "AI Answer";
   if (msg.message_type === "ai_question") return "Question";
+  if (msg.sender_id === "ai-system") return "System";
   return "AI";
 }
 
@@ -227,7 +227,7 @@ export default function ChatScreen() {
         >
           <FlatList
             ref={listRef}
-            data={messages}
+            data={messages.filter((m) => m.message_type !== "ai_question")}
             keyExtractor={(m) => m.id}
             renderItem={renderItem}
             contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.lg }}

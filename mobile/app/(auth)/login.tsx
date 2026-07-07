@@ -151,8 +151,7 @@ export default function Login() {
       </ScrollView>
       <LinearGradient
         colors={["transparent", colors.bg]}
-        style={styles.bottomFade}
-        pointerEvents="none"
+        style={[styles.bottomFade, { pointerEvents: "none" }]}
       />
     </KeyboardAvoidingView>
   );

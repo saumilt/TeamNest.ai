@@ -2635,3 +2635,34 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 
 ## Iteration 90 — Seller Earnings Analytics (June 2026)
 ### /market/mine extended: 30-day revenue trend (by-day cents from mkt_earnings) + per-template views/installs/sales/revenue_cents/conversion_pct. View tracking: $inc views on GET /market/templates/{id}. MyTemplates.jsx: "Earnings analytics" card (earnings-analytics) — 30 CSS mini-bar trend (earnings-trend, hover tooltips, period total) + performance table (template-performance-table: Views/Installs/Conv./Sales/Revenue). Verified via curl + screenshot (trend spike $40.60, Helpdesk Pro row).
+
+## Iteration 88 — 2026-07-07 — Mobile app (Expo) MVP + Template demo blank-screen fix
+
+### Bug fix (web/shared): Template Marketplace demos rendered blank after login
+- Root cause: generated app.js reveals `#app-view` by only setting `style.display`
+  and never clears the element's `hidden` attribute. The injected
+  `[hidden]{display:none !important}` render guard (services/dev_preview_shim.py)
+  then kept the view hidden → blank app after login, and blank thumbnails (captured
+  post-login).
+- Fix: `_inject_login_shim` now injects a MutationObserver that drops the stale
+  `hidden` attribute whenever a view is revealed via inline display. Applies to ALL
+  previews + marketplace demos.
+- Regenerated all 14 marketplace thumbnails via `scripts/capture_market_shots.py`.
+- Verified: 14/14 demos render app after login, `/templates` cards show real
+  screenshots, regular dev-project preview still works (no regression).
+- Regression test: `backend/tests/test_iteration88_preview_shim_reconcile.py` (3 pass).
+
+### Feature: NEW mobile surface (Expo/React Native) under /app/mobile
+- Talks to the EXISTING shared FastAPI backend (no backend changes). JWT via Bearer.
+- Screens (expo-router): (auth)/login (demo + email/password), (auth)/redeem
+  (invite-code redeem signup), (tabs) Chats / Research / Tasks / You, chat/[id].
+- Chats: WhatsApp-style list. Chat conversation: real-time WebSocket
+  (/api/ws/{chat_id}?token=), inline @ai / @devmanager, lightweight markdown renderer.
+- AI Research tab: multi-model compare (chatgpt/claude/gemini/deepseek/perplexity/grok)
+  -> synthesized answer + per-model cards. Tasks: list/add/complete. You: profile + logout.
+- Token stored in expo-secure-store (localStorage fallback on web preview).
+- Design mirrors web dark/amber theme (src/theme.ts).
+- Deps added: expo-secure-store, expo-linear-gradient.
+- Tested by testing_agent (iteration_86.json): 10/10 mobile flows PASS. Fixed 3 LOW
+  cosmetic issues (AI answer label order, hide ai_question echo, LinearGradient
+  pointerEvents deprecation).
