@@ -1,0 +1,525 @@
+# TeamNest.ai — Product Requirements
+
+## Original Problem Statement
+AI-native team communication & research platform — chat, multi-AI research, project
+folders, tasks, AI message polish, integrations, public snapshots, and (now)
+invite-your-friends flows.
+
+## Architecture
+- **Backend**: FastAPI + MongoDB + WebSocket. JWT auth (bcrypt). emergentintegrations
+  for OpenAI/Anthropic/Gemini; direct keys for DeepSeek/Perplexity/Grok.
+- **Frontend**: React + Tailwind + Shadcn, dark "Swiss Brutalism" theme. Yellow `TN`
+  brand mark.
+- **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
+
+## Implemented Features
+### Iteration 87 (Jul 2026) — Invite-only viral launch system + access-gated billing
+- **Launch Access Mode** (launch_settings, default invite_only; waitlist/approved_only/open) + 7 admin toggles. `GET /api/launch/config` drives all UI gating (hooks/useLaunchConfig.js).
+- **Signup gated**: /auth/signup → 403 invite_required unless open mode. New accounts only via `POST /api/launch/code/redeem` (creates user+workspace, grants access level, badges, N personal invites, sets session).
+- **Waitlist** (/waitlist): full form + interest areas + "What would you build?", rank cards (counter starts #1247), referral links (?ref=CODE, +50 spots/referral), milestones 1/3/5/10/25/50 (5 refs auto-grants demo code), dedupe email+ip_hash. Public leaderboard (masked names).
+- **Invite codes**: 8-char alnum, case-insensitive, single/multi-use, expiry, allowed domains, 9 access levels (waitlist_only→full_beta) with plan eligibility + credit limits + badges. States: valid/invalid/expired/used/inactive with friendly screens (/invite).
+- **Personal invites** (/invites): 4+ per approved user, share via copy/WhatsApp/X/LinkedIn/email/SMS (prewritten viral copy in lib/launchShare.js), team multiplier unlocks at 2/4/6/10 accepted joins.
+- **Code drops** (/drop/CODE, seeded DEVOS100 83/100 left, 24h countdown) + admin drop creator.
+- **Admin Launch Control** (/launch-admin, owner/admin): waitlist table (search/filter/approve/reject/CSV), code generator (campaigns, prefix, uses, expiry), campaign pause, drops, grant extra invites (1/4/10/custom + in-app notification), leaderboard, analytics (12 metrics incl. checkout_blocked), Mailgun email previews, settings.
+- **Billing gating**: checkout/credits/hosting endpoints → 403 launch_gated for launch_access statuses outside {invited, approved, demo, founder_beta, full_beta, paid_member}; pre-launch accounts (no launch_access) grandfathered. Pricing page + /billing show gate screens; hero/nav/login show Request Invite / Enter Invite Code (demo button hidden while invite-only).
+- **Emails**: real Mailgun sends (teamnest.ai domain, existing mailgun_service) + every email stored in invite_notifications for admin preview. 9 template kinds.
+- CRITICAL FIX: lib/api.js PUBLIC_PATHS now includes /waitlist, /invite, /drop/ (401 interceptor was redirecting direct loads to /).
+- Seeded: 12 collections, mock waitlist (Sam T. 42 refs etc.), codes DEVOS100/FOUNDR25/BUILD247.
+- Tested: 20/20 backend pytest (tests/test_iteration85_launch_invite.py) + full Playwright pass (iteration_85.json); redeem→/dashboard redirect + /login demo-hide fixes self-verified.
+- Also this session: removed all "1 credit = $0.0010 / 40% margin" pricing-math copy (Pricing.jsx, DevOsInfo.jsx, billing_settings note).
+
+### Iteration 86 (Jul 2026) — Next-ideas panel: minimized default + research mode for unhired chats
+- **NextIdeasPanel minimized by default**: shows only the small "Suggestions" chip until the user expands (choice persisted per chat via localStorage `chat:next-ideas:hidden:{id}`, "0" = expanded). No API fetching while minimized; re-syncs on chat switch.
+- **Hire-aware suggestions**: `GET /chats/{id}/next-ideas` now branches on `chat.dev_team_hired`. Unhired → research-copilot mode: all prompts start with `@ai` (summaries, comparisons, risk analysis, recommendations) grounded in chat history; project context omitted; fallback list is research-only. Hired → existing build-oriented behavior (@devmgr prompts + project context).
+- Verified via curl (unhired bakery chat → 4 @ai research chips; hired chat → @devmanager build chips) + Playwright (minimized default, expand shows @ai chips, no runtime errors).
+
+### Iteration 85 (Jun 2026) — First-task-free teaser + Demo-mode anti-abuse guardrails
+- **Plan teaser (conversion hook)**: FIRST @devmanager mention in an unhired chat gets a free LLM plan preview (gpt-5.4-mini, markdown: vision/screens/data model/phases, explicitly NO code, deterministic fallback) followed by the $199 hire card. One-time per chat (`chat.devmgr_teaser_used`); later mentions get only the hire card. `_post_plan_teaser` in dev_chat_agents.py; message `metadata.plan_teaser`.
+- **Demo guardrails** (public demo workspace = amit@demo.team's, resolved via `deps.demo_workspace_id` 5-min cache):
+  - Rate limit: `DEMO_BUILD_LIMIT_PER_HOUR` env (default 10) rolling-hour cap on `dev_build_activities`; `/talk` → 429 `demo_limit_reached`; chat mentions → friendly "Demo limit reached" message (`metadata.demo_limit`, 2-min throttle). `GET /api/demo/quota` → {is_demo, limit, used, remaining}.
+  - Demo meter chip in DevStudio toolbar (`ds-demo-meter`, "⚡ Demo · X/10 builds left", refreshes after builds, rose when 0). 429 toast in studio.
+  - Watermark: "TeamNest demo preview" badge injected serve-time into all demo-workspace preview + /p/ production HTML (`_inject_demo_watermark` in dev_preview_shim.py).
+  - Exports blocked (403 friendly copy via `deps.block_if_demo`): GitHub export, Vercel/Netlify deploys, file PUT edits + snapshot reverts (read-only artifacts).
+  - Ephemeral projects: already covered by 1h inactivity demo_reset (dev_projects in wipe list).
+- Fix: hire pill/button hidden on already-hired projects (DevStudio toolbar + MockupNotice preview banner).
+- Self-tested via curl + Playwright screenshot: teaser+card posted once, quota 429, demo_limit chat msg, watermark in HTML, 403s on export/PUT, meter chip renders.
+
+### Iteration 84 (Jun 2026) — @devmanager monetization gating + Builders expansion
+- **Price $599 → $199, configurable**: `HIRE_DEVMANAGER_PRICE_USD` env (backend/.env, default 199) drives checkout amount; `GET /api/hire-devmanager/config` exposes it; all frontend buttons (banner/pill/toolbar) fetch price dynamically — copy is now "Hire @devmanager · $199".
+- **Chat gating**: `@devmanager`/`@devmgr` mentions (and implicit devmgr routing) in an unhired chat run NO LLM work — `_post_hire_prompt` posts an in-chat checkout card (`metadata.hire_prompt`, HirePromptCard.jsx, throttled 1/2min). Demo account (amit@demo.team) bypass provisions free on checkout click.
+- **Build Room gating**: `GET /dev-projects/{id}` returns `dev_team_hired` (via `deps.project_dev_team_hired`: related chat hired, or any workspace chat for chatless projects). `POST /talk` + builders PUT/generate/suggest → 402 `hire_required` when unhired. UI: lock icon on Builders tab, hire banner in studio chat pane, toolbar hire button hidden once hired.
+- **Builders tab additions**: "App Builder" (guided 4-step plain-English Q&A wizard → composes @devmanager instruction; locked until hired) + "Templates" (17-template catalog, browsable FREE; "Use this template" locked until hired). Locked builders show LockedBuildersPanel with hire CTA. Default rail: templates when locked, appbuilder when hired.
+- **Slash command popover**: typing `/` in the chat composer opens SlashCommandPopover (7 Dev OS commands: new/template/scan/task/bug/plan/help) with keyboard nav — mirrors the `@` mention popover.
+- WelcomeTour + MentionPopover copy updated to single @devmanager entity at $199.
+- Tests: `/app/backend/tests/test_iteration84_hire_gates.py` 13/13 + full Playwright pass (see /app/test_reports/iteration_84.json). Known kept-unhired fixtures: project 7d700236… / chat a7024917… ; hired fixture: project 86f09509… / chat db183e41….
+
+### Core (Phase 1)
+- Auth: signup / login / demo-login + per-user `preferences.favorite_ai_model`.
+- Workspace + invite (owner / admin / member / viewer).
+- Chats: group / direct / personal_ai with members, pinned messages, integrations.
+- Messages: send / edit / delete / react / pin via REST + WS broadcast.
+- AI Research (6 models — ChatGPT, Claude, Gemini, DeepSeek, Perplexity, Grok)
+  - Single-tool fast path (no synthesis) when 1 model selected
+  - Multi-tool: auto-best (favors user's favorite) → auto-synthesize
+- Side-by-side comparison panel with voting + re-synthesize.
+- Ask AI Before Posting (10 polish actions).
+- Project folders + saved research + linked tasks/chats.
+- Tasks: Kanban + AI multi-task breakdown (`/api/ai/suggest-tasks`) with
+  SuggestTasksDialog (per-task assignee/priority/due picker).
+- Inline `@task` command parsing.
+- Reminders posted to assignee's personal AI chat.
+
+### Iteration 73 (Feb 2026) — Chat + Dev OS reliability sprint
+- **NextIdeasPanel** above the chat composer — 4 LLM-generated "what to try next" chips that drop their full prompt into the composer on click. Backed by `GET /api/chats/{id}/next-ideas` with 60s server cache + `?refresh=1` force regen + deterministic fallback list. Per-chat hide/show persisted in localStorage.
+- **Empty-preview self-heal**: `/api/dev-projects/{id}/preview/index.html` now seeds a deterministic stub SPA on the fly (`seed_stub_files`) when the project has zero generated files — no more bare `404 — index.html` in the chat-side LivePreviewPane. Friendly empty-state fallback if seeding fails.
+- **Resilient demo-login shim**: every served preview HTML gets a `/* tn-login-shim */` script injected that hooks `[type=email]` + `[type=password]` inputs and any sign-in button by text/id — so `demo@example.com / demo` always works regardless of which element ids the LLM-generated index.html chose.
+- **Spin-up now writes `chat.linked_dev_project_id`** so the active-project pointer is set the moment a chat creates a Dev OS project (and seeds stub files immediately).
+- **DevProjectSwitcher iframe-refresh bug fix**: GET `/api/chats` + GET `/api/chats/{id}` both now read `chat.linked_dev_project_id` first (was: arbitrary `related_chat_id` lookup), and `LivePreviewPane` keys its iframe on `${project.id}:${refreshKey}` so React re-mounts on switch. Chat-header pill text + right-rail iframe now follow the active project correctly.
+- Tests: `/app/backend/tests/test_iteration72_next_ideas_preview.py` (10 tests) + `test_iteration73_active_project_pointer.py` (6 tests) — 16/16 passing; frontend e2e Playwright verified switcher + chips + composer drop-in.
+
+### Iteration 78 (Jun 2026) — Blank preview everywhere (storage cross-contamination)
+- **Root cause**: all generated apps share one browser origin and the same localStorage keys (`app:auth`, `app:entities`). Stale auth/entities from one app leaked into another → app.js auto-entered app-view with foreign-schema data → BOTH views ended display:none → blank page on chat preview, DevStudio preview, share links and /p/ links. Reproduced deterministically.
+- **Fix (serve-time, universal)**: login shim wraps `Storage.prototype` get/set/removeItem to prefix `app:*` keys with `tn:{project-or-slug}:` derived from the URL path (covers /dev-projects/{id}/preview, /p/{slug}, /share/preview/{token}, /preview/shared/{token}). Every generated app has isolated storage; stale global keys ignored. Users log into each app once again (fresh namespaced state).
+- Verified via Playwright with stale global keys: login view renders (no blank) → login → app-view block, 8 entities, no JS errors, namespaced keys written.
+
+### Iteration 77 (Jun 2026) — "Nothing loads after login" fix (Fun Pizza Kitchen)
+- **Root cause 1 (content)**: 04:31 design edit rewrote index.html dropping every id app.js renders into (#entities-list, #create-form, filters, customizer). Repaired via talk_to_build (rebuilt app-view with full ID contract, kept new design); republished v2. Added HTML↔JS ID-CONTRACT rule to talk_to_build prompt (redesigns must preserve ids or return both files).
+- **Root cause 2 (shim)**: login shim's `stopPropagation()` blocked the app's own login handler, and shim only toggled `hidden` attr while some generated apps use inline `style.display` — app stayed display:none after login. Shim now: no stopPropagation (app handler runs too), clears inline display + block fallback. Serve-time → fixes all previews/releases instantly.
+- Also diagnosed earlier outage: EMERGENT key budget exhausted ($20.02/$20) killed all AI calls; user topped up. Custom domains remain MOCKED (CNAME info only) — real path = Vercel/Netlify deploy tabs.
+- Verified via Playwright: login → app-view display:block, 8 entities, 3 KPI cards, customizer + specials render.
+
+### Iteration 76 (Jun 2026) — LLM model upgrades (all providers, Universal Key)
+- Ensemble (`ai_service.py` MODEL_CONFIG): ChatGPT → **gpt-5.5**, Claude → **claude-sonnet-4-6**, Gemini → **gemini-3.1-pro-preview**, fast tier → **gpt-5.4-mini** + **gemini-3.5-flash** (claude-haiku-4-5 already latest).
+- Worker models across app (dev agents, codegen, github summaries, chat categorize, dashboard, bookkeeper, inline @ai, calls/voice-note summaries, ai_cmo, memory_rag): gpt-4o/gpt-4o-mini → gpt-5.4/gpt-5.4-mini; sonnet-4-5 → 4-6; gemini 2.5 → 3.x. MODEL_CONFIG key names unchanged (e.g. "gpt-4o-mini" key now maps to gpt-5.4-mini) so catalog/fallback references stay valid.
+- Verified: direct pings on all 5 new models via EMERGENT_LLM_KEY + e2e `@ai` chat answer (PONG test).
+
+### Iteration 75 (Jun 2026) — Governance + collaboration increment (Phase A of "Emergent competitor" spec)
+- **QA/Security publish gates**: `routes/dev_gates.py` — QA content checks (6 named, ≥5 to pass) + static security scan (secrets/eval/document.write block; innerHTML/http warn). `POST /dev-projects/{id}/gates/run`; gates stored on releases; launch-checklist badges in PublishDialog; owner `override_gates` (else 422 `gates_failed`).
+- **PM approval flow**: `dev_action_approvals`. Non-PM publish/GitHub-export auto-creates approval + interactive chat card (`metadata.approval_card` → ApprovalActionCard.jsx Approve/Reject). PM = 'product' role-claim else workspace owner/admin. Approve executes (`_do_publish` refactor / `export_or_fallback`); reject posts ⛔; members 403 on decide.
+- **Collaborative preview comments**: team mode (LivePreviewPane drawer; resolve / convert-to-task / convert-to-bug) + GUEST mode on public share links (`/preview-share/{token}/comments`, name+comment, no auth/credits) with feedback panel on SharePreviewPage.
+- **Snapshot diff viewer**: `GET .../files/{fid}/diff/{snapshot_id}` (difflib) + DiffViewer.jsx modal in FileExplorerPanel history (revert-from-diff).
+- **LivePreviewPane upgrades**: quick-action chips (Fix bug/Add feature/Improve design/Mobile friendly → composer via onQuickPrompt), mobile/desktop viewport toggle, comments drawer.
+- **Risk labels** on edit summaries (🟢 Safe / 🟡 Needs review when backend/schema/auth touched). **Auto release notes** on publish (phase3b, background task).
+- **Preview render guard** (user bug): serve-time style enforces `[hidden]{display:none}` + scrollable body — fixes generated apps showing login+app views simultaneously/overflowing. Codegen prompts hardened (hidden-attr toggling, 420px responsive).
+- Tests: iteration_75 — backend 11/11, frontend pass; HIGH item (ApprovalActionCard wiring lost during test run) re-fixed, verified via Playwright (8 cards, live statuses).
+- **Phase B backlog (NOT built)**: Build Review Meeting thread after publish; per-project credit budgets/guardrails; Owner Mode plain-English digest; feature voting board + "Ask the team" polls; AI standup; Build Room 5-tab layout; clone-and-customize; company template library; AI preference memory; integration marketplace placeholder cards; voice/meeting-to-project entry points; promo-card overlap with comments drawer (minor UI).
+
+### Iteration 74 (Jun 2026) — Live build feed, publish-to-production, attachments-to-build
+- **BuildProgressCard (Emergent-style live activity feed)**: every AI build/edit posts a `build_progress` chat message; the card polls `GET /api/build-activities/{id}` (1.5s) and shows steps ticking live — 🔍 Analyzing → 📐 Planning → ✍️ Wrote frontend/app.js (4/7) → 🧪 Smoke tests 6/6 → 🚀 Deploying preview. Service: `services/dev_build_activity.py` (`start_activity/add_step/complete_activity/fail_activity`); instrumented in `_maybe_auto_start_project._build` and `_route_as_continuation`+`talk_to_build(on_step=...)`.
+- **End-of-build recommendations**: after every successful build/edit, an ai-system message with `metadata.idea_chips` (4 LLM-generated product-specific chips, `@devmgr`-prefixed prompts, deterministic fallback) renders as tappable pills; click drops the prompt into the composer (`onPickIdea` threaded Chats → MessageList → MessageBubble).
+- **Full-screen preview**: LivePreviewPane header Maximize2 icon + "Open full screen" link in the creds banner (window.open raw preview).
+- **Attachments feed the build**: chat images (vision via ImageContent) + small text files (inlined) now flow into `@role` replies, `talk_to_build` edits, and new-project `generate_project_files` (frontend specs only). Loader: `_load_attachment_context` in dev_chat_agents.
+- **Publish to production (TeamNest hosting)**: `POST /api/dev-projects/{id}/publish` snapshots all files into `dev_prod_releases` (version increments); public serve at `/api/p/{slug}/...` (login shim injected) wrapped by React route `/p/:slug` (ProductionAppPage). Slug editing + collision auto-suffix + 409 on taken; custom domain PATCH → `pending_dns` + CNAME instructions in UI (DNS verification MOCKED/informational).
+- **Real Vercel/Netlify deploys**: `POST /api/dev-projects/{id}/deploy/vercel|netlify` with user tokens (never stored) — Vercel v13 inline-file deployments, Netlify digest deploy w/ site reuse; clean 4xx on bad tokens, httpx errors → 502. UI: PublishDialog (TeamNest/Vercel/Netlify tabs) from LivePreviewPane "Publish".
+- **Continuation routing fix**: `_maybe_auto_start_project` now prefers `chat.linked_dev_project_id` (any source) for continuation detection — spin-up-created projects (`source: "chat"`) previously never matched (only `auto_devmgr`).
+- **Public-route fix**: `PUBLIC_PREFIXES` in `lib/api.js` now includes `/p/`, `/share/`, `/call/` — unauthenticated visitors were 401-redirected to `/` off public pages.
+- **Login-shim race fix (post-iter74 bug report)**: user reported demo login failing on the Engineering project. Root cause candidate verified: login handlers (app.js + shim install) only attach after deferred app.js downloads — on slow connections a Sign-in click during that window did nothing. `_inject_login_shim` now ALSO installs a document-level delegated capture listener at parse time, so `demo@example.com / demo` works even if app.js never loads. Verified via Playwright: normal, app.js-blocked, chat-iframe, and wrong-creds (error shown) scenarios all pass.
+- **"Comment → activity" fix (user report: 'nothing happens when I comment')**: three routing gaps closed in `dev_chat_agents.py`: (1) plain messages with NO @mention in a development chat with a linked project now implicitly route to @devmgr when actionable (`_should_implicit_devmgr` + `_looks_actionable`: edit verbs, bug signals like "can't read/broken/unreadable", lead-in stripping for "let's/please/can you"); (2) specialist mentions (e.g. @frontend) with actionable asks now APPLY the edit via `_maybe_specialist_edit` → `_route_as_continuation` instead of just replying in prose (first-mentioned specialist only, devmgr owns multi-mention builds, cascade_depth 0 only); (3) `_is_continuation` gained bug-signal + lead-in handling so complaints route to the existing app instead of dead-ending. Also: idea-chip prompts now forced to "@devmgr add/improve" enhancement phrasing (a chip's "create a library of..." had spawned an unintended NEW project), and codegen styles.css/index.html prompts now mandate explicit input background+text color pairing (the "white font in inputs" bug). Verified E2E: plain unmentioned bug report → devmgr reply → live activity card → real edit (`input{color:black}` + text-black classes landed in the preview).
+- Tests: `/app/backend/tests/test_iteration74_publish_build_activity.py` (11 tests) + Playwright e2e — see `/app/test_reports/iteration_74.json` (backend 100%, frontend 8/9 → 9/9 after the PUBLIC_PREFIXES fix, re-verified via fresh-context screenshot).
+
+
+- File / image uploads via Emergent Object Storage.
+- Public AI snapshot shareable link.
+- White calendar icon (`filter: brightness(0) invert(1)`) on dark inputs.
+- Browser favicon + manifest (yellow `TN` mark on dark).
+
+### Find Your Friends + Referrals (Phase 2a — Feb 2026)
+- **Magic invite link**: rotate/copy/revoke with role + expiry + max_uses (`/api/invites/link`).
+- **Public join landing** `/join/{token}` — preview workspace + signup-to-join + celebratory boost toast.
+- **Bulk email invite**: paste/CSV, dedupe, builds `mailto:` deep link (recipients on BCC).
+- **Share buttons**: WhatsApp / SMS / Email deep links with prefilled message.
+- **QR code** (yellow on dark) for in-person sharing.
+- **Pending invites tracker** with auto-status refresh when invitee joins.
+- **People you may know** by email-domain (privacy-safe: masked email, skips
+  generic consumer domains).
+- **Sidebar nav** "Find Friends" (yellow accent) + **Dashboard banner** for
+  small workspaces.
+- **Referral incentive**:
+  - Inviter earns `referral_count++` and unlocks tiered badge (Bronze 1+, Silver 5+, Gold 15+, Platinum 50+) with progress bar to next tier.
+  - Joiner gets `pro_boost_until = now + 14d` (Pro AI Boost — all 6 models unlocked, visible as ⚡ in sidebar).
+  - Workspace leaderboard (top 5) with self-highlight.
+  - Endpoints: `GET /api/me/referrals`, `GET /api/leaderboard/referrals?scope=workspace|global`.
+
+### Phase 2a — Voice / Approvals / Export / Admin (Feb 2026)
+- **Voice notes** (`/api/voice-notes`) — browser MediaRecorder → upload → playback.
+  AI actions on each note: **Transcribe** (real Whisper via Emergent LLM Key, ~$0.006/min),
+  **Summarize** (Claude markdown: TL;DR + key points + action items), **Create task**.
+  Graceful fallback on tiny/silent audio (returns `text=""` instead of 500).
+- **Approvals workflow** for AI final answers (`/api/approvals`, `/api/approvals/{id}/decision`).
+  Statuses: draft → needs_review → approved | rejected | needs_revision → archived.
+  Approve locks the answer (no edits). Decision history tracks every reviewer.
+  Notifies creator/reviewers in their personal AI chat.
+- **PDF / Word export** via `reportlab` + `python-docx` — research threads, approvals.
+  `/api/export/research/{thread_id}?format=pdf|docx`, `/api/export/approval/{id}?format=pdf|docx`.
+  Branded with yellow brand bar, page numbers, structured sections.
+- **Admin Dashboard** (`/admin`, owner/admin only):
+  - 8 stat tiles (users, messages, AI threads, tasks, approvals, files, top AI, due today)
+  - Users tab with inline role + status edit (last-owner safeguard)
+  - AI Usage bar chart
+  - Task analytics (by status, by assignee, due today)
+  - Approval analytics (by status)
+- **Send for approval** + **Export PDF** buttons on AI Comparison panel synthesized answer.
+
+## P1 Backlog / Coming Next
+- **App Store curation tools** (P2): featured section, category management.
+- **Weekly "Your store performance" digest** for sellers (P3, via chat post or Resend email).
+- **Stripe go-live**: live keys stashed in backend/.env as STRIPE_LIVE_*; app runs STRIPE_MODE=test — do NOT flip without explicit user instruction.
+- **OAuth contact sync** (Google People API + Microsoft Graph contacts) —
+  playbook ready; awaiting user OAuth credentials.
+- **Sub-second streaming transcription** (Deepgram) — current Whisper-based live
+  has ~4-6s latency due to chunk batching. Optional upgrade.
+- Tasks: subtasks, comments, multi-assignee, advanced reminder schedule.
+- Email reminders (currently in-chat only).
+- Settings page (favorite AI palette).
+- ~~Refactor `server.py` into routers.~~ ✅ Done Feb 2026 (see below)
+
+### Phase 4 — Stripe Portal, Annual Billing, Guest Revoke, AI Polish, Standup Digest, Deepgram (Feb 2026)
+
+**Billing**
+- `POST /api/billing/portal` — Stripe Customer Portal session for owners
+  to update card / view invoices / cancel.
+- Annual billing toggle in `/billing` page: monthly $20 → annual $200 (17% off),
+  monthly $50 → annual $500 (17% off). New env vars `STRIPE_PRO_ANNUAL_PRICE_ID` /
+  `STRIPE_TEAM_ANNUAL_PRICE_ID` enable the recurring annual SKU once user
+  creates those Prices in their Stripe dashboard.
+- Free-plan users see a small "Self-serve portal available after upgrade"
+  hint instead of an invisible button.
+
+**Guest collaborator polish**
+- `GET /api/chats/{id}/guests` — list active guests in a chat.
+- `DELETE /api/chats/{id}/guests/{user_id}` — owner/admin only. Removes from
+  chat; if no remaining scope chats, kicks them from the workspace entirely.
+  Posts a "X removed" system message.
+- `InviteGuestDialog.jsx` now shows current guests with one-click Remove.
+
+**AI answer polish**
+- `ai_answer.metadata` now includes `credits_total` + `credits_breakdown`
+  ([{model_key, model_name, credits}]) so the UI can show what was charged.
+- New `ModelBadge` component on every AI answer: shows model name + credit
+  cost in a pill, hover tooltip reveals "fast model" vs "premium model" context.
+- New `RerunPremiumButton` — when the answer used a fast model
+  (`gpt-4o-mini` / `claude-haiku` / `gemini-flash`), shows a one-click
+  "↻ Re-run with Premium" CTA that posts `@ai ask claude <original>` for a
+  Claude Sonnet re-pass. Drives upgrade behavior on free tier, ARPU on Pro.
+
+**Daily Standup Digest** (engagement booster)
+- `POST /api/standup/generate {chat_id?, project_folder_id?}` — Aggregates
+  open tasks, completed-yesterday, overdue, due-today, then calls GPT-4o mini
+  to produce a markdown digest with TL;DR, sections, and emoji headers.
+  Returns markdown + stats; if `chat_id` provided, also posts as a system
+  message into that chat for everyone to see.
+- New **"Daily Standup"** button on the Dashboard. Result renders inline
+  with stats footer.
+
+**Mobile tab bar polish**
+- Active tab gets a top accent bar + 110% icon scale + smooth transition.
+- Drop shadow at the top edge separates from content above.
+- Active state animates on tap.
+
+**Deepgram Nova-3 transcription** (sub-second live transcript)
+- New `services/deepgram_service.py` wrapping Deepgram SDK v7 with `nova-3`
+  model, smart formatting, language auto-detect.
+- `voice_service.transcribe_audio()` now tries Deepgram FIRST; falls back to
+  Whisper if Deepgram returns empty/errors. Same response shape — caller
+  doesn't care.
+- Affects: live call chunks (`/api/calls/{id}/transcribe-chunk`), voice
+  notes, call recording uploads.
+- Per-chunk latency: ~4-6s (Whisper) → **~0.5-1s** (Deepgram) — 4-8× faster.
+- `DEEPGRAM_API_KEY` in `/app/backend/.env`.
+
+**Tests** — iteration 23: 12/12 backend pytest + 6/6 Playwright frontend
+flows pass. Zero issues found.
+
+### Stripe subscription bug fix + AI speed-up (Feb 2026)
+
+**Bug**: `POST /api/billing/checkout` returned 500 — `emergentintegrations`
+Stripe wrapper is hard-coded to `mode='payment'` and Stripe rejected the
+recurring Price IDs with *"You specified `payment` mode but passed a recurring
+price."*
+
+**Fix**: Bypass the wrapper for recurring plans — call native
+`stripe.checkout.Session.create(mode='subscription', line_items=[…])`
+directly. Status-polling endpoint switched to `stripe.checkout.Session.retrieve()`.
+Webhook handler rewritten to use `stripe.Webhook.construct_event()` with our
+`STRIPE_WEBHOOK_SECRET` and handle:
+  - `checkout.session.completed` → mark txn paid + upgrade plan
+  - `customer.subscription.deleted` → downgrade workspace to free
+  - `customer.subscription.updated` → mirror cancel-at-period-end flag
+
+**`@ai` speed-up** (10× faster, 35× cheaper):
+- Default inline `@ai <question>` was triggering 3 premium models in parallel
+  + a 4th synthesis call. Total wait ~8-13s, burning ~70 credits per question.
+- Now defaults to a single fast model (**GPT-4o mini**, 2 credits, ~1s). The
+  user's `favorite_ai_model` preference applies only to the AI Compose /
+  Compare workflow, not casual inline questions.
+- Explicit comparison still available via `@ai ask all` (6 models +
+  synthesis) or `@ai ask claude, gemini` (custom subset).
+- Synthesis step (when comparing) switched from Claude Sonnet → GPT-4o mini —
+  saves another ~3-5s on every compare query.
+- Added 3 fast model entries to `MODEL_CONFIG`: `gpt-4o-mini`, `claude-haiku`,
+  `gemini-flash` (with proper credit costs 2/9/1).
+
+**Verified**: default `@ai` 0.83s / 2 credits (was 8.9s / 70 credits).
+
+### Phase 3 — Profile, Mobile Tab Bar, Guest Collaborators, Stripe Billing + AI Credits (Feb 2026)
+
+**(a) Self-serve Profile (`/profile`)**
+- New `routes/profile.py` — PATCH `/me/profile` (name, phone with uniqueness,
+  avatar URL), POST `/me/password` (current pw check), POST `/me/email` (pw
+  confirmation + collision check).
+- New `Profile.jsx` page surfaces all three sections + a `must_change_password`
+  banner that nags guest accounts to set a real password on first login.
+
+**(b) Bottom mobile tab bar**
+- `MobileTabBar.jsx` — fixed bottom bar shown only `<md`. Five thumb-reachable
+  tabs (Chats · Tasks · AI · Friends · Me). Hidden on `/call/*` routes for full
+  video real estate.
+- `AppShell.jsx` adds `pb-16 md:pb-0` so content scrolls clear of the bar.
+
+**(c) Guest collaborators (single-chat scope)**
+- New `workspace_members.chat_scope_ids` field — when set, the user only sees
+  the chats they were invited to.
+- POST `/api/chats/{chat_id}/invite-guest` — accepts `{user_id}` (existing
+  TeamNest user) OR `{email, name?, phone?}` (creates a fresh guest account
+  with a one-time password + `must_change_password=true`).
+- New `InviteGuestDialog.jsx` — search existing users OR create-new form;
+  shows a copyable credentials card after creation.
+- `GET /api/chats` respects guest scope (returns only allowed chats).
+- "Guest" button surfaces in the chat header (hidden for personal-AI chats).
+
+**(d) Stripe Billing + AI credit metering**
+- 3 plans: Free (300 credits/mo), Pro $20/mo (6,000 credits), Team $50/mo
+  (18,000 credits). Credit cost per model = vendor cost × 1.4.
+- `services/billing.py` — plan defs, `MODEL_CREDIT_COST` map (Claude Sonnet
+  =34 credits, GPT-4o=23, Gemini Pro=12, Haiku=9, Flash=1, …), per-month auto-
+  reset, free-fallback grace allowance.
+- `routes/billing.py` — `GET /billing/plans`, `GET /billing/me`, `GET /billing/usage`,
+  `POST /billing/checkout` (owner-only, Stripe Checkout via emergentintegrations),
+  `GET /billing/checkout/status/{id}` (idempotent polling), `POST /billing/downgrade`,
+  `POST /webhook/stripe`.
+- Credit gating integrated into AI orchestration: `filter_models_by_credits` +
+  `deduct_credits_for_responses` in `services/ai_runtime.py`; `routes/ai.py`
+  `create_research` returns 402 when out of credits with friendly hint to upgrade.
+- Free-tier fallback: when out of credits, fast models (GPT-4o-mini, Claude
+  Haiku, Gemini Flash) stay available up to a small grace allowance.
+- `/billing` page with 3 plan cards, usage graph, owner-only upgrade CTAs.
+- `CreditsWidget` in sidebar — live credits-remaining bar + Upgrade nudge.
+
+**(e) Capacitor native scaffold**
+- `frontend/capacitor.config.json` + `/app/CAPACITOR.md` with iOS + Android
+  build instructions. User runs the commands on a Mac/Android Studio machine.
+
+**(f)** Deepgram — pending Deepgram API key.
+**(g)** SSO + E2E — P3 backlog.
+
+**Tests** — iteration 22: 15/15 backend pytest + 8/8 Playwright frontend
+flows pass (zero issues found).
+
+### Phone-at-signup + User Search + Direct Add (Feb 2026)
+Built on top of the multi-workspace foundation: workspace members can now find
+existing TeamNest users by email or phone and add them to their workspace
+without going through email-invite at all.
+
+**Data model**
+- `users.phone` (string, as provided) + `users.phone_normalized` (digits-only)
+  for exact matching. Phone is unique across the platform.
+- Migration backfills `phone_normalized` from any legacy `phone` field.
+
+**API additions**
+- `GET /api/users/search?q=<email-or-phone>` — auth required (member+),
+  returns minimal masked info (`name`, `masked_email`, `masked_phone`,
+  `workspace_name`, `already_in_workspace`). Phone matching accepts multiple
+  formats: full E.164, dashed, spaces, last-7 or last-10 digits.
+- `POST /api/workspace/add-existing-member {user_id, role?}` — workspace
+  member-level access; any member can add as `member`, owner/admin can pick
+  any role. Idempotent: 400 if the user is already an active member.
+
+**API changes**
+- `POST /api/auth/signup` and `POST /api/public/invite/redeem` now accept an
+  optional `phone` field. Duplicate phone → 400.
+- `public_user` response includes `phone`.
+
+**Frontend additions**
+- Landing.jsx signup form: optional `[data-testid='signup-phone']` field
+  marketed as "makes you discoverable to teammates".
+- JoinWorkspace.jsx: `[data-testid='join-phone']` only shown for brand-new
+  accounts.
+- TeamAdmin.jsx: new "Find existing user" button next to "Invite by email"
+  opens a search dialog. Debounced search, privacy-masked results, one-click
+  Add. `invite-btn` is now properly disabled for non-owner/admin roles.
+
+**Tests** — Iteration 21: 14/14 backend pytest + 7/7 Playwright frontend
+flows pass.
+
+### Multi-Workspace Membership (Feb 2026)
+Customer-reported bug fix: when inviting an email that already had a TeamNest
+account in another workspace, the system returned `400 "User already exists"`.
+Resolved by promoting users to a true multi-workspace model (Slack/Discord-style).
+
+**Data model**
+- New `workspace_members` collection: `{user_id, workspace_id, role, status, joined_at}` — source of truth for "who is in what workspace with what role".
+- `users.workspace_id` is now the user's *active* workspace pointer; `users.role` mirrors the active workspace's per-membership role.
+- One-time idempotent migration on startup (`services/workspace_membership.migrate_legacy_users`) backfills `workspace_members` rows from existing `users.workspace_id` data.
+
+**API additions**
+- `GET /api/me/workspaces` — list all workspaces the current user belongs to.
+- `POST /api/workspace/switch` `{workspace_id}` — set active workspace.
+- `POST /api/public/invite/check-email` `{token, email}` — pre-flight for the
+  join page; reports `existing_user`, `name`, `already_member`.
+
+**API changes**
+- `POST /api/workspace/invite` — if email exists, add a membership instead of
+  erroring; returns `added_to_existing_user: true`.
+- `POST /api/public/invite/redeem` — if email exists, verify the user's
+  existing TeamNest password (401 on mismatch) then add a membership. Returns
+  `joined_existing_account: true`.
+- `/auth/signup`, `/auth/login`, `/auth/demo-login`, `/auth/me` all now return
+  the user's `workspaces[]` list.
+- `/admin/users`, `/admin/overview`, `/workspace/members`, `/invites`, and
+  `/invites/suggestions` now resolve workspace membership via `workspace_members`
+  rather than `users.workspace_id`.
+
+**Frontend additions**
+- Sidebar `WorkspaceSwitcher` between brand + nav. Single-workspace users see a
+  static label; multi-workspace users get a chevron and dropdown.
+  `data-testid="workspace-switcher-btn"` / `workspace-switcher-menu`.
+- `JoinWorkspace.jsx` detects existing accounts (debounced
+  `/public/invite/check-email`) and swaps the form to a "sign in & join" flow
+  with a green banner explaining their existing account will be augmented.
+
+**Tests**
+- Iteration 20: 22/22 backend pytest tests pass + 17/17 Playwright frontend
+  assertions pass. Customer bug verified fixed end-to-end.
+
+### Mobile-responsive Sidebar (Feb 2026)
+- **Off-canvas drawer pattern** on viewports `<md` (Tailwind 768px). The sidebar
+  is hidden by default; a new mobile top bar (`[data-testid="mobile-topbar"]`)
+  carries the hamburger button + brand mark.
+- Tapping the hamburger slides the drawer in from the left with a dimmed
+  backdrop. Drawer auto-closes on: nav-item click, route change (via
+  `useLocation`), backdrop tap, close button, and `Escape` key.
+- Desktop behavior (`md+`) is unchanged — sticky in-flow sidebar at 240/56 px,
+  manual collapse via `[data-testid="sidebar-toggle"]` and `localStorage` still
+  works.
+- Tested via testing agent (iter 19): 12/12 mobile + desktop checks pass.
+
+### Backend Refactor — server.py → modular routers (Feb 2026)
+- **server.py** trimmed from 3050 → 129 lines; now a pure FastAPI bootstrap
+  (mounts routers, CORS, WebSocket, startup/shutdown).
+- **`/app/backend/deps.py`** — shared infrastructure: `db`, `require_user`,
+  `public_user`, `_post_reminder`, `_broadcast_message`, `_referral_badge`,
+  `ensure_personal_ai_chat`, badge thresholds.
+- **`/app/backend/services/`** — cross-router background helpers:
+  - `ai_runtime.py` — `_finalize_research`, `handle_ai_command`, `handle_inline_task`
+  - `calls_runtime.py` — `public_call`, `post_call_card`, `generate_and_store_highlights`
+- **`/app/backend/routes/`** — 16 domain routers, one per area:
+  `auth · workspace · folders · chats · ai · share · tasks · dashboard ·
+   uploads · integrations · invites · voice_notes · approvals · exports ·
+   admin · calls · public`
+- Tests: 201/207 pytest pass (zero refactor regressions, 6 pre-existing flakes
+  cause Grok-429 + cascade ShareSnapshot failures).
+
+### Screen Sharing in Calls — UX upgrade (Feb 2026)
+- `CallRoom.jsx` now subscribes to `Track.Source.ScreenShare` in **both** audio
+  and video call modes (previously video-only).
+- Dedicated `ScreenShareStage` layout: shared screen takes the main canvas with
+  a yellow accent border + presenter chip; camera tiles / participant badges
+  collapse to a right rail.
+- Top bar shows a "**X is presenting**" banner with the screen-share icon
+  whenever any participant is sharing.
+- `toggleShare` syncs state with `localParticipant.isScreenShareEnabled` so the
+  browser's native "Stop sharing" bar correctly updates the UI.
+- Screen share is published with `audio: true` so the tab/system audio is
+  shared too (where the browser allows).
+- Toasts: `Sharing your screen` on start, `Screen share permission denied` /
+  `Screen share unavailable on this browser` on failure.
+
+### Phase 2c-Live — Real-Time Transcription + AI Highlights (Feb 2026)
+- **Browser-side chunking** — `useLiveTranscription` hook captures each
+  participant's mic in 4-second chunks via parallel MediaRecorder.
+- **Whisper transcription** — each chunk → `POST /api/calls/{id}/transcribe-chunk`
+  → Emergent LLM Key Whisper → text segment.
+- **LiveKit data-channel broadcast** — server uses `LiveKitAPI.room.send_data()`
+  topic=`transcript` so every participant sees lines appear in real time.
+- **Auto-saved transcript** — segments persist on `call.transcript_segments[]`
+  AND build up `call.transcript.text` so the post-call AI summary is generated
+  from real call content (source='transcript' instead of 'chat_context').
+- **AI Highlights** — when a call ends, Claude analyzes the full transcript and
+  tags individual segments as `decision`, `action_item`, `risk`, or `question`
+  with a one-line note. Runs as background task on call end + manual
+  `POST /api/calls/{id}/highlights` for regenerate.
+  - **MeetingSummaryDialog**: HIGHLIGHTS chip bar with per-kind counts
+    + annotated transcript view with colored left borders & kind icons.
+  - **One-click task from segment** — each `action_item` row has a `+ TASK`
+    button that opens SuggestTasksDialog pre-filled with the segment text and
+    Claude-inferred assignee from workspace members.
+  - **Chat call card**: tiny chip preview (e.g. "1 DECISION · 2 ACTIONS · 1 RISK").
+- **Pause/Resume per user** — pause stops your local upload only.
+- **Live Transcript Panel** opens by default with REC indicator + time-stamps.
+
+### Phase 2c — AI Meeting Summaries / Transcription / Demo Seed (Feb 2026)
+- **Post-call AI meeting summary** generated from transcript or chat context
+  around the call window. Structured markdown: TL;DR, Participants, Key points,
+  Decisions, Open questions, Risks, Action items (with owner+due), Next steps.
+- **Transcript upload** — drop any audio file → Whisper transcribes via Emergent
+  LLM Key → cached on the call → unlocks sharper AI summaries.
+- **MeetingSummaryDialog** — summary/transcript tabs, generate/regenerate/edit,
+  upload recording, **create tasks from summary** via SuggestTasksDialog, export
+  PDF/Word.
+- **Live transcript panel** placeholder in CallRoom for forward-compatibility.
+- **Phase-2 demo seed top-up** — idempotent insertion of 2 historical calls (Max
+  Brenner video 42m + Jay Bhavani audio 28m) with transcripts & summaries, plus
+  1 approved + 1 pending approval + 1 overdue task.
+- Endpoints: `POST /api/calls/{id}/upload-recording`, `POST /api/calls/{id}/summary`,
+  `PATCH /api/calls/{id}/summary`, `PATCH /api/calls/{id}/transcript`,
+  `GET /api/export/call/{id}?format=pdf|docx`.
+
+### Phase 2b — Audio / Video / Screen-share Calls (Feb 2026)
+- Real WebRTC via **LiveKit Cloud**. Server issues JWT tokens; LiveKit handles SFU.
+- One-on-one + group, audio-only + video, screen sharing, participant grid with
+  pinning (via `@livekit/components-react` prebuilt tiles).
+- In-chat **call cards**: green LIVE pulse + "Join call" while active; gray ENDED + duration + participants once finished.
+- Endpoints: `GET /api/calls/config`, `POST /api/calls/start`, `POST /api/calls/{id}/join`,
+  `POST /api/calls/{id}/end`, `GET /api/calls/by-chat/{chat_id}`,
+  `GET /api/calls/{id}`, `POST /api/webhooks/livekit`.
+- Server-side state in Mongo `calls` collection. Initiator can force-end; others just mark-left.
+- LiveKit webhook validates signature (HMAC via API secret) and auto-finalizes
+  call state when room finishes.
+
+## P2 Backlog
+- Audio/video calling (WebRTC).
+- WhatsApp chat import.
+- ~~Stripe billing.~~ ✅ DONE (iter 22 — native Stripe SDK)
+- ~~Native iOS / Android.~~ ✅ DONE (iter 24 — Capacitor 7 + 9 plugins)
+- Enterprise SSO.
+
+## Key Endpoints
+- Auth: `POST /api/auth/{signup,login,demo-login}`, `GET /api/auth/me`
+- Preferences: `GET/PATCH /api/user/preferences`
+- Chats: `GET/POST /api/chats`, `GET/POST /api/chats/{id}/messages`, integrations
+- AI: `POST /api/ai/research`, `POST /api/ai/extract-task`,
+  `POST /api/ai/suggest-tasks`, `POST /api/ai/improve`, `GET /api/ai/models`
+- Tasks: `GET/POST /api/tasks`, `PATCH/DELETE /api/tasks/{id}`
+- Files: `POST /api/uploads`, `GET /api/files/{id}`
+- Public: `GET /api/public/snapshot/{token}`, `GET /api/public/invite/{token}`,
+  `POST /api/public/invite/redeem`
+- **Invites**: `GET/POST /api/invites/link`, `POST /api/invites/link/rotate`,
+  `DELETE /api/invites/link/{token}`, `POST /api/invites/bulk`, `GET /api/invites`,
+  `DELETE /api/invites/{id}`, `GET /api/invites/suggestions`
+- WS: `/api/ws/{chat_id}?token=...`
+
+## Mongo Collections
+- `users` (preferences, role, workspace_id), `workspaces`, `chats`, `messages`,
+  `ai_threads`, `ai_responses`, `tasks`, `saved_research`, `folders`,
+  `integrations`, `files`
+- **New (iter 9)**: `invite_links`, `invites`
+
+## Test Reports
+- Backend tests: `/app/backend/tests/test_iteration{8,9}_*.py` — 32/32 pass on
+  new features; 106/108 overall regression (2 pre-existing flakes).
+- Frontend E2E via testing agent — iterations 1–9 all passing.
+- **Iter 24 — Native Devices**: 4/4 backend tests pass for
+  `POST/GET/DELETE /api/devices/register` (idempotent upsert verified).
+
+## Iteration History
+See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-76).

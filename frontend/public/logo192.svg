@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="30" fill="#facc15"/>
+  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle"
+        font-family="'Cabinet Grotesk', 'IBM Plex Sans', system-ui, sans-serif"
+        font-size="92" font-weight="800" fill="#0a0a0a" letter-spacing="-4">TN</text>
+</svg>

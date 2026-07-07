@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 67 — RE-TEST of Hire AI Dev Team after iter66 critical fixes. ALL 9 backend pytests PASS (0 fail, 0 skip). Validated: (1) GET /chats/{id}/hire-dev-team/status/{valid_session_id} now returns 200 applied:false (NOT 502) for unpaid sessions — the proxy 404 is caught, logged, and treated as 'still pending'; (2) GET /chats/{id}/hire-dev-team/status/{unknown_sid} returns 404 'Transaction not found'; (3) Flipping payment_transactions.status='completed' locally → next /status call returns 200 applied:true and provisions: chat.dev_team_hired=true, kind='development', bot_role_ids length 13 incl. 'growth', linked dev_projects row exists, AND BOTH ai-system celebratory + ai-agent-devmgr intro messages are seeded (devmgr parity with /chats/dev path confirmed); (4) Checkout idempotency works — second POST within 5min returns the SAME session_id (verified) and only ONE pending payment_transactions row exists in db (verified via direct motor query); (5) GET /dev-chat/roles returns 13 roles (devmgr+architect+frontend+backend+database+qa+security+devops+reviewer+designer+product+docs+growth); (6) Mention regressions still work — @architect in NON-development chat triggers ai-agent-architect reply, bare @dev does NOT auto fan-out. Frontend: pill data-testid=hire-dev-team-pill renders 'Hire Dev Team · $599', banner data-testid=hire-dev-team-banner renders at top of message list when !dev_team_hired, composer placeholder reads exactly 'Message <name> — type @ for AI · @dev for engineers · / for Dev OS', mention-popover lists all 13 roles incl. Growth, marketing site '/' tn:theme persists across reload (toggle → 'light' → reload → still 'light').",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Hire Dev Team banner (top of message list)", "issues": ["Banner copy reads '12 specialists — Dev Manager, Architect, Frontend, Backend, QA, Security, DevOps…' but the team that is actually attached on hire is now 13 (Growth was added to HIRE_DEV_TEAM_ROLES in this iteration). Also the celebratory ai-system message reads '13 engineers are now on this chat' (correct). Suggest updating the banner subtitle to '13 specialists' for consistency. File ref: frontend HireDevTeamBanner / Chats.jsx."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration67_hire_dev_team_retest.py",
+    "/app/test_reports/pytest/iteration67.xml"
+  ],
+  "action_items": [
+    "Minor copy: update HireDevTeamBanner subtitle text from '12 specialists' to '13 specialists' to match the actual roster (Growth added). Non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "routes/chats.py:851 — StripeCheckout is instantiated with `webhook_url='https://unused.local/webhook'` purely to satisfy the constructor. Works but reads like a footgun if the library ever validates the URL. Consider hoisting a module-level singleton or making webhook_url optional in the library wrapper.",
+    "routes/chats.py:824-826 — `tx = await db.payment_transactions.find_one({'session_id': session_id})` does NOT filter by chat_id or workspace_id, so a malicious user could enumerate session_ids across workspaces. The subsequent workspace_id / chat_id check (lines 827-830) does mitigate disclosure, but returning 403 vs 400 leaks the session's existence in another workspace. Consider returning a uniform 404 for cross-tenant lookups.",
+    "routes/chats.py:610-632 — idempotency works on `created_at` ISO string comparison ($gte recent_cutoff). ISO string comparison is correct for UTC ISO8601 with the same Z/offset format, but if any older row was written without timezone marker the comparison can mis-fire. Worth normalizing now_iso() everywhere (looks fine in this codebase but is a foot-gun pattern).",
+    "routes/chats.py:766-803 — both the ai-system celebratory message and the ai-agent-devmgr intro are inserted serially via two `messages.insert_one + _broadcast_message` calls. If the second insert fails after the first succeeds, the chat ends up with only the system message. Consider wrapping in a bulk insert or accepting the rare partial-state as already idempotent (re-running provision is safe because of the `dev_team_hired` gate so the orphan ai-system stays — but the devmgr intro will be missing forever). Low-priority since both inserts are local.",
+    "services/dev_chat_agents.py — kind-gate removal (iter66) means any chat where a user mentions @architect / @qa etc. will summon the agent. The parser still skips code-block mentions, but a quoted user message containing '@qa' would now trigger QA in any chat. Worth a smoke-test if not already done."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration67_hire_dev_team_retest.py (new — 9 tests, 9 pass)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (pill + banner + composer placeholder + mention-popover w/ 13 roles + safeStorage tn:theme persistence)"},
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (sets tn_session HttpOnly cookie).",
+  "seed_data_creation": "Per run: 2 fresh TEST_iter67_<ts> chats and 1 TEST_iter67_prov_<ts> chat (the prov chat becomes dev_team_hired=true with linked dev_project). Each test run inserts 2-3 payment_transactions rows (one pending for idempotency test, one completed for provision test). All prefixed TEST_ for discoverability — cleanup deferred.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "REACT_APP_BACKEND_URL=https://nest-app-prep.preview.emergentagent.com. Auth: POST /api/auth/demo-login → GET /api/auth/me. Chat create body uses 'type' not 'kind'. To validate the post-payment path WITHOUT real Stripe: POST /chats/{id}/hire-dev-team/checkout, then directly UPDATE db.payment_transactions {session_id} SET status='completed', then GET /chats/{id}/hire-dev-team/status/{sid} → applied:true. The fix in routes/chats.py:824-879 always reads local payment_transactions first (fast path on status=='completed'), then best-effort calls emergentintegrations StripeCheckout.get_checkout_status with try/except that logs the proxy 404 and continues. HIRE_DEV_TEAM_ROLES at routes/chats.py:578-581 now has 13 entries incl. 'growth'. Tests live in /app/backend/tests/test_iteration67_hire_dev_team_retest.py.",
+  "rca of the issue": "Not applicable — iter66's CRITICAL /status 502 bug is FIXED. Verified by: (a) calling /status on an unpaid valid session_id directly returns 200 applied:false with payment_status='unpaid' (no 502 even though the Emergent Stripe proxy 404s on lookup — logged at INFO level and execution falls through to local-state); (b) flipping the local payment row to status='completed' and re-calling /status returns 200 applied:true and provisions the team. The fix uses emergentintegrations.payments.stripe.checkout.StripeCheckout.get_checkout_status (same proxy that minted the session) wrapped in try/except that treats any error as 'still pending', AND a local-state-first fast-path that handles the webhook-driven completion case without needing any Stripe lookup. Idempotency on POST /hire-dev-team/checkout works: same-user/same-chat within 5min returns the existing pending session_id (verified DB-level: only 1 pending row). Devmgr intro parity verified: chat gets BOTH ai-system + ai-agent-devmgr messages on provision."
+}

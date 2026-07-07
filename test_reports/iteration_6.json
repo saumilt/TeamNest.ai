@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 6 — Tested the new AUTO-FINALIZE AI research flow (auto-pick best by confidence → auto-synthesize → post synthesized answer in chat; re-synth on select-best). BACKEND: 7 NEW tests in test_auto_finalize_research.py + 66 prior regression = 73/73 PASS (112s). FRONTEND E2E (Max Brenner Expansion Team chat): Submitted 'What is 2+2?' with chatgpt+claude+gemini → within ~30s the chat displayed exactly ONE synthesized answer message with header 'AI SYNTHESIZED ANSWER · best: <Model> · 3 models'. Confirmed comparison panel did NOT auto-open. Confirmed 'Show all comparisons · pick a different best' button visible on the synthesized message; clicking it opens the AIComparison panel (loaded async). Submit composer button correctly reads 'ASK 3 MODEL(S)'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AI synthesized message", "issues": ["The 'Show all comparisons · pick a different best' button label is rendered in UPPERCASE via CSS (text-transform), which is intentional but worth noting — case-insensitive text matchers needed for any future automated assertions."]},
+      {"screen": "Chat sidebar (Dashboard)", "issues": ["Some pre-existing 'Recent chats' rows show legacy preview body 'AI research complete — 1 model(s) responded.' That string came from the OLD code path; new auto-finalize replaces it with real synthesized text. Old rows from prior iterations still show it — cosmetic only, not a regression."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auto_finalize_research.py",
+    "/app/backend/tests/test_emergent_ai_teams.py",
+    "/app/backend/tests/test_iteration2_features.py",
+    "/app/backend/tests/test_extract_task.py",
+    "/app/backend/tests/test_inline_task_command.py",
+    "/app/test_reports/pytest/iteration6_autofinalize.xml",
+    "/app/test_reports/pytest/iteration6_full.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_finalize_research tie-breaker uses (confidence_score, real_flag) — if two real responses share the highest confidence_score (e.g. both 0.92), the earlier one in the responses list wins because max() is stable. Acceptable but document this.",
+    "POST /api/ai/responses/{id}/select-best?resynthesize=true synth call has NO try/except — if synthesize_answer raises, the response flag flip already succeeded but no chat message gets posted and the user gets a 500. Consider wrapping in try/except and posting a fallback message or returning a structured error.",
+    "Two near-duplicate ai_answer message-construction blocks now exist (in _finalize_research lines 514-535 and in select_best lines 783-802). Extract a small helper _build_ai_answer_message(...) to keep them in sync (e.g., if metadata schema changes).",
+    "server.py is now 1225 lines — refactor into routers (ai_router.py, chat_router.py, task_router.py) is overdue (carried forward from iterations 4 & 5).",
+    "test_inline_task_command.py reads os.environ.get('REACT_APP_BACKEND_URL').rstrip('/') at import time and crashes if the env var isn't set when pytest is invoked from outside supervisor. test_auto_finalize_research.py now falls back to reading /app/frontend/.env — consider unifying this in conftest.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auto_finalize_research.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (73/73)", "frontend": "100% on the new auto-finalize flow that was tested via UI"},
+  "test_credentials": "amit@demo.team / Demo@2026 (and demo-login endpoint) — both working.",
+  "seed_data_creation": "Several auto-finalize threads + ai_answer messages created in 'Max Brenner Expansion Team' chat and a TEST_AutoFinalize_<hash> group chat during pytest runs. All ai_answer messages carry metadata.auto_synthesized=true and best_model. No manual cleanup needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The new auto-finalize pipeline is fully working at backend and visible at frontend. Backend regression file is /app/backend/tests/test_auto_finalize_research.py — adds 7 tests covering POST /ai/research auto-synth, exactly-one-best, ai_answer message body matches final_answer, GET /ai/research/{id} returns final_answer, select-best with resynthesize=true (default) posts new message with metadata.resynthesized=true, resynthesize=false skips message, and @AI inline command also auto-synths. The select_best resynth code path lacks error handling around synthesize_answer — flag a 500 there as a possible failure mode in future runs. The frontend UI button 'Mark Best & Re-synth' inside the AIComparison drawer was verified to exist (data-testid=select-best-<modelKey>, label 'Mark Best & Re-synth' confirmed via code at AIComparison.jsx:426-431). The full UI click->resynth flow was not fully exercised in this run because the drawer was still loading at the time of the test (async fetch); but the corresponding backend endpoint is fully green and the frontend onAIResearch+toast path was verified. If a future iteration wants UI-level resynth coverage: after clicking open-thread, wait 4-5s for the drawer fetch to complete before querying select-best buttons.",
+  "rca of the issue": "N/A — no bugs found. All new behavior matches spec: backend auto-picks best by max confidence_score, calls synthesize_answer with preferred_best, posts a single ai_answer message with metadata {synthesized:true, auto_synthesized:true, best_model, response_count}; thread becomes status='complete' with final_answer populated. select-best defaults to resynthesize=true and posts a new message tagged metadata.resynthesized=true; resynthesize=false correctly skips the new message. Frontend onAIResearch no longer setActiveThread, so the comparison panel does not auto-open."
+}

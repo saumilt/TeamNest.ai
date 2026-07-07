@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 28 — Regression verification of the pure-refactor changes (6 frontend components split into sub-folders + 3 backend route functions decomposed into helpers + import random→secrets in ai_service.py). One CRITICAL backend regression was found and fixed by this agent: the @router.post('/chats/{chat_id}/invite-guest') decorator was attached to the newly-extracted helper _resolve_or_create_invitee instead of the real route handler invite_guest_to_chat, causing FastAPI to expose the helper as the public endpoint (422 Unprocessable Entity, expected body fields 'payload' and 'current'). After moving the decorator to the correct function the invite-by-new-email flow passes end-to-end. Standup-generate refactor verified passing. Call-summary refactor route+decorator alignment verified by source inspection (no list endpoint to seed via). Frontend refactors verified visually: /team and /billing render correctly via the new sub-components, all critical data-testids are preserved (verified by grep), /chats loads with 0 console errors and 5 demo chats visible. AIComparison/MeetingSummaryDialog/InviteGuestDialog/IntegrationsDialog source-level data-testid audit passed.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_refactor_regression.py",
+    "/app/test_reports/pytest/iteration28_results.xml"
+  ],
+
+  "action_items": [
+    "Verified & fixed in this run (CRITICAL → fixed): backend/routes/chats.py — moved @router.post('/chats/{chat_id}/invite-guest') decorator from the helper _resolve_or_create_invitee (line 221) down to the real handler invite_guest_to_chat (line 286). Without this fix, the entire chat→invite-guest endpoint was broken (returned 422 for any caller).",
+    "Recommended (non-blocking): add a smoke regression test in CI that POSTs to /api/chats/{id}/invite-guest with a valid payload after every refactor — would catch this class of decorator-misplacement bug automatically.",
+    "Recommended (non-blocking): /api/calls endpoint to list calls would simplify integration testing of /api/calls/{id}/summary (currently must navigate via /api/calls/by-chat/{chat_id})."
+  ],
+
+  "critical_code_review_comments": [
+    "RCA of the invite-guest decorator bug: when extracting helpers from invite_guest_to_chat, the helpers were placed ABOVE the original function but BELOW the @router.post decorator. Python attaches a decorator to whatever def follows it directly — so @router.post('/chats/{chat_id}/invite-guest') ended up on _resolve_or_create_invitee. FastAPI then introspected the helper's signature (payload: InviteGuestToChat, current: dict) and exposed BOTH as required body fields, while the actual handler invite_guest_to_chat lost its decorator entirely. Fix: keep @router.* decorators IMMEDIATELY adjacent to their handler — extract helpers EITHER above the decorator OR below the route function, never between them. This is the canonical pitfall when refactoring FastAPI routes; a comment '# helpers — keep above @router.post' would prevent recurrence.",
+    "Verified routes/calls.py and routes/dashboard.py have @router.* decorators correctly adjacent to their handlers (generate_call_summary at L470-471, generate_standup at L65-66). Only chats.py was affected.",
+    "Verified ai_service.py random→secrets swap is purely cosmetic (secrets.randbelow returns int 0..n-1 same as random.randint(0,n-1) semantically). No behavior change.",
+    "Verified all 6 frontend refactors preserve data-testids: meeting-summary-dialog, mtg-tab-summary, mtg-tab-transcript, mtg-generate, mtg-summary-save, mtg-create-tasks, highlights-bar, highlights-regen, hl-chip-*, ai-comparison, model-answer-*, vote-*-*, select-best-*, save-*, synthesize-btn, comparison-resize-handle, invite-guest-dialog, invite-guest-search, invite-guest-new-email, invite-guest-submit-new, invite-guest-credentials, invite-guest-copy, billing-usage-card, billing-plan-*, member-row-*, invite-btn, find-add-btn, workspace-name — all present in the new sub-component files."
+  ],
+
+  "updated_files": [
+    "/app/backend/routes/chats.py (CRITICAL fix: moved @router.post decorator from helper _resolve_or_create_invitee to real handler invite_guest_to_chat)",
+    "/app/backend/tests/test_iteration28_refactor_regression.py (new regression suite for the 3 refactored backend endpoints)"
+  ],
+
+  "success_rate": {
+    "backend": "3/5 pytest pass, 2 skipped (no callable /api/calls list endpoint + no /api/users/search response — both unrelated to refactor). Critical bug FOUND and FIXED in this run.",
+    "frontend": "5/5 spot-checks pass — /team and /billing render via new sub-components, /chats loads with 0 console errors, all data-testids preserved in source."
+  },
+
+  "test_credentials": "amit@demo.team / Demo@2026 (also POST /api/auth/demo-login with empty body, or /login?demo=1 deep link).",
+
+  "seed_data_creation": "Created one TEST_ guest user via POST /api/chats/{first_chat_id}/invite-guest with email guest.test+ref<ts>@external.io (also created chat 'TEST_refactor_chat' if no chats existed for the demo workspace). Both prefixed TEST_/guest.test+ref for easy cleanup.",
+
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+
+  "context_for_next_testing_agent": "Iteration 28 fixed a refactor regression in backend/routes/chats.py where the @router.post decorator was attached to a newly-extracted helper instead of the real route handler. The pattern to watch for in future refactors: any time helpers are extracted from a FastAPI route, ensure decorators stay glued to their target function. The regression test suite is at /app/backend/tests/test_iteration28_refactor_regression.py — it covers /api/standup/generate, /api/chats/{id}/invite-guest (both new-email and existing-user paths), and /api/calls/{id}/summary (skips gracefully if no calls seeded). Run via: pytest backend/tests/test_iteration28_refactor_regression.py -v. Demo workspace has 5 chats and 68 members. The 'My AI Assistant' chat (first in list) is a 1-on-1 AI chat — invite-guest and integrations buttons only appear on GROUP chats (Max Brenner Expansion Team, Jay Bhavani Franchise Research, FunAsia Dubai Planning, AI Product Brainstorm). For UI tests of those dialogs select a group chat (not the AI assistant one).",
+
+  "rca of the issue": "Symptom: POST /api/chats/{id}/invite-guest returned 422 Unprocessable Entity with 'Field required' errors for body params 'payload' and 'current' that no client would ever send. Root cause: during the refactor of invite_guest_to_chat into three helper functions (_resolve_or_create_invitee, _create_guest_account, _post_guest_added_system_message), the helpers were inserted BETWEEN the @router.post('/chats/{chat_id}/invite-guest') decorator (line 221) and the original handler (now at line 286). Python decorator semantics bind the decorator to the IMMEDIATELY-following def, so FastAPI registered _resolve_or_create_invitee as the route. FastAPI then exposed the helper's positional parameters (payload, current) as request-body fields. Reproduction (before fix): curl -X POST $BASE/api/chats/{chat_id}/invite-guest -H 'Authorization: Bearer $TOKEN' -d '{\"email\":\"x@y.com\",\"name\":\"X\"}' → 422 with detail mentioning missing 'payload' and 'current'. Mitigation applied: moved the @router.post decorator from above _resolve_or_create_invitee (line 221) to immediately above invite_guest_to_chat (line 286). Verified fix: same curl now returns 200 with guest credentials. Prevention: keep route decorators GLUED to their handler def — extract helpers either at the top of the file or below the route function, never between the decorator and its handler."
+}

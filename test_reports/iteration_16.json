@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 2c-highlights (iter16): Tested AI-generated transcript highlights end-to-end. Backend 11/11 pass (9 fast + 2 slow Claude-gated, ENABLE_SLOW_TESTS=1). Found and fixed a 404 bug in GET/POST /api/calls/{id}/highlights when call documents lacked the projected fields (`transcript_segments`, `transcript_highlights`). MongoDB find_one with a projection on absent fields returns {} which `if not call:` treated as missing → 404. Changed to `if call is None:` in both endpoints. Frontend verified on seeded Max Brenner call (id 11bf8762-…): chat card chip preview `call-hl-{callId}` shows '1 DECISION 2 ACTIONS 1 RISK'; opening MEETING NOTES via `[data-testid=call-notes-{id}]` shows highlights-bar with all 4 chips (`hl-chip-decision`=1, `hl-chip-action_item`=2, `hl-chip-risk`=1, `hl-chip-question`=1) plus the `highlights-regen` button; Transcript tab renders `mtg-transcript-annotated` with 8 `transcript-row-<segId>` entries, colored left borders + kind icon + note label for each highlighted row. Highlight quality on seeded data: includes the expected DECISION (Frisco Legacy West / Plano backup) and ACTION_ITEM (Raj's shortlist by next Friday + comparison deck) — plus an extra QUESTION (weekend foot traffic) and RISK (demographic growth but competition not discussed) flagged by Claude. Regression: iter14 (16/16) and iter15 (8/8 non-slow) all pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16_highlights.py",
+    "/app/test_reports/pytest/iteration16.xml"
+  ],
+  "action_items": [
+    "Bug fixed in /app/backend/server.py: GET /api/calls/{id}/highlights and POST /api/calls/{id}/highlights returned 404 for any call whose Mongo document predates iter16 (i.e. lacks transcript_segments/transcript_highlights fields). Root cause: find_one with a field-projection returns {} (truthy keys absent) and `if not call:` was True for empty dict. Replaced with `if call is None:`. Verified via test_post_highlights_empty_call (was failing 404 → now passes 200 with highlights=[]).",
+    "Optional enhancement (not blocking): expose `generated_at` in POST /api/calls/{id}/highlights response too — currently only GET returns it. Useful for UI to display 'Last analyzed' next to Re-analyze button.",
+    "Optional UX: when generating highlights for the first time (empty cache, segments exist) the dialog shows the 'Find notable moments' yellow CTA — consider auto-triggering on dialog open if hasSegments && !hasHighlights so the user doesn't need an extra click."
+  ],
+  "critical_code_review_comments": [
+    "server.py highlights endpoints (lines 2825-2855): pre-fix bug `if not call:` is a recurring pattern when projecting Mongo docs — search server.py for other `find_one(... {projection}) ... if not X:` and convert to `is None`. Could affect other endpoints silently.",
+    "_generate_and_store_highlights does a second find_one with a fresh projection then if-empty branch returns []. It does not honour `if call is None` either, but here `not call` happens to work because the segs branch returns [] which is fine. Still recommend hardening for clarity.",
+    "end_call fire-and-forget `asyncio.create_task(_generate_and_store_highlights(...))` has no error logging; if Claude rate-limits or the LLM key is invalid the background task swallows the exception silently. Add a try/except wrapper that logs to backend logs (or wrap with `asyncio.shield` + done-callback that logs).",
+    "ai_service.highlight_segments returns [] on any json parse failure — consider logging the raw Claude response (first 500 chars) on parse failure to aid debugging when Claude returns markdown despite the system message.",
+    "MeetingSummaryDialog.jsx generateHighlights() does not refresh the per-segment annotation map until React re-renders after setHighlights — works in practice because hlBySegment is computed from `highlights` state. No issue, but worth a comment.",
+    "MessageBubble.jsx CallRecordCard fetches /highlights on every render of an ended-call card. For chats with many ended calls this is N requests. Consider batching via a context or moving the fetch to chat-load level."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (2 occurrences of `if not call:` -> `if call is None:` in highlights endpoints)",
+    "/app/backend/tests/test_iteration16_highlights.py (new, 11 tests covering GET/POST highlights, shape, kinds, quality, cached/regenerate, empty call, 404, 401, background-task proxy)"
+  ],
+  "success_rate": {
+    "backend": "11/11 = 100% (9 fast + 2 slow Claude-gated). iter14 16/16 + iter15 8/8 regression = 100%.",
+    "frontend": "100% on iter16 scope — call-hl preview chip on chat card, highlights-bar in dialog, all 4 chip kinds, regen button, annotated transcript with 8 rows + color-coded borders/icons/notes verified."
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (token stored under localStorage key 'eat_token').",
+  "seed_data_creation": "None. Tests rely on the iter15 seeded Max Brenner call (id 11bf8762-37e1-4c71-b774-cb00564eb625) which has 8 transcript_segments + cached transcript_highlights with 1 decision + 2 action_items + 1 risk + 1 question.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test at /app/backend/tests/test_iteration16_highlights.py. Run normally for fast suite: pytest backend/tests/test_iteration16_highlights.py -v. For Claude-dependent slow tests (regenerate + end-call background trigger): ENABLE_SLOW_TESTS=1 pytest .... The seeded Max Brenner call (11bf8762-...) is the stable data point for highlight-quality assertions — its 8 segments yield deterministic decision + action_item + risk + question highlights from Claude (verified twice across two regenerate calls, kinds stable). Frontend: use exact testid `call-notes-{callId}` (not :has-text('MEETING NOTES') because there are many such buttons in the seeded chat). The chat list scrolls so scroll_into_view_if_needed() first. WebSocket error in console is unrelated benign noise (existing in iter15 too).",
+  "rca of the issue": "RCA: GET/POST /api/calls/{id}/highlights returned HTTP 404 for any call whose MongoDB document didn't have `transcript_segments` and `transcript_highlights` fields stored (older calls created before iter16). REPRO: any pre-iter16 ended call, e.g. `curl /api/calls/35f7437c-cb99-4daf-9709-d1af76e964fe/highlights` → 404 while `curl /api/calls/<same id>` → 200. CAUSE: motor `find_one({...}, {_id:0, transcript_highlights:1, ...})` returns `{}` (empty projection result) when no projected fields exist on the doc. The check `if not call: raise 404` treats `{}` as falsy. FIX: changed to `if call is None:` in both endpoints (server.py:2836 and 2849). VERIFIED: test_post_highlights_empty_call now returns 200 with highlights=[] (was 404). Side-benefit: empty-call requests now correctly initialize cache via _generate_and_store_highlights → sets transcript_highlights=[] and highlights_generated_at."
+}

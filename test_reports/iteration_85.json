@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 85 — Invite-only launch system (TeamNest.ai) end-to-end tested. Backend: 20/20 pytest PASSED in ~5.7s covering: launch/config (invite_only), signup gate (403 invite_required), waitlist join + duplicate + referral (rank 1247→1197 verified: 50-spot boost), waitlist/status, code state (invalid + lowercase→foundr25 valid), code redeem (200 + session cookie + invites_granted; duplicate email 400), my-invites (TN* personal codes returned), personal code redemption by second user (inviter's accepted=1, next_unlock returned), invited user checkout NOT launch_gated, mongo-flipped waitlist-status user checkout 403 launch_gated, drop DEVOS100 (title/remaining/expires), leaderboard masked names, admin waitlist search+list+approve (returns TN* code), admin codes generator (3 codes), admin drops creator, admin grant-invites, admin analytics (all counters present), admin emails preview, admin waitlist CSV export, admin settings mode switch invite_only→open→signup works (201)→restored to invite_only + signup gate re-engaged (403). Launch mode confirmed back to invite_only after test suite. Frontend Playwright verified: HOME hero (web-hero-request-invite + enter-code + how-it-works, NO web-hero-try-demo, 'currently invite-only' text, web-nav-request-invite), /waitlist direct URL (no redirect, form submits, rank #1,255 displayed, ref-link+copy+all 5 share buttons+milestones 1/3/5/10/25/50 all rendered), /invite (BAD code→invite-state-invalid, 'devos100' lowercase→invite-state-valid + name/email/password/redeem, full redemption 200 with session cookie), /drop/DEVOS100 (drop-code + drop-remaining '78 of 100 spots remaining' + drop-countdown + drop-claim → /invite?code=DEVOS100), /pricing (logged-out shows pricing-launch-gate + pricing-gate-request + pricing-gate-code, NO plan buttons), /signup (auth-invite-gate, 0 email inputs), /login (normal form intact), /invites (redeemed user shows invite-dashboard + invites-remaining + 4 invite-copy-* + 20 invite-share-* buttons — 5 channels × 4 invites), /launch-admin as amit@demo.team (all 7 tabs render: waitlist/codes/drops/leaderboard/analytics/emails/settings; Settings tab shows la-mode-invite_only + all 7 la-flag-* checkboxes: allow_open_signup, allow_public_pricing, allow_public_checkout, allow_invited_upgrade, allow_waitlist_pricing_preview, require_invite_before_checkout, require_admin_approval_before_checkout), REGRESSION /billing for grandfathered demo shows plans normally (billing-launch-gate absent, Free/Pro cards render).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "InviteCode.jsx post-redemption redirect",
+        "issue": "After successful code redeem, page navigates to '/' (marketing landing) instead of '/dashboard' as specified in the review request ('success screen then redirected into the app (/dashboard)'). User's session cookie IS set and API returns token+user+workspaces correctly, but the UI lands them on the logged-out marketing hero. Verified in browser: URL after redeem = 'https://.../' with body text containing 'Log in / Request Invite'. Users must manually click a link to get into the app.",
+        "selector": "post-redeem redirect (invite-redeem success handler)",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "LaunchAdmin.jsx Sel/option markup",
+        "issue": "React hydration warning in browser console on /launch-admin: 'In HTML, <span> cannot be a child of <option>. This will cause a hydration error.' Traced to LaunchAdmin.jsx line 89 in a <Sel> where {n} is wrapped by a dev-only <span data-ve-dynamic ...>. Cosmetic (dropdowns still work), but pollutes console and could trigger client re-render.",
+        "selector": "LaunchAdmin.jsx:89 (la-grant-count Sel options)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Login page",
+        "issues": ["/login still renders a large 'Try the demo — no signup' primary CTA button at the top of the right panel. Review request only explicitly forbids web-hero-try-demo on the marketing hero (which is correctly absent), so this may be intentional for existing users — but visually it undercuts the invite-only positioning by suggesting demo bypass right on the auth page."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration85_launch_invite.py",
+    "/app/test_reports/pytest/iteration85.xml"
+  ],
+  "action_items": [
+    "MEDIUM: On successful /invite redemption, navigate the newly-created user to /dashboard (or /home) instead of '/'. Fix in InviteCode.jsx success handler — e.g., navigate('/dashboard') or window.location.href = '/dashboard' after set-cookie is confirmed. Currently users get dropped on the logged-out-looking marketing page even though their tn_session cookie is valid.",
+    "LOW: Fix hydration warning in LaunchAdmin.jsx:89 Sel options — the visual-editor dev wrapper is emitting <span> inside <option> which is illegal HTML.",
+    "OPTIONAL: Reconsider showing the prominent 'Try the demo — no signup' CTA on /login while global launch mode is invite_only — arguably inconsistent with the invite-gated marketing hero."
+  ],
+  "critical_code_review_comments": [
+    "routes/launch.py:66-96 join_waitlist — solid; uses find_one_and_update on launch_counters for atomic position increment. Duplicate detection is case-normalized on email. ip_hash sha256 first 16 hex chars = ~64 bits of entropy, sufficient for dedupe but non-PII.",
+    "routes/launch.py:153-236 redeem_code — creates user, workspace, membership, personal AI chat, invite_codes.used_count++, invite_redemptions row, marks any matching user_invite as accepted, applies team unlocks, converts waitlist row status, grants N personal invites, sends welcome email, then sets session cookie + returns token. Atomicity is best-effort (no transaction), but each step is idempotent enough. code_state check + email dup check + password length check all pre-mutations. Good order.",
+    "routes/launch.py:246 _apply_team_unlocks — recomputes ALL matching unlock tiers on each accept, so it self-heals if counts change. Fine.",
+    "routes/launch_admin.py:47 mode validation — only whitelists 4 known modes. Good. Missing: audit trail on 'mode' change beyond track_event (no old→new diff, no rollback path visible).",
+    "routes/launch_admin.py:186-200 code generation loop — retries once on collision, but if second attempt collides (very unlikely) it silently inserts an already-existing code path. Consider bumping to 3 retries or using ObjectId-derived suffix.",
+    "routes/billing.py:157 ensure_checkout_allowed runs BEFORE _validate_checkout_request — but Pydantic body validation runs first (per FastAPI), so an invalid-payload waitlist-status user gets 422 instead of 403 launch_gated. Not a security issue (both reject) but confusing for API consumers; my backend test had to send a valid payload to hit the gate.",
+    "InviteCode.jsx post-redeem: redirect target is '/' — should be '/dashboard' per spec (see action_items).",
+    "LaunchAdmin.jsx Waitlist tab: no pagination for large waitlists (>500 rows are truncated server-side, but no page/limit controls in UI). Fine for beta but worth noting.",
+    "LaunchAdmin.jsx Sel/option — <span> inside <option> hydration issue (see ui_bugs).",
+    "services/launch_core.py (not viewed here) — ensure_seed is called at the top of many endpoints. Verify it's idempotent enough not to re-seed on every request (should short-circuit on marker row). If not, consider caching."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration85_launch_invite.py (NEW, 20 tests, ~5.7s, all pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 pytest)",
+    "frontend": "~95% (all 15 flows verified; 1 medium redirect deviation on /invite→/dashboard, 1 low hydration warning)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 (owner + platform admin, grandfathered — no launch_access). Redeemable codes: DEVOS100 (dev_os_demo, 100 uses), FOUNDR25 (founder_beta), BUILD247 (full_beta). Existing invited users: betafounder@test.io / secret123, mate1@test.io / secret123. All login via POST /api/auth/login (sets tn_session HttpOnly cookie).",
+  "seed_data_creation": "Backend pytest created (all TEST-prefixed or qa-<TS>@test.io identifiable): ~4 waitlist_users (qa-wla-*, qa-wlb-*, qa-approve-*), ~4 redeemed users (qa-redeem-*, qa-friend-*, qa-waited-*), 1 waitlist approval → 1 TN* code, 1 campaign 'TEST_iter85_<TS>' with 3 QA* codes, 1 code drop 'QADROP<TS%100000>', 4 personal invites created via grants, several invite_notifications (Mailgun sent). Frontend Playwright created: 1 waitlist user (qa-ui-<TS>@test.io), 1 redeemed user (qa-ui-redeem-<TS>@test.io), 1 invited-dashboard user (qa-ui-inv-<TS>@test.io). None interfere with prod data. Launch mode toggled to 'open' briefly (line ~230 of test) and CONFIRMED restored to 'invite_only' at end + verified via curl at end of suite.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_iteration85_launch_invite.py — run with `cd /app/backend && python -m pytest tests/test_iteration85_launch_invite.py -v --junitxml=/app/test_reports/pytest/iteration85.xml`. Uses pymongo direct write (line ~180) to flip a user's launch_access.status to 'waitlist' to prove checkout gating — expects MONGO_URL & DB_NAME env from backend/.env. The waitlist test relies on ref boost being ≥40 (spec says 50); tighten to ==50 if desired. If /billing/checkout ever moves the launch gate check before Pydantic validation, the invited-user test will need to update payload — currently sends {plan_id:'pro', origin_url:'https://teamnest.ai'} which is a valid schema. Playwright tests verified all data-testids from the spec; some admin tab la-gen-*/la-drop-*/la-wl-* selectors need a `wait_for_selector` after tab click since content is conditionally rendered. Launch mode is CURRENTLY invite_only per API config check — do not leave changed if you re-run.",
+  "rca of the issue": "The two ui_bugs found are cosmetic/UX, not functional. (1) Post-redeem redirect: InviteCode.jsx success handler navigates to '/' rather than '/dashboard' — session is valid, backend returns correct payload, only the client-side navigation target is wrong. Fix: change target route in the redeem-success callback. (2) LaunchAdmin.jsx:89 hydration: dev-only visual-editor injected a <span> into an <option>, which the browser resolves cleanly but React logs. This is a build/HMR artifact — check if the x-ve-dynamic wrappers should be filtered from <option> children in production build. All backend gates (signup 403 invite_required, checkout 403 launch_gated for waitlist-status users, invited users bypassing gate, mode switch open→invite_only) behave exactly per spec."
+}

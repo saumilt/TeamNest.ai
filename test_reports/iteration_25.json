@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only regression of the WhatsApp-style redesign (iteration 25). Verified 12/12 review items end-to-end on mobile 430x932 and desktop 1920x1080 via Playwright. Demo login lands on /chats, 5-tab bottom bar renders/navigates correctly on /chats, /tasks, /research, /projects, /me. Bottom tab bar is correctly HIDDEN on /chats/:chatId (push-detail) and back button returns to list. /me hub renders all 11 expected rows (profile, workspace, billing, dashboard, approvals, find-friends, team-admin, admin-dashboard, my-ai, profile, logout) and Sign out returns to /. Desktop slim sidebar shows brand, workspace switcher, 5 nav items, credits widget, user+logout. Desktop /chats shows 2-pane with 'Pick a chat' empty state. All 16 legacy routes (/dashboard, /profile, /billing, /research, /tasks, /projects, /find-friends, /approvals, /team, /admin, /my-ai, /privacy, /terms, /support, /downloads, /me) return 200 and render content. No 'PHASE 01 / 2026' or 'AI-NATIVE WORKSPACE' chrome detected on Landing, Chats, Me, or Tasks. Backend was NOT tested per request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Tasks board (/tasks)", "issues": ["Column headers (TO DO, IN PROGRESS, NEEDS REVIEW, COMPLETED, OVERDUE), breadcrumb (WORKSPACE / TASKS), and action buttons (ALL, MINE, NEW TASK) still use mono-uppercase tracking-widest chrome — inconsistent with the new native-app aesthetic on Landing/Me/Sidebar/MobileTabBar"]},
+      {"screen": "Chat detail composer (/chats/:chatId)", "issues": ["Composer toolbar buttons (Attach, Ask AI before posting, AI Research) and the 'Loading…' placeholder still use font-mono uppercase tracking-widest classes — should be lowercased for WhatsApp-style consistency"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional polish: remove font-mono/uppercase/tracking-widest classes from Tasks board headers and chat composer toolbar buttons (Attach/Ask AI/AI Research) to fully match the WhatsApp-native aesthetic. Functionally everything in the review request works."
+  ],
+  "critical_code_review_comments": [
+    "AppShell pb-[calc(env(safe-area-inset-bottom)+64px)] correctly clears the bottom tab bar on mobile; verified pages do not overlap.",
+    "MobileTabBar uses isChatDetail = /^\\/chats\\/[^/]+/ regex — correctly distinguishes /chats from /chats/<id>. Also matches /call/ prefix. Good.",
+    "Me.jsx switchWorkspace handler uses window.location.assign('/chats') which is a hard reload; acceptable since the workspace context fully changes. Consider toast cleanup if assign fails (currently dead code path).",
+    "Chats.jsx still imports `label-mono` for the 'Loading…' state at line 347 — orphaned styling class; cosmetic only.",
+    "/my-ai routing redirects to /chats/<personal_ai_chat_id> (verified during route regression). This is intentional behavior from MyAI page, not a bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not in scope)", "frontend": "100%"},
+  "test_credentials": "amit@demo.team / Demo@2026 (demo login button used; also tested manual auth form)",
+  "seed_data_creation": "None — used existing demo workspace seed",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 25 frontend redesign is verified passing. Mobile push-detail pattern works; bottom tab bar hides correctly on chat detail and call. /me hub exposes all secondary screens. Backend unchanged from iteration 24 (native device registration) — no need to retest unless backend was modified. WS errors in console are pre-existing harmless reconnect attempts.",
+  "rca of the issue": "No bug. All 12 review items pass. Two design-only deltas remain on out-of-scope screens (Tasks board + chat composer toolbar) where mono-uppercase chrome was not migrated."
+}

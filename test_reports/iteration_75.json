@@ -1,0 +1,69 @@
+{
+  "summary": "Iteration 75 — QA/security gates, PM approval flow (approve + reject), guest comments, snapshot diff viewer, GitHub-export gating. Backend 11/11 pytest passing (gates 6/6 QA + security ok; owner publish v13; raj publish→approval_requested; raj cannot decide (403); owner approve→v14 + '✅ Approved' chat msg; raj re-publish→owner reject→status rejected + '⛔ Rejected' chat msg + version unchanged; raj github/export→approval_requested; guest share token mint + comments POST/GET; empty guest comment→400; bad token→404; diff endpoint returns lines/added/removed; bad snapshot_id→404). Frontend (Playwright on real preview URL): FIXED a P0 compile error in MessageBubble.jsx (duplicate mangled JSX after line 620 broke webpack — chat page was rendering only the red 'Compiled with problems' banner and NO components). After the fix: chat d553cda0 loads clean; live preview quick-action-0 ('🐛 Fix bug') drops 'fix this bug in the app: ' into composer; viewport toggle switches iframe 642→390px and back; comments drawer opens PreviewCommentsPanel; adding a comment via Enter posts to /api/dev-projects/{id}/preview-comments (200); Resolve → PATCH /dev-preview-comments/{id} (200); Convert to Task → POST convert-to-task (200) with toast 'Task created on the Dev OS board'; PublishDialog TeamNest tab shows gate-qa-badge 'QA 6/6', gate-security-badge 'Security passed', '🟢 Safe to publish'; DevStudio Code tab → frontend/index.html → History → bc-diff-{id} opens diff-viewer-overlay with '+/−' colored lines, hunk header, and 'Revert to this version' (diff-revert-btn); public /share/{token} loads unauthenticated (no redirect — /share/ IS in PUBLIC_PREFIXES from iter74 fix), header 'Feedback' toggle opens share-feedback-panel showing 7 comments (incl. 'Client Jane · guest') and successfully accepts a new named guest comment 'TEST_iter75_guest_UI'. ONE HIGH-PRIORITY FRONTEND BUG REMAINS: ApprovalActionCard.jsx is imported in MessageBubble.jsx line 40 but is NEVER RENDERED anywhere — approval-required chat messages (metadata.approval_card) display as plain markdown so approval-approve-btn/approval-reject-btn/approval-status-pill are missing from chat history. Confirmed 0 [data-testid=approval-action-card] nodes in the chat that has ≥3 approval events (2 approvals + 1 rejection all posted successfully to chat as markdown ai-system messages).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MessageBubble.jsx",
+        "issue": "P0 COMPILE ERROR (fixed by me) — file had mangled duplicate JSX after the correct `}` at line 620 (`</button>\\n)}\\n</div>\\n{meta.call_id && (...)}` etc), which caused webpack SyntaxError: Unexpected token at 621:15. The whole chat surface rendered only the red 'Compiled with problems' overlay. Fix applied: removed the trailing duplicate block. Frontend now compiles cleanly.",
+        "selector": "/app/frontend/src/components/MessageBubble.jsx line 621-629 (dead code after the final `}`)",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "MessageBubble.jsx / ApprovalActionCard wiring",
+        "issue": "ApprovalActionCard is IMPORTED at line 40 but NEVER RENDERED. Approval chat messages (metadata.approval_card set by backend's _post_approval_message in dev_gates.py) show up as plain markdown bubbles ('🔐 **Approval required** — Raj Mehta wants to...' or '⛔ **Rejected** — Amit Patel rejected…') instead of interactive cards. In chat d553cda0 there are ≥3 approval events but 0 [data-testid=\"approval-action-card\"] nodes — approval-approve-btn / approval-reject-btn / approval-status-pill selectors cannot be found because the card component is dead code. Add a branch alongside the existing `message.metadata?.build_activity_id` block (line 122-128 of MessageBubble.jsx) that renders `<ApprovalActionCard card={message.metadata.approval_card} />` when message.metadata?.approval_card is truthy.",
+        "selector": "/app/frontend/src/components/MessageBubble.jsx (insert render branch near line 128, mirroring BuildProgressCard)",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Chat page bottom-right",
+        "issues": ["'Have you met AI Paralegal?' promo card overlaps the live-preview-comments-toggle drawer's send-button area. Fill+click on preview-comment-send became unreliable in Playwright — Enter key still works. Consider adding pointer-events:none to the promo card when the drawer is open, or dismiss the promo card automatically."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration75_gates_approvals.py",
+    "/app/test_reports/pytest/iteration75.xml"
+  ],
+  "action_items": [
+    "HIGH: Wire ApprovalActionCard in MessageBubble.jsx — add `if (message.metadata?.approval_card) return <div data-testid={...}><ApprovalActionCard card={message.metadata.approval_card} /></div>;` next to the build_activity_id branch (line 123-128). Backend already emits metadata.approval_card correctly (verified in dev_gates.py _post_approval_message + test chat has ≥3 approval events).",
+    "OPTIONAL: Dismiss/hide the 'Try AI Paralegal' promo card when the live-preview comments drawer is open (small overlap with the send button in the drawer)."
+  ],
+  "critical_code_review_comments": [
+    "MessageBubble.jsx: unused import of ApprovalActionCard should have been caught by ESLint (`no-unused-vars`). The initial compile error also would have been caught by pre-commit lint. Consider enabling lint-on-save and adding CI lint gate.",
+    "dev_gates.py: `maybe_require_approval` reuses existing pending approvals when a member re-submits (line 163-167 — nice, avoids duplicate chat spam). But there's no rate limit for a member spamming publish (each will find and re-return the same pending approval — safe). Good design.",
+    "dev_gates.py `decide_action_approval`: when the approved action's inner call raises (e.g. _do_publish throws), status still flips to 'approved' with `error` set on the doc. Chat message correctly says '⚠️ Approved, but execution failed: ...'. Good.",
+    "PreviewCommentsPanel.jsx: `useEffect(() => { load(); }, [load])` and `load` depends on `base` which depends on props — fine. But if projectId prop changes to a new project mid-drawer-open, the previously-loaded comments briefly linger before the fetch settles. Not user-visible in this flow but worth a `setComments([])` at the top of load().",
+    "dev_publish.py `_do_publish` auto-suffixes slug on collision with i in range(2,10) — capped at 9 tries. If ever a viral name hits that limit the publish fails with the generic slug error. Consider longer range or falling back to `-${uuid_short}`.",
+    "MessageBubble.jsx already grew to 620 lines — this file is a hot spot for regressions (this iteration's compile error was the second recent one). Consider splitting per-message-type render subtrees (call, build, approval, ai-question, ai-answer) into their own files."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/MessageBubble.jsx (removed 9 lines of dead/mangled JSX after the final `}` — compile error fix)",
+    "/app/backend/tests/test_iteration75_gates_approvals.py (new — 11 tests all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passing)",
+    "frontend": "85% (7/8 flows verified end-to-end: gates badges, quick-action chips → composer, viewport toggle, comments drawer add/resolve/task with real API calls, PublishDialog launch checklist, DevStudio diff viewer + revert, public /share/{token} guest comments including auth-free access; ONE flow — chat approval cards — is broken because ApprovalActionCard isn't wired into MessageBubble)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/login OR /api/auth/demo-login (cookie). raj@demo.team / Demo@2026 for member approval flow. Test project dc4942dc-c4a5-4020-8419-fef40ea6a19a (backend tests). NOTE the chat d553cda0-62f4-4c2d-aae1-4b168208ed1e's LIVE PREVIEW is linked to a DIFFERENT project 90db1b72-c807-42e4-8d76-d5acf62afbc1 ('Create A Library Of Customizable Proposal Templates') — so comments added from the chat's preview go to 90db1b72, not dc4942dc. Both are valid; caller must be aware.",
+  "seed_data_creation": "During testing I created: (a) TEST_iter75 team-mode comment + resolve + convert-to-task on project 90db1b72; (b) 3 more TEST_iter75_guest guest comments on project dc4942dc via share link; (c) 1 named guest comment 'TEST_iter75_guest_UI' from the public /share/{token} page; (d) 1 owner-publish (version bumped to v13), 1 approved-member-publish (v14), 1 rejected-member-publish (version unchanged); (e) 1 pending github_export approval created by raj (id in DB, not decided). Clean-up not performed — data is TEST_-prefixed and safe to leave.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After main agent wires ApprovalActionCard into MessageBubble.jsx, re-verify by opening https://nest-app-prep.preview.emergentagent.com/chats/d553cda0-62f4-4c2d-aae1-4b168208ed1e as amit and asserting document.querySelectorAll('[data-testid=\"approval-action-card\"]').length >= 3 (there are 2 approval-required + 1 rejected events already in that chat's history — cards should show status pills 'approved'/'rejected' respectively and NO approve/reject buttons since all are already decided). To test the pending-approval flow with visible Approve/Reject buttons, create a new pending approval as raj (curl POST /api/dev-projects/dc4942dc.../publish with raj's session cookie → returns {status:'approval_requested'}) then open the chat as amit — the new card should have data-testid=approval-approve-btn and data-testid=approval-reject-btn visible. Backend regression file at /app/backend/tests/test_iteration75_gates_approvals.py — 11 tests, run with `pytest tests/test_iteration75_gates_approvals.py -v`. All still pass.",
+  "rca of the issue": {
+    "bug_1": "MessageBubble.jsx compile error",
+    "reproduction_1": "Open ANY chat page → red 'Compiled with problems: SyntaxError: /app/frontend/src/components/MessageBubble.jsx: Unexpected token (621:15)' overlay covers screen.",
+    "root_cause_1": "The main agent added a new render branch (the CallRecordCard / call_id block) but the previous version's closing JSX was not fully removed — 9 lines of dead JSX (`</button>` / `)}` / `</div>` / another `<MeetingSummaryDialog…/>` / `</>` / `);` / `}`) remained AFTER the correct function-closing `}` at line 620. Babel-loader hit the stray `</button>` at line 621 as top-level and threw. This kind of merge artifact is invisible to eyeball review but very obvious to any lint or `yarn build` step.",
+    "mitigation_1": "Removed lines 621-629 (verified end-of-file now cleanly closes with `}\\n`). Frontend recompiles clean. Suggest enabling `yarn eslint --fix` on every commit, or a `yarn build` smoke check in CI.",
+    "bug_2": "ApprovalActionCard never rendered in chat",
+    "reproduction_2": "Login as amit → open chat d553cda0 → look at message history. The 2 approval-required + 1 rejected system messages (metadata.approval_card set) render as plain markdown bubbles. Zero [data-testid=approval-action-card] in DOM.",
+    "root_cause_2": "In MessageBubble.jsx line 40 the ApprovalActionCard is imported (`import ApprovalActionCard from '@/components/chat/ApprovalActionCard';`) but the component is never referenced in the render tree. Backend correctly attaches `metadata.approval_card = {approval_id, action, action_label, project_id, project_name}` (see dev_gates.py `_post_approval_message`) but there's no `if (message.metadata?.approval_card) return <ApprovalActionCard card={...} />` branch alongside the existing BuildProgressCard branch (line 122-128).",
+    "mitigation_2": "Add a render branch to MessageBubble.jsx (parallel to the build_activity_id branch): `if (message.metadata?.approval_card) return <div className=\"flex\" data-testid={\\`message-${message.id}\\`}><ApprovalActionCard card={message.metadata.approval_card} /></div>;`. No backend change needed."
+  }
+}

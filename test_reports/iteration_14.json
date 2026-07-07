@@ -1,0 +1,46 @@
+{
+  "summary": "Phase 2c (AI meeting summaries, transcript upload, demo top-up) — backend 16/16 pass, frontend verified end-to-end. Demo top-up correctly seeds 2 historical calls (Max Brenner video 42m, Jay Bhavani audio 28m) with full transcript+summary on call1 and transcript-only on call2; 1 approved approval (Max Brenner) + 1 needs_review (Jay Bhavani); overdue 'Research Frisco restaurant lease rates' task assigned to Raj. POST /calls/{id}/summary returns cached=true when summary exists, generates fresh markdown (## TL;DR + ## Action items / ## Decisions present) with source='transcript' on regenerate=true. PATCH /calls/{id}/summary and /transcript persist edits. GET /export/call/{id}?format=pdf returns %PDF bytes, ?format=docx returns PK bytes — both verified. POST /calls/{id}/upload-recording with a silent WAV succeeds (after a small Whisper-segment fix, see below). Frontend MeetingSummaryDialog opens from the call-ended card, shows metadata bar (duration/participants/started/source=transcript), 8 yellow H3 headings in summary, transcript tab with seeded text, plus Regenerate, Edit, Create tasks, Export PDF, Export Word — all testids present. Approvals page shows APPROVED + NEEDS REVIEW filters working with Jay Bhavani item. Tasks board renders 'Research Frisco lease rates' in OVERDUE column with HIGH/URGENT badge and Raj assigned. Regression: 60 prior tests (iter10 referrals + iter11 phase2a) still pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/calls/{id}/upload-recording",
+        "issue": "voice_service.transcribe_audio assumed Whisper segments are objects (s.start, s.end, s.text), but the current emergentintegrations build returns segments as dicts. Result: 500 with detail 'dict object has no attribute start'. Fixed by duck-typing both dict and object segments in /app/backend/voice_service.py."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14_phase2c.py",
+    "/app/test_reports/pytest/iteration14.xml"
+  ],
+  "action_items": [
+    "Review voice_service.py duck-typed segments fix (handles both dict and SDK object). Same call-site logic existed only for verbose_json Whisper, but the bug bit every upload-recording call regardless of audio content because the SDK exposes segments as dicts in current emergentintegrations.",
+    "Optional polish: in server.py upload_call_recording (line 2660), the error filter for 'decode/format/audio_too_short' did not catch the attribute error — once the underlying voice_service fix is in place this no longer matters, but consider widening the soft-fail filter to AttributeError too.",
+    "server.py is now ~2885 lines. Phase 2c added 5 new endpoints (~265 lines). Strongly recommend splitting into routers (calls_router, voice_router, exports_router) before Phase 3."
+  ],
+  "critical_code_review_comments": [
+    "voice_service.py:42-45 bug: `s.start` assumes object segments. Fixed to support both dict and object — but this means previous voice-note transcription endpoints (server.py:1945, 1972) also relied on this and were silently broken whenever Whisper returned segments. Worth checking if voice-note thread had been broken since the SDK change.",
+    "Demo top-up idempotency is gated on `summary.source: demo_seed` on any call. If a previous run inserted call2 first (no summary) and crashed before call1, the topup would still re-run and create duplicates. Consider a more robust idempotency marker (e.g., a meta document in db.seed_history).",
+    "PATCH /calls/{id}/summary accepts raw dict — no Pydantic validation. A typo'd key silently no-ops with status 200. Recommend a CallSummaryEdit model (mirroring CallTranscriptEdit).",
+    "POST /calls/{id}/summary: cached path doesn't refresh `generated_at` so old summaries can be served indefinitely; users have no UI signal that the cached summary is stale. Consider showing 'generated X ago' in dialog header (currently only 'source' shown)."
+  ],
+  "updated_files": [
+    "/app/backend/voice_service.py (bug fix: handle dict and object segments)",
+    "/app/backend/tests/test_iteration14_phase2c.py (new, 16 test cases)"
+  ],
+  "success_rate": {
+    "backend": "16/16 = 100% on Phase 2c; 60/60 = 100% on regression (iter10 + iter11). iter13_calls.py has a pre-existing conftest URL fixture issue unrelated to Phase 2c.",
+    "frontend": "100% on Phase 2c scope — MeetingSummaryDialog opens, renders, all 5 action buttons present; Approvals page filters NEEDS_REVIEW correctly; Tasks board shows overdue Frisco task with HIGH/URGENT + Raj; CallRoom audio button intact."
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 (owner via POST /api/auth/demo-login). priya@demo.team / Demo@2026 (admin reviewer).",
+  "seed_data_creation": "None new — used the existing _seed_phase2_topup() output. PATCH transcript test restored original text after editing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2c is functionally green. The one real bug found (Whisper segments duck-typing in voice_service.py) is fixed. Backend test file at /app/backend/tests/test_iteration14_phase2c.py covers: demo top-up (4 tests), summary cached/regenerate/cached-again (3), PATCH summary/transcript (2), upload silent WAV (1), export PDF/DOCX/invalid (3), 404 guards (3). For UI: log in via the 'TRY DEMO WORKSPACE' button (it handles token storage under key 'eat_token'); manually setting localStorage.token does not work because the key is 'eat_token' not 'token'. Then click 'Max Brenner Expansion Team' chat → scroll up if needed → click 'Meeting notes' button on any [data-testid^=call-card-] ended card to open MeetingSummaryDialog.",
+  "rca of the issue": "voice_service.transcribe_audio (line 42-45) iterated `segs` with `s.start, s.end, s.text`. The Whisper response in current emergentintegrations.llm.openai.OpenAISpeechToText returns segments as plain dicts when response_format='verbose_json', so attribute access raises AttributeError. server.py:upload_call_recording catches only 'decode'/'format'/'audio_too_short' in str(e).lower(), so 'object has no attribute start' fell through to HTTP 500. Reproduction: POST a 1-second silent 8kHz mono PCM WAV to /api/calls/{id}/upload-recording. Mitigation: dual-path access using isinstance(s, dict) ? s.get('start') : getattr(s, 'start', None). Verified by re-running the test which now returns 200."
+}

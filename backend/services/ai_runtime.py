@@ -1,0 +1,375 @@
+"""AI research + inline-task background handlers.
+
+Pulled out of server.py so they can be invoked from multiple routers (chats,
+ai) without circular imports.
+"""
+from typing import List, Optional
+
+from ai_service import ask_models_parallel, synthesize_answer
+from deps import (
+    PROJ,
+    _broadcast_message,
+    _post_reminder,
+    db,
+    logger,
+    new_id,
+    now_iso,
+)
+from services.billing import (
+    can_use_model,
+    consume_credits,
+    credit_cost_for_model,
+)
+
+
+async def _finalize_research(
+    thread: dict,
+    responses: List[dict],
+    chat_id: str,
+    parent_msg_id: Optional[str],
+    favorite_model: Optional[str] = None,
+    compare: bool = False,
+) -> dict:
+    """After all models have responded: auto-pick best, auto-synthesize, post the
+    synthesized answer to chat. Returns the posted message dict.
+
+    If only one model responded, skip synthesis and post that single answer
+    directly. Auto-best tie-breaks toward the user's favorite model.
+
+    When `compare=True` (user explicitly asked for a side-by-side via
+    `@ai compare …`), the posted body includes EVERY model's answer stacked
+    inline so the user sees the full comparison immediately — no extra
+    click needed. The synthesized takeaway is still appended at the bottom.
+    """
+
+    def _score(r: dict) -> tuple:
+        return (
+            r.get("confidence_score") or 0,
+            1 if (favorite_model and r.get("model_key") == favorite_model) else 0,
+            1 if r.get("real") else 0,
+        )
+
+    best = max(responses, key=_score, default=None)
+    if best:
+        await db.ai_responses.update_one(
+            {"id": best["id"]}, {"$set": {"selected_as_best": True}}
+        )
+        best["selected_as_best"] = True
+
+    single_mode = len(responses) <= 1
+    if single_mode and best:
+        final_synthesis = best.get("answer") or ""
+        synthesized_flag = False
+    else:
+        final_synthesis = await synthesize_answer(
+            thread["question"], responses, thread["id"], preferred_best=best
+        )
+        synthesized_flag = True
+
+    # ── Build the chat-bubble body ────────────────────────────────────
+    # In compare mode we stitch every model's answer into one rich body so
+    # the user sees the full side-by-side without ever clicking "Show all
+    # comparisons". The synthesis is appended at the bottom as a takeaway.
+    if compare and not single_mode:
+        sections = []
+        for r in responses:
+            name = r.get("model_name") or r.get("model_key") or "AI"
+            answer = (r.get("answer") or "").strip() or "_(no answer)_"
+            badge = " ⭐" if best and r.get("id") == best.get("id") else ""
+            sections.append(f"### {name}{badge}\n\n{answer}")
+        comparison_block = "\n\n---\n\n".join(sections)
+        final = (
+            f"{comparison_block}\n\n---\n\n"
+            f"### 💡 Synthesized takeaway\n\n{final_synthesis}"
+        )
+    else:
+        final = final_synthesis
+
+    await db.ai_threads.update_one(
+        {"id": thread["id"]},
+        {"$set": {
+            "status": "complete",
+            "final_answer": final_synthesis,
+            "auto_synthesized": synthesized_flag,
+            "single_model": single_mode,
+            "compare_mode": compare,
+        }},
+    )
+
+    # Compute the credits this question cost so the UI can show "via GPT-4o
+    # mini · 2 credits" with no extra round trips.
+    credits_total = sum(
+        credit_cost_for_model(r.get("model_key") or "")
+        for r in responses if r.get("real")
+    )
+    credits_breakdown = [
+        {"model_key": r.get("model_key"), "model_name": r.get("model_name"), "credits": credit_cost_for_model(r.get("model_key") or "")}
+        for r in responses if r.get("real")
+    ]
+
+    answer_msg = {
+        "id": new_id(),
+        "chat_id": chat_id,
+        "sender_id": "ai-system",
+        "message_type": "ai_answer",
+        "body": final,
+        "parent_message_id": parent_msg_id,
+        "metadata": {
+            "thread_id": thread["id"],
+            "models": thread["selected_models"],
+            "status": "complete",
+            "synthesized": synthesized_flag,
+            "auto_synthesized": synthesized_flag,
+            "single_model": single_mode,
+            "compare_mode": compare,
+            "best_model": best["model_name"] if best else None,
+            "best_model_key": best["model_key"] if best else None,
+            "response_count": len(responses),
+            "credits_total": credits_total,
+            "credits_breakdown": credits_breakdown,
+        },
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(answer_msg.copy())
+    await _broadcast_message(chat_id, answer_msg)
+    return answer_msg
+
+
+async def filter_models_by_credits(workspace_id: str, models: list) -> tuple[list, list]:
+    """Return (allowed_models, blocked). `blocked` items: {model_key, reason}."""
+    allowed: list = []
+    blocked: list = []
+    for m in models:
+        ok, reason = await can_use_model(workspace_id, m)
+        if ok:
+            allowed.append(m)
+        else:
+            blocked.append({"model_key": m, "reason": reason})
+    return allowed, blocked
+
+
+async def deduct_credits_for_responses(
+    workspace_id: str, user_id: str, responses: list, source: str = "ai_research"
+) -> int:
+    """Charge the workspace for every real (non-mock) model response. Returns
+    the total credits deducted."""
+    total = 0
+    for r in responses:
+        if not r.get("real"):
+            continue
+        cost = credit_cost_for_model(r.get("model_key") or "")
+        await consume_credits(
+            workspace_id,
+            cost,
+            source=source,
+            model_key=r.get("model_key"),
+            user_id=user_id,
+            meta={"thread_id": r.get("research_thread_id")},
+        )
+        total += cost
+    return total
+
+
+async def handle_ai_command(
+    chat_id: str, user_id: str, question: str, models: List[str],
+    compare: bool = False,
+):
+    """Background entry-point for inline `@AI ...` commands in chat messages.
+
+    `compare=True` means the user explicitly asked for a side-by-side view
+    (`@ai compare …` / `@ai show comparison …`). When that's set we render
+    every model's answer inline in the chat bubble — no extra click needed
+    to see the comparison.
+    """
+    user = await db.users.find_one({"id": user_id}, PROJ)
+    favorite = (user or {}).get("preferences", {}).get("favorite_ai_model")
+    workspace_id = (user or {}).get("workspace_id")
+    # ===== Per-chat AI Billing & Permissions gate =====
+    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    if chat and user:
+        from routes.chat_ai_settings import check_ai_allowed as _chk
+        gate = await _chk(chat, user, estimated_credits=20)
+        if not gate["allowed"]:
+            msg = {
+                "id": new_id(), "chat_id": chat_id, "sender_id": "ai-system",
+                "message_type": "ai_answer", "body": f"⚠️ {gate['reason']}",
+                "parent_message_id": None,
+                "metadata": {"ai_blocked": True, "reason": gate["reason"]},
+                "reactions": {}, "created_at": now_iso(),
+                "edited_at": None, "deleted_at": None,
+            }
+            await db.messages.insert_one(msg.copy())
+            await _broadcast_message(chat_id, msg)
+            return
+        # Apply per-chat feature toggles.
+        settings = gate["settings"]
+        premium_keys = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "perplexity", "grok"}
+        if not settings.get("premium_models_enabled", True):
+            models = [m for m in models if m not in premium_keys]
+        if not settings.get("multi_model_compare_enabled", True) and len(models) > 1:
+            models = models[:1]
+    # Filter out models the workspace can't afford
+    allowed_models, blocked = await filter_models_by_credits(workspace_id, models) if workspace_id else (models, [])
+    if not allowed_models:
+        # No model can run — drop a friendly upgrade nudge in chat instead.
+        msg = {
+            "id": new_id(),
+            "chat_id": chat_id,
+            "sender_id": "ai-system",
+            "message_type": "ai_answer",
+            "body": (
+                "**AI credits exhausted** for this workspace. Upgrade your plan "
+                "from the Billing page to keep using premium models, or wait "
+                "until your monthly allowance resets."
+            ),
+            "parent_message_id": None,
+            "metadata": {"upgrade_required": True, "blocked": blocked},
+            "reactions": {},
+            "created_at": now_iso(),
+            "edited_at": None,
+            "deleted_at": None,
+        }
+        await db.messages.insert_one(msg.copy())
+        await _broadcast_message(chat_id, msg)
+        return
+    thread = {
+        "id": new_id(),
+        "chat_id": chat_id,
+        "question": question,
+        "created_by": user_id,
+        "selected_models": allowed_models,
+        "final_answer": None,
+        "status": "running",
+        "votes": {},
+        "public_token": None,
+        "created_at": now_iso(),
+    }
+    await db.ai_threads.insert_one(thread.copy())
+
+    placeholder = {
+        "id": new_id(),
+        "chat_id": chat_id,
+        "sender_id": "ai-system",
+        "message_type": "ai_question",
+        "body": question,
+        "parent_message_id": None,
+        "metadata": {
+            "thread_id": thread["id"],
+            "models": allowed_models,
+            "blocked": blocked,
+            "status": "running",
+        },
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(placeholder.copy())
+    await _broadcast_message(chat_id, placeholder)
+
+    responses = await ask_models_parallel(question, allowed_models, thread["id"])
+    for r in responses:
+        r["id"] = new_id()
+        r["research_thread_id"] = thread["id"]
+        r["votes"] = {"best": [], "most_accurate": [], "best_citations": [], "most_useful": []}
+        r["selected_as_best"] = False
+        r["created_at"] = now_iso()
+        await db.ai_responses.insert_one(r.copy())
+
+    if workspace_id:
+        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_inline")
+        # Per-chat usage ledger.
+        from routes.chat_ai_settings import record_ai_usage as _rec
+        for r in responses:
+            if not r.get("real"):
+                continue
+            await _rec(
+                chat_id=chat_id, user_id=user_id,
+                credits=credit_cost_for_model(r.get("model_key") or ""),
+                model=r.get("model_key"), workflow="inline",
+                project_folder_id=(chat or {}).get("project_folder_id"),
+            )
+
+    await _finalize_research(
+        thread, responses, chat_id, placeholder["id"],
+        favorite_model=favorite, compare=compare,
+    )
+
+
+async def handle_inline_task(chat_id: str, creator: dict, source_msg_id: str, cmd: dict):
+    try:
+        await _do_inline_task(chat_id, creator, source_msg_id, cmd)
+    except Exception as e:
+        logger.exception("[inline-task] failed: %s", e)
+
+
+async def _do_inline_task(chat_id: str, creator: dict, source_msg_id: str, cmd: dict):
+    assignee_id = None
+    assignee_name = None
+    if cmd.get("assignee_name"):
+        wanted = cmd["assignee_name"].lower().strip()
+        members = await db.users.find(
+            {"workspace_id": creator["workspace_id"]}, PROJ
+        ).to_list(1000)
+        for m in members:
+            if m["name"].lower() == wanted:
+                assignee_id, assignee_name = m["id"], m["name"]
+                break
+        if not assignee_id:
+            for m in members:
+                if m["name"].lower().startswith(wanted) or wanted in m["name"].lower():
+                    assignee_id, assignee_name = m["id"], m["name"]
+                    break
+
+    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    task = {
+        "id": new_id(),
+        "workspace_id": creator["workspace_id"],
+        "project_folder_id": chat.get("project_folder_id") if chat else None,
+        "source_chat_id": chat_id,
+        "source_message_id": source_msg_id,
+        "title": cmd["title"],
+        "description": f"Auto-created from chat by {creator['name']}.",
+        "assigned_to": assignee_id,
+        "created_by": creator["id"],
+        "due_date": cmd.get("due_date"),
+        "priority": cmd.get("priority", "medium"),
+        "status": "todo",
+        "created_at": now_iso(),
+        "completed_at": None,
+    }
+    await db.tasks.insert_one(task.copy())
+
+    parts = [f"Task created: \"{task['title']}\""]
+    if assignee_name:
+        parts.append(f"assigned to {assignee_name}")
+    if task.get("due_date"):
+        parts.append(f"due {task['due_date'][:10]}")
+    parts.append(f"priority {task['priority']}")
+    confirm_body = " · ".join(parts) + "."
+    confirm = {
+        "id": new_id(),
+        "chat_id": chat_id,
+        "sender_id": "ai-system",
+        "message_type": "task",
+        "body": confirm_body,
+        "parent_message_id": source_msg_id,
+        "metadata": {"task_id": task["id"]},
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(confirm.copy())
+    await _broadcast_message(chat_id, confirm)
+
+    if assignee_id:
+        due_text = f" Due {task['due_date'][:10]}." if task.get("due_date") else ""
+        await _post_reminder(
+            assignee_id,
+            f'You have been assigned: "{task["title"]}".{due_text}',
+            task,
+        )

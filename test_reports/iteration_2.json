@@ -1,0 +1,54 @@
+{
+  "summary": "TeamNest.ai Phase 2 full backend + frontend testing complete. Backend: 54/54 tests pass (35 regression + 19 new for uploads/file-download/share-snapshot/real-AI). Frontend: all 11 critical flows verified — rebrand to teamnest.ai (yellow TN logo), demo-login, dashboard stats, sidebar nav, group chat messaging, Ask AI (make_professional → apply), Research with 3 models (real responses from chatgpt/claude/gemini), Share snapshot → public /s/{token} loads WITHOUT auth, file upload + download chip, Projects (5 folders + detail), Tasks (5-column kanban + new-task creation), Team Admin (5 members + invite modal).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Chats composer Send button area (bottom-right)",
+        "issue": "Emergent badge (id=\"emergent-badge\", 'Made with Emergent' link) overlays the Send button and Ask N model(s) submit button at bottom-right. In Playwright automation it intercepted pointer events and we had to hide it. On real user setups it overlaps visually in the same corner and may catch clicks on narrow viewports.",
+        "selector": "#emergent-badge",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration2_features.py",
+    "/app/backend/tests/test_emergent_ai_teams.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iteration2_results.xml",
+    "/app/test_reports/pytest/iteration1_regression.xml"
+  ],
+  "action_items": [
+    "Consider raising the chat composer container above the Emergent badge (z-index) or adding right-padding so the Send button sits clear of the bottom-right badge.",
+    "server.py is now 1074 lines (was 925) — increasing maintenance debt; split into routes/auth.py, routes/chats.py, routes/ai.py, routes/files.py, routes/snapshot.py, routes/tasks.py modules.",
+    "/api/files/{id} reads full file into memory (data, ct = get_object(...)); fine at 20MB cap but consider streaming Response (StreamingResponse with iterator) for fairness under concurrent downloads.",
+    "/api/uploads also reads entire file into memory before size check — for a 50MB upload attempt the server has already buffered 50MB before responding 413. Use file.size or check Content-Length header / chunked read."
+  ],
+  "critical_code_review_comments": [
+    "Public snapshot endpoint correctly strips voter user IDs from votes (returns only vote_counts) — good privacy practice.",
+    "File download endpoint correctly supports both Authorization: Bearer and ?auth= query param so <img src> can render images — well-designed.",
+    "Cross-workspace file download forbidden (403) verified end-to-end with a fresh signup user — proper isolation.",
+    "Share-link create endpoint is idempotent (reuses existing public_token) — good UX, no token churn.",
+    "Revoke (DELETE /share) cleanly nulls public_token; subsequent /api/public/snapshot returns 404 — verified.",
+    "ALLOWED_EXT whitelist works (rejects .exe with 400) and 20MB cap returns 413 — both verified.",
+    "MongoDB _id stripping verified across all new responses (uploads, files, public snapshot thread+responses).",
+    "DeepSeek 402 'Payment Required' is gracefully returned as answer text with real=False — meets spec; not a bug.",
+    "Iteration 1 regression test had to be updated for brand rename ('teamnest' instead of 'emergent-ai-teams' at root /api/) — semantic change, expected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2_features.py (new — 19 tests, all pass)",
+    "/app/backend/tests/test_emergent_ai_teams.py (updated: brand rename assertion + relaxed deepseek simulated assertion now that it's real)"
+  ],
+  "success_rate": {"backend": "100% (54/54)", "frontend": "100% of critical flows verified"},
+  "test_credentials": "Demo accounts /app/memory/test_credentials.md verified — Demo@2026 works; /api/auth/demo-login returns Amit token.",
+  "seed_data_creation": "No additional seed data needed. Tests use prefix TEST_ for created chats/folders/tasks; uploaded files are real and remain in Emergent object storage (no API to delete files from frontend, but they are scoped to workspace).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both regression suites (test_emergent_ai_teams.py + test_iteration2_features.py) are the canonical backend regression set — run together. New endpoints all pass: POST /api/uploads, GET /api/files/{id} (header or ?auth=), POST/DELETE /api/ai/research/{id}/share, GET /api/public/snapshot/{token}. Perplexity + Grok both return real=True (Perplexity confirmed 'Paris' for capital-of-France test). DeepSeek 402 is EXPECTED. Frontend: Ask AI flow uses data-testid pattern improve-{action} (e.g. improve-make_professional) and apply-improved. AI research model toggles default to all-selected — clicking a toggle DESELECTS rather than selects. Share button (data-testid=share-snapshot-btn) appears on AIComparison panel after responses ready. Public route /s/:token works in fresh tab without auth. Emergent badge in bottom-right needs to be hidden during Playwright automation to click the Send button.",
+  "rca of the issue": "Minor frontend overlay: 'Made with Emergent' badge (#emergent-badge) is a fixed-position element pinned to bottom-right with high z-index that overlaps the chat composer's Send button and the AI research drawer's submit button. Reproduction: open any group chat, type a message, attempt to click the Send button — at 1920x1080 the badge's hit area partially covers the button. Mitigation suggestions: (1) Increase right padding on .chat-composer to push send button clear of the badge, OR (2) move composer action buttons further left, OR (3) accept it (badge is small enough that ~90% of click area on Send remains)."
+}

@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 54 — Dev OS nightly auto-scan scheduler. Backend: 8/9 pytest tests passed (test_iteration54_nightly_scan.py). Governance now exposes `nightly_scan_enabled` (default True), PUT persists, POST /api/dev-os/run-nightly-scan works, digest message posted to linked chat starts with '🌙 **Dev OS · nightly scan**' and includes deep-link, proposals tagged created_by_agent='devos_nightly' + source_chat_id, opt-out switch fully skips (drafted=0), startup log line confirmed. Frontend: governance page renders new 'NIGHTLY AUTO-SCAN' section with Run now button (gov-run-scan) and new toggle (gov-toggle-nightly_scan_enabled); both wire to the correct APIs and the success toast 'Scanned X · drafted Y' renders correctly. 1 minor dedupe quirk found (see below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/dev-os/run-nightly-scan",
+        "issue": "Dedupe by (project_id, source_signal, created_by_agent='devos_nightly') works for stable user content, but the nightly digest message that the scheduler itself posts into the linked chat contains keywords ('bug', 'perf', 'churn', 'risk', etc.) which scan_chat_for_signals re-matches on the NEXT run, producing NEW source_signal values that bypass dedupe. Observed: 1st run drafted 5 proposals → 2nd run (immediate re-trigger) drafted 6 (instead of 0). Without dedupe the count would be ~18, so dedupe is partially working; the leak comes purely from the AI-system digest messages re-feeding the regex."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration54_nightly_scan.py",
+    "/app/test_reports/pytest/iteration54_nightly.xml"
+  ],
+  "action_items": [
+    "Consider filtering AI-system messages (message_type=='ai-system' or sender_id=='ai-system') out of scan_chat_for_signals so the scheduler's own digest messages don't trigger fresh signals on subsequent runs. Alternatively, ignore messages whose body starts with '🌙 **Dev OS · nightly scan**'. Currently this is a minor quirk — does not duplicate identical signals, only introduces 1-2 new ones per project per night driven by the digest text itself."
+  ],
+  "critical_code_review_comments": [
+    "services/dev_os_nightly_scan.py:84 — MAX_PROPOSALS_PER_SCAN=3 cap per project applies AFTER the LLM gen calls; consider capping the slice before gather to avoid wasted LLM cost if MAX is later lowered.",
+    "routes/dev_os.py:163 (run-nightly-scan endpoint) — has no auth-role gate beyond require_user; any workspace member can trigger an LLM-heavy 30-90s scan. Consider restricting to owner/admin or rate-limiting (e.g., 1 manual scan per workspace per 5 min).",
+    "dev_os_nightly_scan.py:51 — when chat lookup fails (chat=None), function returns 0 WITHOUT updating last_scan_at, so the project stays 'due' on every tick. Minor — wasted DB lookup only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration54_nightly_scan.py (NEW)"
+  ],
+  "success_rate": {"backend": "89% (8/9)", "frontend": "100%"},
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (no body)",
+  "seed_data_creation": "None. Used pre-seeded demo workspace which already has 6 chat-linked dev_projects from prior iterations.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 + Phase 2 + nightly automation Dev OS module is feature-complete. Backend test file is /app/backend/tests/test_iteration54_nightly_scan.py (pytest). Note: scan endpoint takes 30-90s due to live LLM; tests use http://localhost:8001 to avoid 100s Cloudflare edge timeout (test runtime ~222s). The single dedupe failure is a real but non-blocking design quirk (digest messages re-trigger regex on next pass). Frontend: gov-toggle-nightly_scan_enabled and gov-run-scan testids present on /dev-os/governance.",
+  "rca of the issue": "Dedupe quirk: services/dev_os_nightly_scan.py:100-109 dedupes by (project_id, source_signal[:500], created_by_agent='devos_nightly'). Each successful nightly tick inserts a system message via db.messages.insert_one (lines 157-170) whose body contains words like 'signals', 'risk', 'proposals', 'bug', etc. The next scan_chat_for_signals call sees these AI-system messages and emits new top_signals with DIFFERENT text content (because they reference the digest body), which then look like brand-new source_signal values to the dedupe table. Fix path: in services/recursive_improvement.scan_chat_for_signals filter out messages where sender_id=='ai-system' or message_type=='ai-system' (or specifically skip bodies starting with '🌙 **Dev OS · nightly scan**'). Reproduction: POST /api/dev-os/run-nightly-scan twice within a minute against the demo workspace — 2nd call still drafts 4-6 proposals instead of 0."
+}

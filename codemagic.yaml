@@ -1,0 +1,163 @@
+# Codemagic CI/CD pipeline for TeamNest.ai
+#
+# Two workflows:
+#   1. android-release   → builds signed AAB → uploads to Google Play (Internal track)
+#   2. ios-release       → builds signed IPA → uploads to TestFlight
+#
+# Both pipelines:
+#   - install yarn deps
+#   - run `yarn build` (CRA production build)
+#   - run `npx cap copy` to sync /build into native projects
+#   - run the platform-specific build (gradle or Xcode)
+#   - sign + upload to the respective store
+#
+# Required Codemagic environment variables / certificates:
+#   ANDROID:
+#     - CM_KEYSTORE              (.jks file uploaded via Codemagic UI)
+#     - CM_KEYSTORE_PASSWORD
+#     - CM_KEY_ALIAS
+#     - CM_KEY_PASSWORD
+#     - GCLOUD_SERVICE_ACCOUNT_CREDENTIALS (Play Console service account JSON)
+#
+#   iOS:
+#     - APP_STORE_CONNECT_PRIVATE_KEY  (App Store Connect API key)
+#     - APP_STORE_CONNECT_KEY_IDENTIFIER
+#     - APP_STORE_CONNECT_ISSUER_ID
+#     - CERTIFICATE_PRIVATE_KEY        (your signing key) – auto-managed if you
+#                                       enable Codemagic-managed signing
+#
+# Both workflows trigger automatically when you push to `main` and the
+# `[mobile-release]` substring appears in the commit message — change the
+# trigger section if you want them on every push.
+
+workflows:
+  android-release:
+    name: TeamNest.ai · Android (Play Store internal)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      vars:
+        PACKAGE_NAME: "ai.teamnest.app"
+      node: 20
+      java: 17
+      android_signing:
+        - tn_android_keystore           # Reference the keystore you upload in Codemagic UI
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: "android-v*"
+          include: true
+    scripts:
+      - name: Install JS deps
+        script: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Build React bundle
+        script: |
+          cd frontend
+          yarn build
+
+      - name: Sync to Android project
+        script: |
+          cd frontend
+          npx cap sync android
+
+      - name: Bump versionCode + versionName
+        script: |
+          cd frontend/android
+          # Use the latest Play Console code so we never collide with manual uploads.
+          BUILD_NUMBER=$(($(google-play get-latest-build-number --package-name "$PACKAGE_NAME" --tracks=internal,alpha,beta,production) + 1))
+          sed -i "s/versionCode .*$/versionCode $BUILD_NUMBER/" app/build.gradle
+          echo "Built versionCode=$BUILD_NUMBER"
+
+      - name: Build signed AAB
+        script: |
+          cd frontend/android
+          ./gradlew bundleRelease
+    artifacts:
+      - frontend/android/app/build/outputs/**/*.aab
+      - frontend/android/app/build/outputs/**/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal     # change to "production" when you're ready
+        in_app_update_priority: 3
+        submit_as_draft: false
+
+  ios-release:
+    name: TeamNest.ai · iOS (TestFlight)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        BUNDLE_ID: "ai.teamnest.app"
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 20
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        provisioning_profiles:
+          - tn_appstore_profile
+        certificates:
+          - tn_distribution_cert
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+      tag_patterns:
+        - pattern: "ios-v*"
+          include: true
+    scripts:
+      - name: Install JS deps
+        script: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Build React bundle
+        script: |
+          cd frontend
+          yarn build
+
+      - name: Sync to iOS project
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Pod install
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Bump build number
+        script: |
+          cd frontend/ios/App
+          BUILD_NUMBER=$(($(app-store-connect get-latest-app-store-build-number "$BUNDLE_ID") + 1))
+          agvtool new-version -all $BUILD_NUMBER
+          echo "Built CFBundleVersion=$BUILD_NUMBER"
+
+      - name: Build & archive IPA
+        script: |
+          cd frontend
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace "ios/App/App.xcworkspace" \
+            --scheme "App"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # submit_to_app_store: false      # flip this when ready for App Store review

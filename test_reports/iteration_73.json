@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 73 — DevProjectSwitcher iframe-refresh bug (the iteration-72 carry-over) is now FULLY RESOLVED. Backend: 16/16 pytest pass — 6 new pointer-regression tests in test_iteration73_active_project_pointer.py (GET /api/chats/{id} reflects pointer for both projects with round-trip toggle; GET /api/chats list reflects pointer; POST /chats/{id}/spin-up-dev-os now writes chat.linked_dev_project_id so a fresh chat's subsequent GET returns linked_dev_project matching the fresh project) PLUS all 10 iteration-72 regression tests still green (next-ideas fresh/cache/refresh/404, spin-up seeds stub files, preview self-heal on empty project, login-shim injection, public share-token preview). Frontend e2e (Playwright on real preview URL with demo cookie): opened chat 1ad8d0d0..., expanded LivePreviewPane via the vertical LIVE PREVIEW strip, recorded initial iframe src = /api/dev-projects/b51bfe01.../preview/index.html and header pill = 'Engineering · Project'. Clicked chat-dev-project-switcher → chat-dev-project-row-cb18e4c2-... — iframe src changed to /api/dev-projects/cb18e4c2.../preview/index.html (iframe re-mounted, new login form rendered with project name 'Design Accounts Payable App Which Allows To Approve'), header pill updated to the same project name, 'Switched to project' confirmation toast visible. NextIdeasPanel sanity: 4 chips render above composer; clicking 'Draft Data Model' drops a 139-char prompt into the composer textarea.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration73_active_project_pointer.py",
+    "/app/backend/tests/test_iteration72_next_ideas_preview.py",
+    "/app/test_reports/pytest/iteration73.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/dev_os.py:1097 set_active_dev_project — only updates `linked_dev_project_id` & `updated_at`; consider also bumping a `chat.active_project_switched_at` audit field so admins can trace switches. Not blocking.",
+    "routes/chats.py:114-134 list_chats legacy fallback — uses .sort('created_at', -1).to_list(5000) and picks first hit per legacy chat. If a legacy chat has multiple related projects (pre-pointer era), the picked one may not match what get_chat returned in races. Document or migrate-script to backfill `linked_dev_project_id` for all legacy chats so the fallback path can be retired.",
+    "Iteration 72 review comments still stand (NextIdeas refresh has no error UI; preview self-heal swallows exceptions silently; login-shim should add a window.__tn_login_shim_done guard). Not regressed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration73_active_project_pointer.py (new — 6 regression tests for the pointer-driven linked_dev_project derivation)"
+  ],
+  "success_rate": { "backend": "100% (16/16)", "frontend": "100% (DevProjectSwitcher iframe + header pill switch verified end-to-end; NextIdeasPanel chips + drop-into-composer verified)" },
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (sets tn_session HttpOnly cookie). Test chat 1ad8d0d0-03ee-4a5e-b123-9a635c0aba28 with linked projects cb18e4c2-bff2-401e-8f3e-86d74dca308a ('Design Accounts Payable…') and b51bfe01-b01e-4f83-8842-522842099519 ('Engineering · Project').",
+  "seed_data_creation": "TestSpinUpSetsPointer creates a transient direct chat (named TEST_iter73_spinup), spins up a fresh dev-os project on it, asserts the chat's linked_dev_project_id is set, then best-effort DELETEs the chat. test_preview_self_heals_empty_project (iter72) still inserts/deletes a TEST_iter72_<hex> dev_projects row.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression files for future iterations: /app/backend/tests/test_iteration72_next_ideas_preview.py (10 tests) + /app/backend/tests/test_iteration73_active_project_pointer.py (6 tests). Run with env REACT_APP_BACKEND_URL exported. The DevProjectSwitcher carry-over bug from iteration 72 is closed — both /api/chats and /api/chats/{id} now honor chat.linked_dev_project_id with related_chat_id as legacy fallback only, and LivePreviewPane.jsx now keys the iframe on `${project.id}:${refreshKey}` so React unmounts/remounts on project change. Note: the chat ends this test run with the pointer set to PROJECT_B (Engineering · Project) — the last activation in TestPointerDrivesChatList. If you need it set to A for your scenario, POST /api/chats/{cid}/active-dev-project/{cb18e4c2...}.",
+  "rca of the issue": "Confirmed fix matches the agent-to-agent context: backend GET /api/chats/{id} previously derived linked_dev_project via db.dev_projects.find_one({'workspace_id': ws, 'related_chat_id': chat_id}) which returns whichever project Mongo returned first regardless of which one was 'active', so flipping chat.linked_dev_project_id via /active-dev-project/{pid} had no effect on the response shape — and the frontend iframe (key was a stable string) didn't re-mount. Fix is two-fold and both halves verified: (1) routes/chats.py get_chat (lines 220-230) and list_chats (lines 91-134) now read chat.linked_dev_project_id first and only fall back to related_chat_id for legacy chats; (2) LivePreviewPane.jsx iframe key is now `${project.id}:${refreshKey}` so a pid change forces React to unmount/remount the iframe and re-fire the load event. Spin-up endpoint (chats.py:498) writes the pointer on creation. End-to-end Playwright confirms both iframe src AND header pill update on switcher row click."
+}

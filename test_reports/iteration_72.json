@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 72 verified. Backend (10/10 PASS): GET /api/chats/{cid}/next-ideas generates fresh ideas with cached:false, second call within 60s returns cached:true, ?refresh=1 forces regen, unknown chat → 404. POST /api/chats/{cid}/spin-up-dev-os is idempotent and the served preview HTML for the existing linked project contains a real login form (no 'Empty project' / no '404 — index.html'). GET /api/dev-projects/{pid}/preview/index.html injects 'tn-login-shim' on every served HTML and self-heals genuinely empty projects (verified by directly inserting a test project with NO files via Mongo, then hitting the preview endpoint → 200 with shim present). Share-token public preview (POST /share-token + anon GET /api/share/preview/{token}/index.html) returns 200 HTML with the shim injected; bogus tokens → 404. Frontend: NextIdeasPanel renders 4 chips above the composer, chip click drops the full prompt into the message input, ↻ refresh works, Hide ↔ Show toggle persists per chat. LivePreviewPane on the chat right-rail now shows the working SPA (login form visible) instead of '404 — index.html' — verified by network: iframe src resolves to /api/dev-projects/{pid}/preview/index.html with 200 OK and includes the SPA login UI. HOWEVER bug #3 (DevProjectSwitcher refresh) is only PARTIALLY fixed — see frontend_issues below.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "DevProjectSwitcher → LivePreviewPane refresh",
+        "issue": "Clicking a different project in the chat-header DevProjectSwitcher updates the backend correctly (chat.linked_dev_project_id flips to the new project — confirmed via direct GET /api/chats/{id}) AND parent loadChat fires (next-ideas refetch + new chips appear), BUT the right-rail LivePreviewPane iframe `src` stays pointing at the OLD project's preview URL. Additionally the chat-header project badge still displays the old project name ('Engineering · Project') after the switch. The onSwitched→loadChat wiring works for chat data and next-ideas, but LivePreviewPane and the header pill are reading a stale derived value — likely the iframe src is bound to a memoized prop or an older `active_dev_project_id` field rather than the freshly-updated `linked_dev_project_id`. User-reported bug #3 is therefore NOT fully resolved.",
+        "affected_selectors": ["[data-testid=chat-dev-project-switcher]", "[data-testid=chat-dev-project-row-<pid>]", "iframe[src*='/preview/']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration72_next_ideas_preview.py",
+    "/app/test_reports/pytest/iteration72.xml"
+  ],
+  "action_items": [
+    "Fix LivePreviewPane in /app/frontend/src/pages/Chats.jsx (or LivePreviewPane.jsx) so the iframe `src` re-derives from the freshly-loaded chat.linked_dev_project_id after onSwitched/loadChat fires. Likely root cause: the project_id passed to LivePreviewPane is captured once at mount via useMemo or initial state, instead of subscribing to the updated chat object. Suggested fix: pass `chat.linked_dev_project_id` directly as a prop and key the iframe by it so React unmounts/remounts on change.",
+    "Update the chat-header active-project pill (next to '+ Open Studio →') to also re-read from chat.linked_dev_project_id so the displayed project name matches the active iframe after a switch.",
+    "Consider exposing chat.active_dev_project_id as an explicit field (currently null in GET /api/chats/{id}) and having both the header pill and LivePreviewPane bind to it — single source of truth would avoid the desync we just observed."
+  ],
+  "critical_code_review_comments": [
+    "routes/chats.py:511 chat_next_ideas — _llm_next_ideas catches generic Exception silently then falls back; if the LLM provider is unreachable for an extended period, the cache write upserts the fallback list every 60s. Consider tagging cached entries with source:'fallback' so the UI can show a subtle 'reconnecting' badge.",
+    "routes/dev_os.py:_serve_preview — self-heal branch swallows ALL exceptions from seed_stub_files (line 1327). On a real Mongo failure the user gets the friendly empty-state with no log signal — at minimum log a warning so an outage is visible in supervisor logs.",
+    "routes/dev_os.py:_inject_login_shim — shim is injected on EVERY html request including ones that already contain a login flow. The marker-check is good, but if a real LLM-built SPA generates its own auth and submits to /api/auth/login successfully, the shim's setInterval may re-trigger after the SPA navigates to its app view. Worth adding a 'window.__tn_login_shim_done = true' guard once the form has been auto-submitted.",
+    "components/chat/NextIdeasPanel.jsx — lastMessageId-driven re-fetch fires 1.5s after each new message; in a fast-moving group chat this could thrash. Debounce or only fire after N seconds of message silence.",
+    "components/chat/NextIdeasPanel.jsx — refresh button has no error-state UI (catch is silent). If /next-ideas returns 500 the spinner just stops with no signal."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration72_next_ideas_preview.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "85% (NextIdeasPanel ✓, LivePreviewPane initial render ✓, login-shim served ✓, DevProjectSwitcher iframe-refresh ✗)"},
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (sets tn_session). Test chat 1ad8d0d0-03ee-4a5e-b123-9a635c0aba28 has both linked projects cb18e4c2-* and b51bfe01-* (b51bfe01 was the empty one; spin-up now seeds its stub files so the preview returns a real SPA).",
+  "seed_data_creation": "test_preview_self_heals_empty_project directly inserts a TEST_iter72_<hex> dev_projects row via Motor, wipes its dev_code_files, hits preview, then cleans up both collections. No leftover state.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable backend regression: /app/backend/tests/test_iteration72_next_ideas_preview.py — run with REACT_APP_BACKEND_URL, MONGO_URL, DB_NAME env vars (already in .env files but pytest needs them exported). The DevProjectSwitcher bug to retest after fix: open chat 1ad8d0d0..., expand LivePreviewPane (click vertical 'LIVE PREVIEW' label), note iframe src ends with b51bfe01.../preview/index.html, click [data-testid=chat-dev-project-switcher] then [data-testid=chat-dev-project-row-cb18e4c2-bff2-401e-8f3e-86d74dca308a] — iframe src MUST change to cb18e4c2/preview/index.html AND header pill text must update to 'Design Accounts Payable…'.",
+  "rca of the issue": "DevProjectSwitcher refresh bug (#3) RCA: Backend handler /api/chats/{id}/dev-projects/{pid}/activate (or similar) does write chat.linked_dev_project_id correctly — GET /api/chats/{id} after the switch returns the new pid. Frontend Chats.jsx wires onProjectSwitched={loadChat} on ChatHeader → DevProjectSwitcher, and loadChat IS being called (confirmed by network: GET /api/chats/{id}/dev-projects and GET /api/chats/{id}/messages?limit=5 fire on row click, AND NextIdeasPanel chip set changes because chatId-keyed effect re-runs). However the LivePreviewPane iframe src does NOT change — meaning the project_id prop passed to LivePreviewPane is being computed from a stale closure / a memoized value / a different field (likely it's derived once from the initial chat object or from chat.active_dev_project_id which is null). The header project pill has the same problem. Mitigation: bind LivePreviewPane's `pid` prop directly to chat.linked_dev_project_id from the freshly-loaded chat object, and add a `key={pid}` on the iframe element so React forces a re-mount when the value changes."
+}

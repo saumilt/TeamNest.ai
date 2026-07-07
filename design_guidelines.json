@@ -1,0 +1,116 @@
+{
+  "theme": "Dark",
+  "archetype": "5 (Luxury - Premium, Depth, Mystery)",
+  "vibe": "Exclusive, scarce, premium, cutting-edge, behind the velvet rope.",
+  "color_palette": {
+    "background_primary": "bg-zinc-950",
+    "background_secondary": "bg-zinc-900",
+    "surface_elevated": "bg-zinc-900/60",
+    "surface_elevated_hover": "bg-zinc-800/80",
+    "primary_accent": "amber-400",
+    "primary_accent_hover": "amber-300",
+    "primary_accent_glow": "shadow-[0_0_20px_rgba(251,191,36,0.3)]",
+    "text_primary": "text-zinc-50",
+    "text_secondary": "text-zinc-400",
+    "border_subtle": "border-zinc-800/50",
+    "border_focus": "border-amber-400/50"
+  },
+  "typography": {
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "Satoshi",
+    "mono_font": "JetBrains Mono",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter text-zinc-50",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-zinc-50",
+    "h3": "text-xl sm:text-2xl font-medium tracking-tight text-zinc-100",
+    "body_large": "text-lg text-zinc-400 leading-relaxed",
+    "body_base": "text-base text-zinc-400 leading-relaxed",
+    "label": "text-xs font-bold uppercase tracking-[0.2em] text-zinc-500",
+    "code": "font-mono text-sm tracking-tight text-amber-400"
+  },
+  "spacing_and_layout": {
+    "container_padding": "px-6 md:px-12 lg:px-24",
+    "section_spacing": "py-24 md:py-32",
+    "grid_system": {
+      "marketing_hero": "flex flex-col items-center justify-center min-h-[90vh] text-center",
+      "bento_features": "grid grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-6 md:gap-8",
+      "dashboard_layout": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
+    },
+    "card_padding": "p-8 md:p-10"
+  },
+  "surfaces_and_micro_themes": {
+    "crystal_glass": "bg-zinc-900/60 backdrop-blur-2xl border border-zinc-800/50 shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+    "tracing_beam_border": "relative overflow-hidden before:absolute before:inset-0 before:rounded-xl before:border before:border-transparent before:[background:linear-gradient(to_right,theme(colors.amber.400/0),theme(colors.amber.400),theme(colors.amber.400/0))_border-box] before:[mask-composite:exclude]",
+    "buttons": "rounded-full bg-amber-400 text-zinc-950 font-semibold px-8 py-4 hover:bg-amber-300 transition-all duration-300 shadow-[0_0_15px_rgba(251,191,36,0.2)] hover:shadow-[0_0_25px_rgba(251,191,36,0.4)] hover:-translate-y-0.5",
+    "inputs": "bg-zinc-950/50 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-50 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50 transition-all placeholder:text-zinc-600",
+    "badges": "rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 px-3 py-1 text-xs font-bold tracking-wide uppercase"
+  },
+  "components_strategy": {
+    "hero_section": "Outcome-driven, extreme simplicity. 'TeamNest.ai is currently invite-only.' Single primary CTA 'Request Invite' opening a modal, or secondary 'Enter Invite Code'. Hide standard nav links to force conversion.",
+    "waitlist_form": "Segmented Beta style. Multi-step or dense Shadcn Form asking for Name, Email, Company, Role, Size, Use Case, 'What would you build?'. Use glassmorphism card.",
+    "waitlist_dashboard": "The 'Skip-the-Line' Referral Loop. Shows massive typography for rank ('You are #1,247' using JetBrains Mono). Referral link with copy to clipboard. Progress bar for 1/3/5/10/25 referrals milestone rewards.",
+    "invite_code_entry": "Minimalist Code Entry Card. 8-character input (1 char per box or single monospace input). States: valid (glows green/amber), invalid (shakes, red), expired.",
+    "invite_dashboard_approved": "Dashboard for approved users showing 4 available invites, share buttons (copy/WhatsApp/X/LinkedIn/email/SMS), and a list of accepted/pending invites.",
+    "social_drop_page": "High-urgency countdown page for /drop/DEVOS100. Shows remaining uses '17 of 100 spots remaining' with a dynamic progress bar. Big 'Claim Access' CTA.",
+    "referral_leaderboard": "List of top inviters with avatars, masked names (e.g., Al***), and invite count. Gamifies the experience.",
+    "badges": "Visual 'Founding Member', 'Early Builder', 'Dev OS Beta Tester', 'Invite Champion' badges locked until criteria met. Premium gold foil aesthetics using CSS gradients.",
+    "pricing_gated": "Frosted glass overlay covering pricing tiers with a lock icon. 'Pricing is currently available to invited members only.'"
+  },
+  "motion_and_interactions": {
+    "page_load": "Subtle fade up and blur reveal (framer-motion).",
+    "number_counters": "Animate waitlist rank and referral count numbers counting up.",
+    "hover_states": "Cards lift slightly (-translate-y-1) and borders glow with amber-400/20.",
+    "toast_notifications": "Use Sonner for success/error states (e.g., 'Invite code copied!', 'Code expired')."
+  },
+  "media_assets": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/21031387/pexels-photo-21031387.jpeg",
+      "description": "Intricate golden wave patterns on dark background. Use with absolute positioning, opacity-20, and a radial-gradient mask to fade out edges so text remains fully legible."
+    },
+    "dev_manager_context": {
+      "url": "https://images.unsplash.com/photo-1760548425425-e42e77fa38f1",
+      "description": "Code screen snippet to visually represent @devmanager in feature grids or alongside the waitlist form. Apply rounded-2xl and a subtle border-zinc-800."
+    },
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+        "description": "Avatar 1 for leaderboard"
+      },
+      {
+        "url": "https://images.pexels.com/photos/31869537/pexels-photo-31869537.jpeg",
+        "description": "Avatar 2 for leaderboard"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1699899657680-421c2c2d5064",
+        "description": "Avatar 3 for leaderboard"
+      },
+      {
+        "url": "https://images.pexels.com/photos/26872232/pexels-photo-26872232.jpeg",
+        "description": "Avatar 4 for leaderboard"
+      }
+    ]
+  },
+  "testing_attributes": {
+    "rule": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "examples": [
+      "data-testid='request-invite-btn'",
+      "data-testid='enter-code-btn'",
+      "data-testid='waitlist-form-submit'",
+      "data-testid='waitlist-rank-display'",
+      "data-testid='copy-referral-link'",
+      "data-testid='invite-code-input'",
+      "data-testid='claim-drop-btn'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "NOTE: Codebase uses .js (JSX) files, NOT .tsx. Provide all React code using vanilla JS syntax (no TypeScript interfaces or types).",
+    "Install required fonts: Cabinet Grotesk, Satoshi, JetBrains Mono.",
+    "Install icon library: lucide-react (or @phosphor-icons/react for duotone).",
+    "Hide the global navigation links for the launch landing pages to remove distractions. Only show the Logo and a 'Request Invite' button.",
+    "Build the hero section with a centered, outcome-driven layout. Background should use the provided golden wave texture with extremely low opacity (10-20%) and a radial mask to prevent text collision.",
+    "For the Waitlist Dashboard (post-signup), implement the 'Skip-the-line' mechanism. Show the user's rank prominently. Add a referral progress bar with markers for 1, 3, 5, 10, 25 referrals.",
+    "Design the code entry card to feel like accessing a secure vault. Use mono fonts for the code characters.",
+    "Ensure all text has a minimum contrast ratio of 4.5:1 against the dark zinc background.",
+    "Use Shadcn components for forms, inputs, and buttons, but aggressively strip the 'default Vercel look'. Overwrite borders to border-zinc-800 and backgrounds to bg-zinc-950/50.",
+    "Include data-testid attributes on all interactive elements as specified in the testing_attributes section."
+  ]
+}

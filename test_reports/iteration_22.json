@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 22 (Profile, MobileTabBar, Guest Invite, Stripe Billing + AI Credits) — full backend + frontend E2E PASSED. 15/15 pytest backend tests pass; all critical Playwright UI flows pass (Profile save, mobile tab bar hide/show + /call hide, credits-widget, Billing 3-plan view, owner-only gating, invite-guest dialog → credentials card).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration22_profile_billing_guest.py",
+    "/app/test_reports/pytest/iteration22.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Profile change-email endpoint accepts any new email immediately without verification (no confirmation email round-trip). Acceptable for MVP but consider an email-verification flow before billing-critical features land.",
+    "Stripe checkout endpoint stores Stripe API key in env; ensure /api/billing/checkout is only reachable behind auth (it is — uses require_user + role check). Good.",
+    "services/billing.py FREE_GRACE_CREDITS=50 is hardcoded; consider moving to plan config so future plans can have different grace thresholds.",
+    "InviteGuestToChat creates a fresh user with a one-time password but does NOT force a password reset on first login. The guest could keep using the auto-generated password forever; consider a first-login password change prompt.",
+    "routes/billing.py: webhook handler at /api/webhook/stripe — verify Stripe sends signature over the public ingress; if not, webhook plan updates will silently no-op (status-poll fallback at /billing/checkout/status/{session_id} still works)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration22_profile_billing_guest.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (8/8 critical flows)"},
+  "test_credentials": "Owner: amit@demo.team / Demo@2026 (POST /api/auth/demo-login). Member: raj@demo.team / Demo@2026. Admin: priya@demo.team / Demo@2026.",
+  "seed_data_creation": "Each TestGuestInvite run creates a unique guest user `guest.test+<ts>@external.io` with a one-time password; not cleaned up (isolated by timestamp). Frontend test also creates `guestui<ts>@external.io` guests during dialog test. Profile tests mutate Amit and Raj phone numbers each run with timestamped values — safe.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 22 fully green. Backend coverage: PATCH /me/profile (name+phone+avatar, dup-phone 400, /auth/me reflects update), POST /me/password (wrong current → 401), POST /me/email (wrong pwd 401, collision 400), GET /billing/plans (3 plans, correct credits 300/6000/18000 and prices 0/20/50), GET /billing/me (auto-creates free), GET /billing/usage (full shape), POST /billing/checkout (member 403, owner gets checkout.stripe.com URL, free plan 400), credit-exhaustion (manually set credits_used_this_period=999999 → /api/ai/research with claude returns 402; resetting allows gpt-4o-mini free fallback), POST /chats/{cid}/invite-guest (new email path: returns one_time_password + created_new_account=true, guest can login, GET /chats returns only that chat, system message posted; user_id path: no password in response). Frontend coverage: /profile renders 3 sections, save updates /auth/me; mobile-tab-bar hidden on 1440 desktop, visible on 390 mobile, navigates between tabs (tab-tasks → /tasks), HIDDEN on /call/* routes; /billing renders 3 plan cards + billing-usage-card + billing-usage-bar; owner sees billing-upgrade-pro/team buttons; non-owner (raj) sees NO upgrade buttons and page mentions 'owner only'; credits-widget visible in sidebar showing 'Free plan 300/300 credits'; invite-guest-dialog opens with search results, new-email form, submit creates account, invite-guest-credentials card shows email+password+Copy. Stripe redirect not click-tested in UI (would navigate away) — verified via direct API call returning checkout.stripe.com URL. Pre-existing flaky tests (TestRealAIModels + TestShareSnapshot) skipped per main agent's instruction.",
+  "rca of the issue": "N/A — all 15 backend + 8 frontend flows verified working."
+}

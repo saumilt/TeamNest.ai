@@ -1,0 +1,52 @@
+{
+  "summary": "P2 batch regression: Audit log (backend + UI) and Mailgun module are GREEN. Frontend renders /dev-os/audit-log fully with all required testids (audit-log-page, audit-stats x5 tiles, audit-search, audit-action-filter, audit-refresh, audit-table-card, audit-row-{id}, audit-toggle-{id} expands audit-meta-{id}) and DevOsHub exposes dev-os-audit-link. ProjectDetail tabs (Plan/Tasks/Proposals/Bugs/Comments/Memory/Releases) load without regression. CRITICAL BUG: the new Dev OS presence WebSocket rejects every connection with HTTP 403 (handshake refused before accept). Root cause is a schema mismatch in /app/backend/services/dev_os_presence.py — it reads user.workspace_ids (array, does NOT exist), while the users collection uses workspace_id (scalar) plus a separate db.workspace_members collection. Confirmed via direct mongo probe: the canonical pattern is used by deps.get_user. Frontend keeps retrying with exponential backoff and pollutes the console with 403s; presence-bubbles testid never mounts.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "WS /api/ws/dev-os-presence/{project_id}",
+        "issue": "Every valid-token, valid-project connection is rejected with HTTP 403. presence_ws() reads `user.workspace_ids` but the schema field is `workspace_id` (scalar) on users + db.workspace_members for multi-workspace. The $in lookup therefore evaluates to {$in: []} and the project lookup returns None → websocket.close(4403) BEFORE accept → Starlette emits HTTP 403 on the upgrade. Frontend hook re-tries forever, flooding console.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Dev OS Project Detail live presence",
+        "issue": "WebSocket handshake fails 403 (backend bug above). presence-bubbles is NOT rendered. useDevOsPresence keeps retrying — adds noisy 403 entries to the console every few seconds. No cursor overlay possible.",
+        "affected_selectors": ["[data-testid=presence-bubbles]", "wss:/api/ws/dev-os-presence/{pid}"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration59_p2batch.py",
+    "/app/test_reports/pytest/iteration59.xml"
+  ],
+  "action_items": [
+    "Fix /app/backend/services/dev_os_presence.py presence_ws(): resolve user's workspace memberships from db.workspace_members (and/or the scalar users.workspace_id) instead of the non-existent user.workspace_ids array. Suggested replacement around lines 150-162:\n\n    user = await db.users.find_one({'id': user_id}, {'_id': 0, 'id': 1, 'name': 1, 'workspace_id': 1})\n    if not user: await websocket.close(code=4404); return\n    ws_ids = [m['workspace_id'] async for m in db.workspace_members.find({'user_id': user_id}, {'_id': 0, 'workspace_id': 1})]\n    if user.get('workspace_id') and user['workspace_id'] not in ws_ids: ws_ids.append(user['workspace_id'])\n    project = await db.dev_projects.find_one({'id': project_id, 'workspace_id': {'$in': ws_ids}}, {'_id': 0, 'id': 1})\n    if not project: await websocket.close(code=4403); return",
+    "After the fix re-run /app/backend/tests/test_iteration59_p2batch.py — the three WS tests (happy path + 4401 + 4403) should pass. Frontend presence-bubbles should then mount on /dev-os/projects/{pid}."
+  ],
+  "critical_code_review_comments": [
+    "dev_os_presence.py uses a schema that doesn't exist (`workspace_ids` array on users). The rest of the codebase uses scalar `workspace_id` + db.workspace_members. Add a unit/integration test that connects with a known-good token so this kind of schema regression is caught next iteration.",
+    "presence_ws closes the socket before calling accept() on bad-token / wrong-project / no-user paths. That's intentional but the close codes (4401/4403/4404) never reach the client — Starlette translates pre-accept close into HTTP 403 regardless. If the frontend ever needs to distinguish reasons (e.g. to stop retrying on 4403), the server must accept() first, then send a JSON error event, then close.",
+    "useDevOsPresence retries indefinitely with no max-attempts cap — once the backend bug is fixed this is fine, but consider giving up after N consecutive 4403/4404 so wrong-workspace navigations don't spin forever.",
+    "Mailgun service _configured() check is correct; send_email correctly short-circuits when env is missing. send_batch has a 1000-recipient guard. Good defensive code.",
+    "AuditLog.jsx — when entries is empty the 'Action types' stat shows -1 because of `actions.length - 1` (actions always contains the synthetic 'all' so length>=1, but for 0 entries actions=['all'] → length-1=0, OK). False alarm."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration59_p2batch.py (new — 6 tests: audit-log shape, ws-token, presence happy/4401/4403, mailgun module)"
+  ],
+  "success_rate": {
+    "backend": "50% (3/6 — audit-log, ws-token, mailgun pass; 3 WS tests fail due to the workspace_ids bug)",
+    "frontend": "85% (audit log + DevOsHub tile + ProjectDetail tabs all OK; presence WS does not connect)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login",
+  "seed_data_creation": "None — read-only checks.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_iteration59_p2batch.py. The 3 failing WS tests are gated on the dev_os_presence.py fix described in action_items. AIComposer and ContactBookImporter refactor were not exercised in the chat UI (would require building a chat path); module-level imports + ProjectDetail page loads showed no runtime errors so the refactor is module-safe but full flow re-verification (open AI composer in a chat, paste contacts via importer) is recommended after the WS fix lands.",
+  "rca of the issue": "REPRO: 1) POST /api/auth/demo-login → cookie set. 2) GET /api/auth/ws-token → returns short-lived JWT. 3) wss://…/api/ws/dev-os-presence/{valid_project_id}?token={token} → server replies 403 Forbidden before WS upgrade. Backend log shows `INFO: \"WebSocket /api/ws/dev-os-presence/... 403\" connection rejected (403 Forbidden)` for every attempt, while the legacy /api/ws/{chat_id} accepts fine with the same token. ROOT CAUSE: services/dev_os_presence.py:151-159 queries the user with projection `workspace_ids: 1` and then `db.dev_projects.find_one({'workspace_id': {'$in': user.get('workspace_ids') or []}})`. The actual users schema has scalar `workspace_id` plus a separate `workspace_members` collection — verified by reading deps.get_user (lines 93-108) and direct mongo inspection. `user.get('workspace_ids')` is therefore always None → $in: [] → no project ever matches → close(4403) → Starlette returns HTTP 403. MITIGATION: replace the lookup as shown in action_items. Also accept() before close if we ever want the client to read the close code (currently Starlette emits HTTP 403 regardless of the close code we pass)."
+}

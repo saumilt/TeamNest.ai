@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 10 — Referral incentive layer (badges + Pro AI Boost + leaderboard) on top of Find-Your-Friends v1. Created /app/backend/tests/test_iteration10_referrals.py with 27 tests across 6 classes: TestPublicUserFields (1), TestRedeemFlow (1 — end-to-end redeem + inviter/joiner delta), TestMyReferrals (2), TestProgressBoundaries (18 parametrized — badge tier + next_badge boundaries at 0/1/4/5/14/15/49/50/100), TestLeaderboard (4 — workspace/global/limit cap/default limit), TestNoRegression (1). 27/27 PASS in 4s. Full regression with iter8 + iter9 suites: 59/59 PASS (32 prior + 27 new). FRONTEND E2E: (a) Joiner (fresh redeem) at /find-friends shows ff-rewards-card 'UNRANKED · 0 · 1 more to BRONZE · 0/1', ff-leaderboard with Amit at 5, ff-boost-active '14D LEFT'; sidebar-user shows Zap icon + 'MEMBER · PRO'. (b) Amit (inviter) at /find-friends shows ff-rewards-card 'SILVER · 5 · 10 more to GOLD · 5/15', ff-leaderboard 'Amit Patel · you · 5'; sidebar shows 'OWNER' only — NO Zap, NO ' · PRO' suffix (correctly distinguishes inviter from joiner). (c) /join/{valid_token} celebratory toast text exactly matches spec: '🎉 Welcome to Emergent Demo Workspace! You've unlocked 14-day Pro AI Boost — all 6 AI models unlocked.' (d) All 4 prior tabs (ff-tab-link/bulk/suggest/pending) still render — Find-Friends v1 regression OK. The inviter-vs-joiner pro_boost distinction (inviter gets badge progression, joiner gets the boost) is correctly implemented in BOTH backend (verified via /auth/me + /me/referrals) and frontend (sidebar conditional rendering).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_referrals.py",
+    "/app/test_reports/pytest/iteration10.xml",
+    "/app/test_reports/pytest/iter10_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now 1881 lines — module split is still the top tech-debt item (flagged since iter4). REFERRALS section adds ~75 lines, fits cleanly into a future referrals_router.py.",
+    "/api/leaderboard/referrals scope param is loosely typed (string). Any value other than 'workspace' is treated as global — should be an Enum or explicit literal['workspace','global'] for 400 on invalid input. Minor.",
+    "_next_badge iterates a hard-coded list — fine for 4 tiers, but BADGE_THRESHOLDS is also duplicated implicitly in _referral_badge (different value set). Consolidate both into a single source-of-truth list to keep tiers in sync if more are added.",
+    "POST /public/invite/redeem: inviter notification re-reads inviter with PROJ then computes new_count from that doc — there's a tiny race where another concurrent redeem could push the count further between $inc and find_one. Current copy says 'You're now at N referral(s)' so eventual-consistency is fine, but worth a note. Acceptable for v1.",
+    "Inviter does NOT get pro_boost — confirmed and correct per spec. However the joiner's `referred_by` is set to `link.created_by` (the workspace owner who generated the link), NOT to the user who actually shared the link if it was shared by someone else. For now there is only one active link per workspace, so this is equivalent, but if multi-link/per-user links are added later, the inviter attribution will need to be re-thought.",
+    "Frontend RewardsCard label maps `referral_badge=null` → 'UNRANKED' (good fallback). Progress bar uses fraction count/threshold — verified visually at 0/1 and 5/15."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10_referrals.py (NEW — 27 tests, all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% — 27/27 new tests pass; 32/32 prior regression tests pass; 59/59 combined",
+    "frontend": "100% — all 4 spec scenarios verified end-to-end (joiner sidebar+rewards+boost+leaderboard; inviter sidebar-without-pro+rewards-with-tier+leaderboard-is_me; toast text exact match; Find-Friends v1 tabs intact)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 (owner) via POST /api/auth/demo-login. Fresh joiner accounts created per-test with timestamp@acmebrand.co.",
+  "seed_data_creation": "Created ~3 new redeemed users during testing (ui_joiner_*, toast_test_*, joiner_*). Each gets 14-day pro_boost_active=true. Amit's referral_count incremented from prior 4 to 5 (now SILVER tier). All test users persist in db.users — fine for next iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Amit's referral_count is now 5 (SILVER) due to test redemptions across iter9+iter10. Boundary expectations: 5 → next_badge='gold', remaining=10. When asserting deltas, use the dynamic before-count approach (see TestRedeemFlow.test_redeem_grants_boost_and_increments_inviter). Frontend test pattern: inject `eat_token` in localStorage and navigate — works reliably. Toast appears briefly (~3s) on /dashboard after /join redirect — poll via page.evaluate for substring '14-day Pro AI Boost' rather than CSS selector since it lives inside a sonner toast container.",
+  "rca of the issue": "N/A — no bugs found. Two false-positives during test authoring: (1) used /invite-link instead of /invites/link path (fixed); (2) sent token as query param instead of JSON body to /public/invite/redeem (fixed)."
+}

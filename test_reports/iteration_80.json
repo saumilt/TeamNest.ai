@@ -1,0 +1,82 @@
+{
+  "summary": "Iteration 80 — Template Marketplace / App Store end-to-end verification. Backend: 27/27 pytest pass (~3.9s) covering public store (14 templates, screenshots, demo HTML+CSP), auth guards (401/403/admin ok), free/paid install (200 / 402), Stripe checkout session creation (200 with cs_test_ URL), free-checkout-rejection (400), seller submit + admin approve/reject with notes propagation, wrong-workspace 404, no-files 400, payout account save (valid + 422 invalid), 70/30 split arithmetic on existing purchase, webhook bad-signature. Frontend Playwright: (a) /templates direct-load unauth PASSES — 14 cards, 14 tm-use-* + 14 tm-demo-* + 7 tm-cat-*, Helpdesk Pro $29/mo badge visible, Free badges visible, NO redirect to home (regression fix verified); (b) /showcase direct-load PASSES — no redirect; (c) unauth 'Use this template' click sets localStorage.tn-next-path correctly and navigates to /signup; (d) demo/index.html renders in-browser with tn-login-shim login form (demo@example.com/demo shown as hint); (e) FULL REAL STRIPE CHECKOUT run as raj with card 4242 4242 4242 4242 — checkout URL created, redirect to checkout.stripe.com/c/pay/cs_test_* succeeded, US$29.00 shown, form fill + Pay clicked, redirected BACK to /market/install/{id}?session_id=... successfully. HOWEVER, the /market/checkout/status polling NEVER resolves to paid — the emergent Stripe proxy 404s the session on most retrieves and, on the ones that DO 200, returns payment_status=unpaid (session appears on a different backing account than the one that hosted the payment). Verified via backend logs: 'response_code=404 No such checkout.session: cs_test_a1bLd4YooHSg9…' and 'session status retries exhausted'. Result: user is stuck on 'Confirming your payment…' indefinitely; payment_transactions row stays payment_status=initiated/processed=false; mkt_purchases NEVER created; mkt_earnings NEVER created; frontend polls for 8*2.5s=20s then would show an error state (but I observed it stayed 'Confirming' for 75s+ — the setError path only triggers if a network call actually returns, and here they return 200 with unpaid, so attempts increment but the error is never surfaced).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/market/checkout/status/{session_id}",
+        "issue": "The emergent Stripe proxy is load-balanced across multiple backing accounts. A session created on one account cannot be reliably retrieved via retrieve() because the proxy routes each request to a different backing account. Result: after a successful 4242-card payment on checkout.stripe.com, the retrieve either 404s ('No such checkout.session') OR returns 200 with payment_status='unpaid' (session exists on that account but was NOT paid on that account). _session_status_with_retry runs 6 attempts × 1.2s and then gives up. Frontend polling runs 8 attempts × 2.5s (~20s) then would surface an error, but in practice the retrieve returns 200/unpaid so no error path fires and the user is stuck forever on 'Confirming your payment…'. NO mkt_purchases row, NO mkt_earnings row, NO project install. This is the ONLY end-to-end failure of the entire iteration.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/market/templates (public)",
+        "issue": "Helpdesk Pro (the only paid template, id=49645b24…) has has_screenshot=false — the UI shows an empty card image (visible as a blank block above the $29/mo badge on /templates). All 13 free templates have screenshots. Consider seeding one for the paid template too, since it's the marquee sample of the paid experience."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AppShell.jsx",
+        "issue": "safeNextPath() function is defined at line 41 but NEVER invoked anywhere in the codebase (grep -rn 'safeNextPath' returns only the definition). This means the localStorage.tn-next-path value set by TemplatesMarket.jsx line 33 (when a logged-out user clicks 'Use this template') is written but never read, so after signup/login the user lands on /chats (the default) instead of /market/install/{id}. Reproduction: log out, visit /templates, click 'Use this template' on any free card → routed to /signup with tn-next-path set correctly → complete login (or signup) → user is on /chats, NOT /market/install/{id}. Full 'Use → signup → install' flow is broken from the auto-redirect step onwards.",
+        "selector": "AppShell.jsx L41 (safeNextPath dead code)",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Paid template install with real Stripe test card 4242",
+        "issue": "See critical backend issue above. Root cause is the emergent Stripe proxy account routing. The frontend UI reaches Stripe, the user pays, and returns to /market/install/{id}?session_id=... — all correct. The break happens at the status-polling step because the proxy 404s the session retrieve. Symptoms: page stuck on 'Confirming your payment…' with no error state, no project ever installs, no purchase persists.",
+        "affected_selectors": ["[data-testid='install-pay-btn']", "polling of /api/market/checkout/status/{session_id}"]
+      },
+      {
+        "flow": "Logged-out install intent (tn-next-path auto-redirect after signup/login)",
+        "issue": "safeNextPath() defined but never called — see UI bug above. Setting tn-next-path works, reading it back after auth does not.",
+        "affected_selectors": ["localStorage.tn-next-path"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "/templates — Helpdesk Pro card",
+        "issues": ["Card image area is blank (no screenshot seeded for the only paid template). Since it's the flagship $29/mo example, users see an empty block where they expect app visuals."]
+      },
+      {
+        "screen": "'What's new' changelog modal",
+        "issues": ["Console warns 'DialogContent requires a DialogTitle for the component to be accessible for screen reader users' — a11y issue on the modal used across the app."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration80_template_market.py",
+    "/app/test_reports/pytest/iteration80.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix the Stripe checkout-status confirmation for real 4242-card payments. Best options: (a) rely on the Stripe webhook (POST /api/webhook/stripe already exists and is idempotent) as the source of truth for payment_status='paid' — the frontend can poll DB state via /market/checkout/status without going through Stripe retrieve at all when the DB already shows processed=true; (b) if the emergent proxy supports Stripe-Account header or account_id passthrough, pin it to the account that created the session; (c) failing that, increase retries dramatically (e.g. 30+ attempts) — but that's a band-aid because the load balancer may never route to the right account within any bounded window.",
+    "HIGH: Actually invoke safeNextPath() in AppShell.jsx (or in the LoginPage/SignupPage success handler) so the tn-next-path localStorage value is honored — currently the function is dead code. Once fixed, after logging in from /signup with tn-next-path set, navigate(nextPath) should be called instead of the default /chats. Test: unauth click 'Use this template' → /signup → login as amit → expect landing on /market/install/{id}.",
+    "MEDIUM: Seed a screenshot for Helpdesk Pro (49645b24-…) or fall back to a placeholder image in the card so the paid template's card is visually complete.",
+    "LOW: Add DialogTitle (or VisuallyHidden wrapper) to the ChangelogModal DialogContent for a11y."
+  ],
+  "critical_code_review_comments": [
+    "routes/template_market.py _session_status_with_retry (line 304): swallows all exceptions with `except Exception` and never distinguishes 404 (resource_missing, permanent per this backing account) from transient network errors. Given the known load-balancer semantics, the code should ideally treat 404 as 'try a different account' with a much larger attempt budget (or use the webhook path). Right now 6 retries at 1.2s is far too small when the proxy has N backing accounts.",
+    "routes/template_market.py market_checkout_status: when _session_status_with_retry returns None, it returns the DB state ('initiated' / 'open') — but if the txn was already updated by the webhook to 'paid', the endpoint DOES NOT call _finalize_paid_session on the DB-only path. Concretely, if a webhook fires before the client's next poll, the status endpoint sees payment_status='paid' in DB, but does not trigger installation. Consider: if txn.payment_status == 'paid' and not txn.processed, still call _finalize_paid_session on the DB-only path (or make _finalize_paid_session self-triggering).",
+    "pages/AppShell.jsx: `safeNextPath` is DEAD CODE — never invoked from any component. Either wire it into AppShell's initial useEffect (calling navigate(safeNextPath()) once on mount) or delete the function.",
+    "pages/market/InstallTemplate.jsx: polling error branch is dead when status endpoint always returns 200 (with unpaid). `if (attempts < 8) setTimeout(poll, 2500); else { setError(...); setPhase('error'); }` — this WILL fire the error after 8 attempts, but user has been staring at 'Confirming your payment…' for 20s with no visible progress. Consider adding a live 'Attempt X of 8 — this is taking a moment…' hint, and after failure, offer a manual 'I've paid — check now' button.",
+    "The demo /market/templates/{id}/demo/{path} endpoint injects the login shim only for .html files — verified working. But it does NOT set CORS headers, and if a template embeds inline scripts that hit any external CDN, the CSP connect-src 'none' will block them (this is intentional and correct — noted for reference).",
+    "Cookies set by /api/auth/login have Secure=true which means requests from tests using http://localhost cannot round-trip the cookie. Backend tests here use Bearer tokens (compensating), which is fine, but the codebase should be aware that curl-based smoke tests against localhost won't be cookie-authed.",
+    "The mkt_earnings.status field is only ever set to 'pending' — there is no code path that transitions earnings to 'paid_out' when the platform actually transfers to the seller's Stripe Connect acct_. This is the MOCKED payout — main agent already flagged this and it's expected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration80_template_market.py (new, 27 tests, ~3.9s, no LLM calls)"
+  ],
+  "success_rate": {
+    "backend": "100% (27/27 automated); Stripe checkout confirmation flow: 0% end-to-end (payment succeeds but confirmation never reaches app)",
+    "frontend": "80% — /templates direct-load ✅, /showcase direct-load ✅, unauth Use→signup ✅, demo endpoint HTML ✅, Stripe redirect+form ✅, payment confirm back ❌ (backend issue), auto-redirect after signup ❌ (safeNextPath dead code)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 (PLATFORM ADMIN via PLATFORM_ADMIN_EMAILS), raj@demo.team / Demo@2026 (clean buyer), priya@demo.team / Demo@2026 (admin role, prior Helpdesk Pro purchase in DB). All 3 login via POST /api/auth/login (email + password) — POST /api/auth/demo-login ignores its body and always returns amit. Stripe test card 4242 4242 4242 4242, any future expiry, any CVC.",
+  "seed_data_creation": "Backend test suite creates 2 seller submissions (TEST_iter80_approve_me, TEST_iter80_reject_me) via raj against a source project created by installing a free template, plus 1 wrong-workspace bogus dev_project and 1 empty dev_project. All 100% cleaned up by the module-scoped autouse cleanup fixture — verified 0 TEST_iter80 documents remain post-test. Browser Stripe test left 4 'initiated' payment_transactions rows for raj which I manually cleaned via db.payment_transactions.delete_many({email:'raj@demo.team', payment_status:'initiated'}) → 4 deleted. Post-cleanup DB is pristine (no mkt_purchases for raj, no leftover TEST_ items). The mkt_earnings row (amount=2030 pending, seller=amit) is a pre-existing legitimate earnings row from an earlier main-agent test and was NOT touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_iteration80_template_market.py (27 tests, ~4s). Run with `cd /app/backend && python -m pytest tests/test_iteration80_template_market.py -v --junitxml=/app/test_reports/pytest/iteration80.xml`. Uses REACT_APP_BACKEND_URL from /app/frontend/.env with a filesystem fallback. Auth via POST /api/auth/login + Bearer token (NOT cookies — cookies are Secure so they don't ride over http://localhost). Two flows are BROKEN pending main-agent fix: (1) real Stripe 4242-card checkout end-to-end because the emergent Stripe proxy load-balances across multiple backing accounts and the retrieve() call cannot find the paid session — see backend logs 'response_code=404 No such checkout.session'; (2) tn-next-path auto-redirect after signup because safeNextPath() in AppShell.jsx is dead code. Do NOT re-run the real Stripe test until (1) is addressed — every attempt leaves an orphan initiated txn (safe to delete). All other 25 endpoints work correctly.",
+  "rca of the issue": "PAYMENT CONFIRMATION RCA: The emergent Stripe proxy at integrations.emergentagent.com/stripe fronts multiple backing Stripe accounts and load-balances requests across them without account affinity. When POST /v1/checkout/sessions creates a session, it lands on some backing account A. When GET /v1/checkout/sessions/{id} retrieves it, the proxy routes the request to a random backing account (A, B, C, …). If it hits A: returns 200 with the session (unpaid until the buyer's payment is committed to A's ledger — but the buyer's browser was on checkout.stripe.com which is Stripe's canonical hosted page, so the payment goes to Stripe's actual account not the proxy's ledger). If it hits B/C/…: returns 404 resource_missing. The retry logic in _session_status_with_retry (6 attempts × 1.2s) is insufficient to reliably land on A, AND EVEN WHEN IT DOES the payment_status returned is 'unpaid' because the proxy's ledger view doesn't reflect Stripe's actual charge state. So the polling loop cannot terminate as paid, mkt_purchases never persists, mkt_earnings never persists, and the user is trapped on 'Confirming your payment…'. The idiomatic Stripe fix is to rely on webhooks — the platform's Stripe account that owns the API key will receive checkout.session.completed with payment_status='paid' via POST /api/webhook/stripe, which idempotently calls _finalize_paid_session. If webhooks are correctly registered with the emergent proxy for STRIPE_API_KEY=sk_test_emergent, this should just work. If not, the polling fallback needs to (a) use a much larger retry budget, and (b) treat 'session exists but unpaid' as 'keep polling' rather than terminating. TN-NEXT-PATH RCA: pages/AppShell.jsx defines safeNextPath() at line 41 that reads and clears localStorage.tn-next-path, but NO code in the codebase (grep -rn 'safeNextPath') calls it. So the value is set correctly by TemplatesMarket.jsx before the click routes to /signup, but never consumed. Fix: in AppShell (or better, in LoginPage/SignupPage's onSuccess handler), useEffect on mount to check safeNextPath() and navigate(nextPath, {replace:true}) if truthy."
+}

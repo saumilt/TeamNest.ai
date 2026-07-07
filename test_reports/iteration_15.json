@@ -1,0 +1,34 @@
+{
+  "summary": "Phase 2c-live-transcription (iter15): backend 9/9 pass (1 of which is 32s slow gated by ENABLE_SLOW_TESTS=1, also ran and passes). Frontend live-transcript panel UX verified end-to-end. POST /api/calls/{id}/transcribe-chunk accepts a 16kHz mono WAV, returns ok=true with non-empty text + populated segment {id,speaker_id,speaker_name,text,seq,at}; segment is appended to call.transcript_segments[] and call.transcript.text gets a new line 'SpeakerName: text' with transcript.source='live_chunks' (verified via GET /api/calls/{id}). Tiny <1KB payload returns {ok:true, text:''} with no DB write. Corrupted/random 8KB binary returns 200 (gracefully soft-fails, no 500). GET /api/calls/{id}/transcript-segments returns {segments:[...]} 200, 401 unauth, 404 unknown call. POST /api/calls/{id}/summary?regenerate=true after live chunks returns source='transcript' or 'live_chunks'. Ended-call >30s window returns 400 'Call has ended'. Frontend: navigated directly to /call/{id} after granting mic+cam perms — LiveTranscriptPanel renders by default, REC indicator visible (count=1), PAUSE toggle hides REC (count=0) and changes label to 'RESUME', resume restores REC (count=1). NOTES button (call-transcript-btn) toggles panel visibility cleanly (1→0→1). X close (live-transcript-close) hides panel. Stream container present. Controls call-toggle-mic, call-toggle-share, call-hangup, call-elapsed, call-participants-btn all present. End button returns user to /chats/{chat_id}. Regression: MeetingSummaryDialog opens from MEETING NOTES card with full TL;DR + Participants + Key discussion points + Decisions + Action items + Suggested next steps rendered. Phase 2c (iter14) 16/16 prior tests still pass. No issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15_live_transcription.py",
+    "/app/test_reports/pytest/iteration15.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:2693 transcribe_call_chunk — when a chunk is rejected by the early-return checks (tiny payload <1KB, empty text, decode failure), the server silently drops the seq number. If the client expects monotonic seq tracking the FE will see gaps; not currently a bug but worth a `dropped: true` field for FE observability.",
+    "server.py:2750 — transcript.text concatenation does a string append in a $set, computed from call.get('transcript',{}) read BEFORE the $push. Under concurrent chunk uploads from multiple participants the running text can race (last write wins, intermediate segments may be lost from transcript.text but preserved in transcript_segments[]). Recommend computing the running text from transcript_segments at read-time (in GET /calls/{id} or the summary path) or use a Mongo $concat aggregation update. Low-likelihood in practice (4s cadence per participant) but observable in multi-speaker calls.",
+    "call_service.publish_data swallows all errors via print() — if LiveKit data channel breaks silently in production there is no metric/log alert. Consider emitting to a structured logger and/or a counter so ops can detect transcript broadcast failures.",
+    "useLiveTranscription hook on Playwright headless logs `mic denied NotFoundError`. The hook clearly handles this gracefully (panel still renders + REC indicator works from state, not from device). Verified no crash. In real browsers with mic this is fine.",
+    "MessageBubble.jsx:345 opens /call/{id} via window.open(...,'_blank'). This means clicking JOIN CALL from the chat-card opens a popup — some browsers/popup blockers may block this. Consider also offering an in-tab navigation fallback (or just navigate(`/call/${id}`) for the current user)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15_live_transcription.py (new, 9 tests)"
+  ],
+  "success_rate": {
+    "backend": "9/9 = 100% on iter15 live-transcription endpoints. iter14 regression 16/16 = 100%.",
+    "frontend": "100% on iter15 scope — panel, REC indicator, PAUSE/RESUME, NOTES toggle, X close, controls, hangup nav, MeetingSummaryDialog regression all verified."
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (token stored under localStorage key 'eat_token').",
+  "seed_data_creation": "Tests create transient audio calls in Max Brenner Expansion Team chat and end them in cleanup. No persistent seed data added.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test at /app/backend/tests/test_iteration15_live_transcription.py covers: transcribe-chunk with audio (persistence verified via GET /calls/{id}), tiny/empty payload, bad-audio soft-fail (no 500), transcript-segments GET+404+401, summary uses live transcript, ended-call rejection (skipped unless ENABLE_SLOW_TESTS=1 — runs in 32s), unknown-call 404. Run: REACT_APP_BACKEND_URL=... ENABLE_SLOW_TESTS=1 pytest backend/tests/test_iteration15_live_transcription.py -v. For frontend: CallRoom opens via window.open('/call/<id>','_blank') from MessageBubble.jsx so JOIN CALL/AUDIO clicks won't navigate the current tab — fetch active call_id via /api/calls/start (or get from card) then page.goto(`${BASE}/call/${call_id}`) directly. Mic/cam permissions MUST be granted before goto (context.grant_permissions(['microphone','camera'], origin=BASE)). Playwright headless reports 'NotFoundError: Requested device not found' for mic which is OK — the hook handles gracefully, REC indicator is driven by enabled state not actual capture.",
+  "rca of the issue": "No issues found this iteration."
+}

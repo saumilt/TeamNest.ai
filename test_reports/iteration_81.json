@@ -1,0 +1,73 @@
+{
+  "summary": "Iteration 81 — nav restructure + connected story + AI Employees pricing/marketing + admin margin control + Stripe webhook fallback/reconciler + tn-next-path fix + paid template screenshot. Backend: 19/20 pytest pass (test_iteration81_nav_pricing_margin.py, ~4.3s). Frontend Playwright: desktop 4-item nav + both dropdowns work; mobile hamburger sheet shows PRODUCT (5 items) / EXPLORE (2 items) / AI Employees / Pricing groups; home ConnectedStory section with 4 steps present; /pricing shows 40% margin + all 5 employee cards with devmanager first ($199/mo, 'YOUR IT TEAM' ribbon); /employees-info shows 'Five specialized AI employees' + employee-jump-devmanager + $199/mo hero; ADMIN MARGIN ROUND-TRIP UI works end-to-end (40→45 saves, /pricing shows 45%; restored to 40); non-admin raj on /market/review sees 'Only the TeamNest platform admin can review templates.' with NO margin card; paid Helpdesk Pro screenshot backend endpoint returns 200 with 18KB PNG (has_screenshot: true confirmed). TWO CRITICAL BACKEND BUGS discovered: (1) stripe.checkout.Session objects returned by retrieve()/construct_from() do NOT support `.get()` in this stripe-python version → template_market.py:313 `s.get('status')` and billing.py:463 `obj.get('id')` both raise AttributeError. This breaks the ENTIRE iteration-81 CRITICAL FIX — the webhook fallback 500s on any well-formed unsigned event, AND the reconciler + /market/checkout/status polling cannot process paid sessions even when the emergent proxy successfully returns them. Backend logs confirm: '[market] session status retries exhausted ...: get' and stack trace 'AttributeError: get' at billing.py:463. (2) safeNextPath() in AppShell.jsx has side effects (localStorage.removeItem) inside render body; React StrictMode double-invokes render, so 1st call consumes the value + returns nextPath (but Navigate is discarded), 2nd call returns null → user stays on /chats. Verified end-to-end: logged-out click 'Use this template' → /signup → login as amit → landed on /chats (NOT /market/install/{id}), and localStorage.tn-next-path was cleared. DID NOT re-run the real 4242-card Stripe checkout because bugs #1 above guarantee the confirmation flow cannot complete even if the payment succeeds (same root cause as iteration 80, now compounded by the .get() bug). Also verified raj's iteration-80 pending session cs_test_a1gQwSeCK... is still 'initiated' in DB (reconciler ran but crashed on .get; also the emergent proxy 404s the session most of the time due to load balancing).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/webhook/stripe (billing.py:463) + GET /api/market/checkout/status/{id} + reconciler (template_market.py:313)",
+        "issue": "stripe.checkout.Session objects returned by stripe.checkout.Session.retrieve() and stripe.Event.construct_from() do NOT have a `.get()` method in the installed stripe-python version — attribute access raises AttributeError. This breaks: (a) the webhook unsigned-payload fallback path (billing.py stripe_webhook line 463 `obj.get('id')` → 500 on ANY unsigned event received in emergent-proxy mode); (b) the market payment status endpoint (template_market.py _session_status_with_retry line 313 `s.get('status') or 'open'` → AttributeError caught but treated as retry-failure, so paid sessions NEVER resolve to 'paid' even when the proxy returns 200); (c) the 30s market reconciler (same .get() call in _session_status_with_retry) never confirms any pending payment. Repro: `stripe.checkout.Session.construct_from({'id':'x','status':'complete','payment_status':'paid'}, 'sk_test_x').get('status')` → AttributeError: get. Fix: replace ALL `s.get(k)` with dict subscript `s[k]` (StripeObject supports __getitem__) or use `dict(s).get(k)` / `s.to_dict_recursive().get(k)`. This is THE root cause blocking iteration-80's CRITICAL FIX + iteration-81's follow-up.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/webhook/stripe",
+        "issue": "Also 500s on malformed but syntactically valid JSON (e.g., missing data.object) because event['data']['object'] raises KeyError with no handler. Should return 400 for any malformed event, not 500."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AppShell.jsx safeNextPath",
+        "issue": "Side effect (localStorage.removeItem) inside render body. Under React.StrictMode (index.js:8), render is double-invoked in dev — first call consumes tn-next-path from localStorage and returns nextPath, but the resulting Navigate is discarded by StrictMode's throwaway pass; second call reads null and returns null → no navigation. Verified end-to-end: logged-out click 'Use this template' → /signup → login as amit → landed on /chats NOT /market/install/{id}; localStorage.tn-next-path IS set correctly and IS consumed, but the redirect never commits. Fix: move safeNextPath into a useState initializer (only runs once during commit) OR into a useEffect that reads-and-clears and calls navigate(...). Do NOT do the removeItem inline in render.",
+        "selector": "[data-testid=web-nav-logo] → route AppShell.jsx:28",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Full Stripe paid template purchase (4242 test card)",
+        "issue": "NOT re-tested because the two critical backend bugs above make it impossible to succeed. Iteration-80 RCA (emergent Stripe proxy load-balances across backing accounts so retrieve() intermittently 404s) is UNCHANGED, AND the fix attempted in iteration 81 (webhook fallback + reconciler) itself crashes on `.get()` on the Session object. Both the polling path AND the reconciler path AND the webhook fallback path are broken.",
+        "affected_selectors": ["[data-testid=install-pay-btn]", "polling /api/market/checkout/status/{id}"]
+      },
+      {
+        "flow": "tn-next-path auto-redirect after login/signup",
+        "issue": "See UI bug above. AppShell.jsx safeNextPath is invoked but the side-effect-in-render pattern breaks under React.StrictMode."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration81_nav_pricing_margin.py",
+    "/app/test_reports/pytest/iteration81.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix stripe.checkout.Session.get() bug — replace `s.get('status')` with `s['status']` (or dict(s).get('status')) in template_market.py:313 (_session_status_with_retry) and billing.py:463 (stripe_webhook) + line 372 (obj.get('id'), and any other .get() call on parsed stripe objects downstream). Without this fix, the CRITICAL FIX from iteration 81 is completely non-functional — the webhook fallback + reconciler + status polling ALL fail on the .get attribute.",
+    "HIGH: Fix AppShell.jsx safeNextPath side-effect-in-render bug. Two viable patterns: (a) `const [nextPath] = useState(() => safeNextPath())` so it runs exactly once on mount; (b) move to useEffect that reads localStorage + navigate(). Either works. Test by: logout → /templates → click 'Use this template' on any free card → /signup → login as amit → expect landing on /market/install/{id}.",
+    "MEDIUM: Add a try/except around event['data']['object'] in billing.py stripe_webhook to return 400 instead of 500 on malformed webhook payloads.",
+    "LOW: Since the emergent Stripe proxy issue persists (session 404 on wrong backing account), consider adding a manual 'I've paid — check now' button on InstallTemplate.jsx as a UX fallback while the reconciler runs. This is orthogonal to the .get() bug — even after .get() is fixed, the proxy load-balancing means resolutions are probabilistic within any bounded polling window.",
+    "LOW: Clean up raj's stale iteration-80 payment_transaction rows (session_id starts with cs_test_a1gQwSeCK... and cs_test_a1bLd4YooHSg9... plus my iteration-81 cs_test_a1RE6zbIeYRWTlldSOOX1DGlkNkfbdvr8qfWKd1mQlZYGySixfP3W4MNyr, cs_test_a1tU04JWdNRCpccLZe8tN3IwL6xaQnAXEvsmcF80G30FPWGwiKs77k4vhf); safe to delete since they're all 'initiated' & 'processed:false' and never became paid."
+  ],
+  "critical_code_review_comments": [
+    "template_market.py:313 `s.get('status') or 'open'` — Stripe library's StripeObject shadows dict.get with __getattr__ returning AttributeError('get'). Must use `s['status']` (StripeObject.__getitem__ works) or convert via `dict(s).get('status')`. Same issue exists at line 314 for payment_status. This IS the root cause of the whole iteration-81 CRITICAL FIX being non-functional.",
+    "billing.py:463 `obj.get('id')` — same StripeObject.get() bug. And line 372 `session_id = obj.get('id')` inside _handle_checkout_session_completed will hit the same crash whenever the webhook is unsigned (emergent proxy). Root cause of webhook fallback 500s.",
+    "billing.py stripe_webhook: no try/except around event['data']['object'] → KeyError becomes 500 on malformed events instead of a clean 400.",
+    "AppShell.jsx:28 `const nextPath = safeNextPath();` — side effect (localStorage.removeItem) inside function-component render body is a React anti-pattern. Breaks under StrictMode's double-render + concurrent-mode discarded renders. Move to useState initializer or useEffect + navigate().",
+    "template_market.py _session_status_with_retry catches bare Exception and doesn't distinguish 404 (permanent-for-this-request due to proxy routing) from AttributeError (real bug). If it distinguished, the .get() bug would have been surfaced much sooner in ordinary logs.",
+    "template_market.py reconciler runs every 30s across ALL pending market transactions in a 2-hour window; if the .get() bug is fixed but the emergent proxy still 404s most of the time, the reconciler will keep retrying stale transactions indefinitely. Consider a max-attempts field on payment_transactions and marking as 'abandoned' after N failed reconciler passes.",
+    "Iteration-80's stale txn cs_test_a1gQwSeCKUhnMRmJgSgFMYRYR3sVupl1W8QzJR1u5yhE6ogz7aqu2JfbC8 still in DB — the reconciler DID hit the retrieve() 200 path on it but the .get() bug crashed the parsing. This is direct DB evidence of the CRITICAL bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration81_nav_pricing_margin.py (new, 20 tests, ~4.3s, 19 pass 2 fail — 2 failures document the CRITICAL stripe .get() bug)"
+  ],
+  "success_rate": {
+    "backend": "95% (19/20 automated pass) — the 2 failing tests both document the SAME critical stripe .get() bug that transitively breaks the entire iteration-81 CRITICAL FIX",
+    "frontend": "85% (nav ✓ dropdowns ✓ mobile ✓ home ✓ pricing ✓ employees ✓ admin margin round-trip ✓ raj forbidden ✓ paid screenshot ✓; tn-next-path auto-redirect ✗ due to StrictMode+render-side-effect bug; real Stripe 4242 checkout NOT re-tested because pre-conditions broken)"
+  },
+  "test_credentials": "amit@demo.team / Demo@2026 (PLATFORM ADMIN via PLATFORM_ADMIN_EMAILS + workspace owner), priya@demo.team / Demo@2026 (workspace admin — passes /admin/billing-settings, FAILS /market/admin/* because not in PLATFORM_ADMIN_EMAILS), raj@demo.team / Demo@2026 (member — fails both).",
+  "seed_data_creation": "No persistent test seed data created. Margin was temporarily changed to 45% during round-trip test and restored to 40%. verified via GET /api/public/credit-pricing → credit_margin_pct: 0.4 after test. Stripe test left 1 additional 'initiated' payment_transaction from the Priya checkout initiation smoke test (session cs_test_a1RE6zbI... / cs_test_a1tU04JWd...) — safe to delete; already noted in action items.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_iteration81_nav_pricing_margin.py (20 tests, ~4.3s). Run: `cd /app/backend && python -m pytest tests/test_iteration81_nav_pricing_margin.py -v --junitxml=/app/test_reports/pytest/iteration81.xml`. The 2 failing tests (TestWebhookAndReconciler::test_webhook_unsigned_wellformed_json_accepted + test_stripe_session_object_get_method_available) INTENTIONALLY document the critical .get() bug — they should pass once main agent fixes template_market.py and billing.py to use dict-subscript access instead of .get(). For frontend: the tn-next-path bug needs main-agent fix to AppShell.jsx (move safeNextPath to useState initializer or useEffect). Once BOTH bugs are fixed, re-run the full end-to-end real Stripe 4242 checkout as raj (payment succeeds → return page polls status → webhook + reconciler resolve to paid → mkt_purchases row created with 70/30 split → project installs). If STILL blocked after fixes, the emergent Stripe proxy load-balancing issue documented in iteration_80.json remains, and a manual 'check now' button is the pragmatic UX fallback.",
+  "rca of the issue": "TWO INDEPENDENT ROOT CAUSES BLOCKING ITERATION 81's HEADLINE CRITICAL FIX:\n\n(1) StripeObject.get() bug (BACKEND, CRITICAL): The installed stripe-python version's `StripeObject.__getattr__` raises AttributeError for attributes not in the underlying _data dict — INCLUDING inherited dict methods like `.get`. Both `template_market.py:313 s.get('status')` (the reconciler + status polling core) and `billing.py:463 obj.get('id')` (the webhook fallback core) crash with AttributeError: 'get'. Confirmed live via `python3 -c 'stripe.checkout.Session.construct_from({...},key).get(\"status\")'` → AttributeError. Fix: replace `s.get(k)` with `s[k]` (StripeObject supports __getitem__ via dict subclassing) or `dict(s).get(k)` for a safe-with-default idiom. This bug makes iteration-80's original 'session retrieve 404' RCA a red herring for the parsing failures — even the 200-response path was crashing on .get().\n\n(2) React StrictMode + render-side-effect bug (FRONTEND, HIGH): `AppShell.jsx:28 const nextPath = safeNextPath();` inline in render, with safeNextPath performing `localStorage.removeItem(...)`. React.StrictMode (index.js:8) intentionally double-invokes function-component render bodies in dev to expose non-idempotent code. First call reads 'tn-next-path' from localStorage, removes it, returns the value → Navigate scheduled. Second call reads null (already removed) → returns null → no Navigate. Because StrictMode's first render is discarded before commit, the scheduled Navigate never applies. Fix: move to useState(() => safeNextPath()) so the init function runs exactly once during commit, OR to useEffect where side effects belong.\n\nBoth fixes are simple (10 lines each) but until they land, the iteration-81 CRITICAL FIX + tn-next-path claims are non-functional."
+}

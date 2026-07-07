@@ -1,0 +1,265 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand display family kept for legacy nodes that still call it. */
+@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500,400&display=swap");
+
+:root {
+    /* TODO: light mode */
+    --bg: #0A0A0E;
+    --surface: #17171E;
+    --surface-2: #1F1F27;
+    --surface-3: #272731;
+    --hairline: rgba(255, 255, 255, 0.08);
+    --text: #F5F5F7;
+    --text-dim: rgba(245, 245, 247, 0.62);
+    --text-mute: rgba(245, 245, 247, 0.40);
+    --brand: #FFD23F;
+    --brand-deep: #E0A800;
+    --brand-tint: rgba(255, 210, 63, 0.14);
+    --ai: #B794F4;
+    --ai-tint: rgba(183, 148, 244, 0.16);
+    --green: #34D399;
+    --red: #F87171;
+    --bubble-out: #3A2E14;
+
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    color-scheme: dark;
+    font-family:
+        "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+        sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Native date / time pickers — make the calendar icon visible on dark bg */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+    color-scheme: dark;
+    color: #fafafa;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+    /* brightness(0)=force black, then invert(1)=pure white. Reliable across
+       Chromium/WebKit regardless of system theme. */
+    filter: brightness(0) invert(1);
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* Firefox-only: the native indicator can be styled via background */
+@-moz-document url-prefix() {
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"] {
+        color: #fafafa;
+    }
+}
+
+/* File inputs — make the native button readable */
+input[type="file"] {
+    color: #a1a1aa;
+}
+
+input[type="file"]::-webkit-file-upload-button,
+input[type="file"]::file-selector-button {
+    background: #1c1c1f;
+    color: #fafafa;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    padding: 4px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    margin-right: 8px;
+}
+
+input[type="file"]::-webkit-file-upload-button:hover,
+input[type="file"]::file-selector-button:hover {
+    background: #2a2a2e;
+}
+
+/* Autofill — Chrome turns inputs yellow by default */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+    -webkit-text-fill-color: #fafafa;
+    -webkit-box-shadow: 0 0 0px 1000px #121214 inset;
+    caret-color: #fafafa;
+    transition: background-color 99999s ease-in-out 0s;
+}
+
+/* Native dropdown arrow visibility (used by raw <select>; shadcn select is custom) */
+select {
+    color: #fafafa;
+    color-scheme: dark;
+}
+
+/* Number-input spinner arrows on dark bg */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    filter: invert(0.9);
+    opacity: 0.7;
+}
+
+/* Search input clear (X) button */
+input[type="search"]::-webkit-search-cancel-button {
+    filter: invert(0.9);
+    cursor: pointer;
+}
+
+.font-display {
+    font-family: "Cabinet Grotesk", "IBM Plex Sans", sans-serif;
+    letter-spacing: -0.025em;
+}
+
+.font-mono {
+    font-family: "JetBrains Mono", monospace;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 4%;
+        --foreground: 0 0% 100%;
+        --card: 0 0% 7%;
+        --card-foreground: 0 0% 100%;
+        --popover: 0 0% 7%;
+        --popover-foreground: 0 0% 100%;
+        --primary: 217 91% 60%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 11%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 0 0% 11%;
+        --muted-foreground: 240 5% 65%;
+        --accent: 0 0% 11%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 0 0% 14%;
+        --input: 0 0% 14%;
+        --ring: 217 91% 60%;
+        --radius: 0.25rem;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+/* Selection */
+::selection {
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+/* Utility classes */
+.dot-grid {
+    background-image: radial-gradient(
+        rgba(255, 255, 255, 0.06) 1px,
+        transparent 1px
+    );
+    background-size: 18px 18px;
+}
+
+.glow-yellow {
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25);
+}
+
+.glow-blue {
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+
+.label-mono {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #71717a;
+}
+
+.shimmer {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.fade-in {
+    animation: fade-in 0.25s ease-out;
+}
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

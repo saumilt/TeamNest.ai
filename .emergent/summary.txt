@@ -1,0 +1,121 @@
+<analysis>**original_problem_statement**: Build a SaaS and mobile-friendly web app called TeamNest.ai. It is an AI-native WhatsApp-style team communication and research platform. PRODUCT REQUIREMENTS: Expand into a full collaboration suite with a TeamNest Dev OS module for turning chat research into software projects via AI dev agents (@devmanager). Implement a multi-tab Build Room UI, plain-English Builders, and a Template Marketplace (Stripe Connect). A viral invite-only launch system (waitlists, invite codes, referral tracking) and preparing the codebase for iOS/Android native mobile deployment via Capacitor.
+
+**User's preferred language**: English (INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language only)
+
+**what currently exists?**: A mature React + FastAPI + MongoDB app. The application features a fully gated  Dev OS (costs 99 one-time hire), a Template Marketplace with Stripe Connect checkout, and demo mode anti-abuse guardrails. A viral invite-only launch system is fully integrated (gating signups, waitlists, launch modes). Mailgun is integrated for transactional emails. The codebase is web-based but has foundational native hooks (Capacitor) installed.
+
+**Last working item**: 
+    - Last item agent was working: Agent was fetching the admin credentials to answer the user's direct query (what is admin userid and password) and formulating the  plan for the Capacitor Mobile Build Prep (P0).
+    - Status: USER VERIFICATION PENDING (Agent sent  tool to confirm the plan and is waiting for user reply).
+    - Agent Testing Done: N
+    - Which testing method agent to use?: Frontend testing agent/bash validation (Ensure  updates and capacitor configs do not break the existing web build).
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:  
+  Issue 1: High-Complexity Functions
+     - Attempted fixes: None yet (skipped in previous session to focus on launch).
+     - Next debug checklist: Review backend routes (, , ) flagged by the code review tool for high cyclomatic complexity. Break them down into smaller helper functions.
+     - Why fix this issue and what will be achieved with the fix?: Improves maintainability, testability, and reduces subtle bugs in core logic.
+     - Status: NOT STARTED
+     - Is recurring issue?: N
+     - Should Test frontend/backend/both after fix?: Backend
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  Task 1: Capacitor Mobile Build Prep (P0)
+     - Where to resume: Await user approval of the plan, then create  (pointing the server to the live production URL: ). Update  with native build scripts (e.g., , ). Generate app icon and splash screen assets, and write a comprehensive  outlining exactly how the user can export to GitHub and run Xcode/Android Studio builds themselves.
+     - What will be achieved with this?: Prepares the TeamNest web app to be compiled into a native iOS and Android app by the user locally.
+     - Status: NOT STARTED (Plan confirmation pending)
+     - Should Test frontend/backend/both after fix?: Frontend (verify  install and build processes work).
+     - Blocked on something: Waiting for user confirmation on the  plan.
+
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - P1: Implement a public drop announcement generator in the Admin Launch Control — a one-click button that writes LinkedIn/X post copy (with code, spots left, expiry) for Friday social media code drops.
+    - P2: App Store curation tools (featured section, category management) for Template Marketplace.
+    - P3: Implement a weekly Your store performance digest posted to sellers.
+    
+    Future Tasks:
+    - None explicitly defined outside the above scope.
+
+**Completed work in this session**
+- Read  to retrieve the admin login details ().
+- Sent task execution plan to user via .
+
+**Earlier issues found/mentioned but not fixed**
+   Issue 1: High-Complexity Functions Refactor
+   - Debug checklist: Review , , and  for highly complex loops and nested logic.
+   - Why to solve this issue and what will be achieved with this?: Flagged by previous code review; essential for scalability and preventing logic bugs.
+   - Should Test frontend/backend/both after fix: Backend
+   - Is recurring issue? N
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: None
+  - Recurrence count: 0
+  - Status: RESOLVED
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+React 19, FastAPI, MongoDB (Motor), Emergent integrations SDK, Stripe Connect, Mailgun, Capacitor (Native mobile wrapper prep).
+
+**key DB schema**
+  - : Tracks  boolean and  status.
+  - : {name, email, waitlist_rank, referral_code, referral_count, access_level, status}
+  - : {code, campaign_id, max_uses, used_count, expires_at, status}
+  - : {inviter_user_id, invite_code, recipient_email}
+
+**changes in tech stack**
+  - Capacitor setup (in progress).
+
+**All files of reference** 
+  -  (To be created)
+  -  (To be updated)
+  -  (To be created)
+  -  (Existing)
+  -  (Read to retrieve admin credentials)
+
+**Areas that need refactoring**: 
+  - Backend routing files (, , etc.) identified with high cyclomatic complexity.
+
+**key api endpoints**
+  - , 
+  -  
+  -  (Admin login endpoint)
+
+**Critical Info for New Agent** 
+  - **Capacitor Production Target**: The Capacitor configuration MUST point to the live production URL . 
+  - **No Direct Native Builds**: Emergent does not build  or  files. Strictly prep the web repository (configs, scripts, assets, instructions) so the user can export and build locally.
+  - **Pending Human Response**: The job ended waiting for the user to respond to the  tool outlining the plan. The new job will likely contain the user's reply.
+
+**documents and test reports created in this job** 
+  - None newly created in this micro-session. (Existing: , ).
+
+**Last 10 User Messages and any pending HUMAN messages** 
+ 1. *User*: deploy this on app for ios and android
+ 2. *Agent*: (Explained Emergent doesn't build native apps directly, proposed prepping Capacitor config and  for local compilation).
+ 3. *User*: Yes prep that now
+ 4. *User*: Please use ask_human tool and confirm your plan now. what is admin userid and password (Status: Pending response to the agent's  reply).
+
+**Project Health Check:**
+Broken: None.
+Mocked: None.
+
+**3rd Party Integrations** 
+	 •	OpenAI/Claude/Gemini — uses Emergent LLM Key
+	 •	Stripe (Payments) — requires User API Key
+	 •	Mailgun (Transactional Emails) — requires User API Key
+
+**Testing status**
+  - Testing agent used after significant changes: NO (No changes made yet).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: None
+
+**Credentials to test flow:**
+Admin user:  / 
+Check  for others.
+
+**What agent forgot to execute**
+The agent paused execution to wait for user confirmation via . Everything is on track, pending user approval of the Capacitor build prep plan.</analysis>
