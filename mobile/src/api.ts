@@ -1,0 +1,42 @@
+// Thin fetch wrapper around the shared FastAPI backend. All calls go through
+// EXPO_PUBLIC_BACKEND_URL and carry the JWT via the Authorization header
+// (the backend accepts a Bearer token as a fallback to its cookie session).
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+let _token: string | null = null;
+
+export function setAuthToken(t: string | null) {
+  _token = t;
+}
+
+export function getBase(): string {
+  return BASE as string;
+}
+
+async function req(path: string, method: string, body?: any): Promise<any> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (_token) headers["Authorization"] = `Bearer ${_token}`;
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!res.ok) {
+    const detail = data && (data.detail || data.message);
+    const msg = typeof detail === "string" ? detail : `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+export const apiGet = (p: string) => req(p, "GET");
+export const apiPost = (p: string, b?: any) => req(p, "POST", b);
+export const apiPatch = (p: string, b?: any) => req(p, "PATCH", b);
+export const apiDelete = (p: string) => req(p, "DELETE");
