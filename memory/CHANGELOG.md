@@ -2666,3 +2666,44 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Tested by testing_agent (iteration_86.json): 10/10 mobile flows PASS. Fixed 3 LOW
   cosmetic issues (AI answer label order, hide ai_question echo, LinearGradient
   pointerEvents deprecation).
+
+## Iteration 89 — 2026-07-07 — Attach files to any chat → AI researches their contents (web + mobile)
+
+### Feature
+- Users can attach common file formats to ANY chat and have the AI read/research
+  the data inside: **PDF, DOCX, XLSX/XLS, CSV, TXT, JSON, MD, PPTX** (text
+  extraction) + **images** (vision).
+- New `services/file_extract.py` — best-effort per-format extractor
+  (pdfplumber / python-docx / openpyxl / python-pptx / plain text). Truncates to
+  ~6k chars/file, 40k total, ≤30 files, ≤8 images.
+- `handle_ai_command` (services/ai_runtime.py) now accepts `attachments`: inlines
+  extracted document text into the model prompt and passes image bytes to
+  vision-capable models via `ask_models_parallel(image_bytes_list=...)`.
+- `send_message` (routes/chats.py): the `@ai` path forwards message attachments;
+  in the personal **"My AI Assistant"** chat, attaching file(s) with ANY message
+  auto-triggers AI (no `@ai` needed).
+- `@devmanager` upgraded — `_load_attachment_context` now uses the shared
+  extractor (was images + plain text only).
+- `routes/uploads.py`: allowed types extended (docx/xlsx/xls/pptx/md); cap raised
+  to **30MB**.
+- Deps added: openpyxl, python-pptx.
+
+### Mobile (net-new attach UI)
+- `mobile/app/chat/[id].tsx`: paperclip (expo-document-picker) + photo
+  (expo-image-picker, with permission flow → Open Settings fallback) buttons,
+  attachment chips w/ remove, multipart upload via `apiUpload`, attachments sent
+  in `metadata.attachments`.
+- `mobile/src/components/MessageAttachments.tsx`: image thumbnails + tappable
+  file chips (authenticated `/api/files/{id}?auth=` URL).
+- app.json: registered expo-document-picker + expo-image-picker plugins.
+
+### Bug fixes (found during testing)
+- `CreditSplash.jsx`: low-balance modal now honors a **session-scoped dismiss**
+  (sessionStorage `tn-credit-splash-low-dismissed`) so it no longer re-nags /
+  hard-blocks the web UI after being closed.
+- `uploads.py` 413 message corrected 20MB → 30MB.
+
+### Testing
+- Backend pytest 7/7 (`test_iteration89_attach_ai_research.py`).
+- Web verified E2E: attach orion.txt → `@ai` → "WOMBAT-42 / $88,000" (read from file).
+- Mobile verified: CSV attach → auto AI → correct value; composer testIDs + chips render.

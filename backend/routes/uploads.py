@@ -27,7 +27,7 @@ async def upload_file(
 ):
     data = await file.read()
     if len(data) > MAX_UPLOAD_SIZE:
-        raise HTTPException(413, "File too large (max 20MB)")
+        raise HTTPException(413, "File too large (max 30MB)")
     filename = file.filename or "file.bin"
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
     if ext not in ALLOWED_EXT:

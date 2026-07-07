@@ -58,6 +58,8 @@ export default function CreditSplash() {
     const COOLDOWN_MS = 6 * 60 * 60 * 1000;
     const check = async () => {
       try {
+        // Once the user closes it this session, never nag again until reload.
+        if (sessionStorage.getItem("tn-credit-splash-low-dismissed") === "1") return;
         let lastShown = 0;
         try { lastShown = Number(localStorage.getItem("tn-credit-splash-low-at") || 0); } catch { /* noop */ }
         if (Date.now() - lastShown < COOLDOWN_MS) return;
@@ -77,7 +79,11 @@ export default function CreditSplash() {
 
   const dismiss = () => {
     setOpen(false);
-    try { sessionStorage.setItem("tn-credit-splash", "1"); } catch { /* noop */ }
+    try {
+      sessionStorage.setItem("tn-credit-splash", "1");
+      // Low-balance splash: don't re-open again for the rest of this session.
+      sessionStorage.setItem("tn-credit-splash-low-dismissed", "1");
+    } catch { /* noop */ }
   };
 
   const buy = async (packId, customAmount) => {
