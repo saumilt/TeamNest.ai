@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet } from "@/src/api";
 import { Avatar } from "@/src/components/Avatar";
+import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -95,9 +96,7 @@ export default function ChatsScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.header}>
         <Text style={styles.h1}>Chats</Text>
-        <View style={styles.brandMark}>
-          <Text style={styles.brandMarkText}>TN</Text>
-        </View>
+        <CreditsBadge />
       </View>
 
       {chats === null ? (

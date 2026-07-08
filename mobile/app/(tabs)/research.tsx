@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
+import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { Markdown } from "@/src/markdown";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -81,7 +82,10 @@ export default function ResearchScreen() {
         contentContainerStyle={{ padding: spacing.lg, paddingTop: insets.top + spacing.md, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.h1}>AI Research</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={styles.h1}>AI Research</Text>
+          <CreditsBadge />
+        </View>
         <Text style={styles.sub}>
           Ask once, compare answers across models, get one synthesized result.
         </Text>

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/src/components/Avatar";
+import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { apiDelete } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
@@ -76,7 +77,10 @@ export default function YouScreen() {
       style={styles.container}
       contentContainerStyle={{ padding: spacing.lg, paddingTop: insets.top + spacing.md, paddingBottom: 60 }}
     >
-      <Text style={styles.h1}>You</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg }}>
+        <Text style={[styles.h1, { marginBottom: 0 }]}>You</Text>
+        <CreditsBadge />
+      </View>
 
       <View style={styles.profileCard}>
         <Avatar name={user?.name} size={72} />

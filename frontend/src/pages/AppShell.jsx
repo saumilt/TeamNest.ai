@@ -6,6 +6,7 @@ import MobileTabBar from "@/components/MobileTabBar";
 import ChangelogModal from "@/components/ChangelogModal";
 import EmployeeCrossSell from "@/components/EmployeeCrossSell";
 import CreditSplash from "@/components/CreditSplash";
+import CreditsBadge from "@/components/CreditsBadge";
 
 /** App shell for authenticated routes.
  *
@@ -42,6 +43,7 @@ export default function AppShell() {
       <ChangelogModal />
       <EmployeeCrossSell />
       <CreditSplash />
+      <CreditsBadge />
     </div>
   );
 }

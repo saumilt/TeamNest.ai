@@ -9,11 +9,13 @@ import { Coins, X, Sparkles } from "lucide-react";
 export default function CreditSplash() {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
-  const [lowBalance, setLowBalance] = useState(null);
+  const [reason, setReason] = useState("buy"); // 'buy' | 'low'
+  const [remaining, setRemaining] = useState(null);
   const [buying, setBuying] = useState(null);
   const [custom, setCustom] = useState("");
   const [params, setParams] = useSearchParams();
 
+  // Confirm a Stripe checkout return (?credit_session_id=).
   useEffect(() => {
     const sid = params.get("credit_session_id");
     if (!sid) return;
@@ -26,6 +28,7 @@ export default function CreditSplash() {
           toast.success(`+${data.credits} credits added to your workspace 🎉`);
           params.delete("credit_session_id");
           setParams(params, { replace: true });
+          window.dispatchEvent(new Event("teamnest:credits-changed"));
           return;
         }
       } catch { /* retry */ }
@@ -35,61 +38,56 @@ export default function CreditSplash() {
     poll();
   }, []);
 
+  // Load packs/promo + decide whether to AUTO-open. The buy-credits prompt only
+  // auto-surfaces when the workspace is on the Free plan OR has < 100 credits
+  // left — never for unlimited workspaces, at most once per session, and never
+  // if the user chose "Don't show this again".
   useEffect(() => {
-    api.get("/billing/credit-packs")
-      .then(({ data }) => {
-        setData(data);
-        let dismissed = false;
-        try { dismissed = sessionStorage.getItem("tn-credit-splash") === "1"; } catch { /* noop */ }
-        // 4s delay so it doesn't stack on top of the changelog modal.
-        if (data.promo?.enabled && !dismissed) setTimeout(() => setOpen(true), 4000);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Low-balance trigger: when credits drop below the admin threshold,
-  // surface the splash — at most once every 6h per browser so it never
-  // nags every tab/page load or interrupts an active build loop.
-  useEffect(() => {
-    if (!data?.promo?.enabled) return undefined;
-    const threshold = Number(data.promo.low_balance_threshold ?? 50);
-    if (!(threshold > 0)) return undefined;
-    const COOLDOWN_MS = 6 * 60 * 60 * 1000;
-    const check = async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        // Once the user closes it this session, never nag again until reload.
-        if (sessionStorage.getItem("tn-credit-splash-low-dismissed") === "1") return;
-        let lastShown = 0;
-        try { lastShown = Number(localStorage.getItem("tn-credit-splash-low-at") || 0); } catch { /* noop */ }
-        if (Date.now() - lastShown < COOLDOWN_MS) return;
-        const { data: me } = await api.get("/billing/me");
-        const remaining = me?.usage?.credits_remaining;
-        // Clamp the admin threshold so it never exceeds ~20% of the plan's
-        // monthly grant. Otherwise a high admin threshold (e.g. 1000) would nag
-        // every workspace on a small plan (e.g. Free = 300) on every load.
-        const grant = Number(me?.usage?.monthly_credits) || 0;
-        const effective = grant > 0
-          ? Math.min(threshold, Math.max(10, Math.round(grant * 0.2)))
-          : threshold;
-        if (typeof remaining === "number" && remaining < effective) {
-          setLowBalance(remaining);
-          setOpen(true);
-          try { localStorage.setItem("tn-credit-splash-low-at", String(Date.now())); } catch { /* noop */ }
+        const [{ data: packs }, { data: me }] = await Promise.all([
+          api.get("/billing/credit-packs"),
+          api.get("/billing/me"),
+        ]);
+        if (cancelled) return;
+        setData(packs);
+        const usage = me?.usage || {};
+        setRemaining(typeof usage.credits_remaining === "number" ? usage.credits_remaining : null);
+        const hidden = safeGet("local", "tn-credit-splash-hidden") === "1";
+        const shownThisSession = safeGet("session", "tn-credit-splash-shown") === "1";
+        const low = typeof usage.credits_remaining === "number" && usage.credits_remaining < 100;
+        const eligible = !usage.unlimited && (usage.plan_id === "free" || low);
+        if (eligible && !hidden && !shownThisSession) {
+          setReason(low ? "low" : "buy");
+          // 4s delay so it doesn't stack on top of the changelog modal.
+          setTimeout(() => {
+            if (cancelled) return;
+            setOpen(true);
+            safeSet("session", "tn-credit-splash-shown", "1");
+          }, 4000);
         }
       } catch { /* noop */ }
-    };
-    const t = setTimeout(check, 6000);
-    const iv = setInterval(check, 60000);
-    return () => { clearTimeout(t); clearInterval(iv); };
-  }, [data]);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // The persistent Credits badge (or anywhere) can open the buy sheet on demand.
+  useEffect(() => {
+    const openBuy = () => { setReason("buy"); setOpen(true); };
+    window.addEventListener("teamnest:open-credit-splash", openBuy);
+    return () => window.removeEventListener("teamnest:open-credit-splash", openBuy);
+  }, []);
 
   const dismiss = () => {
     setOpen(false);
-    try {
-      sessionStorage.setItem("tn-credit-splash", "1");
-      // Low-balance splash: don't re-open again for the rest of this session.
-      sessionStorage.setItem("tn-credit-splash-low-dismissed", "1");
-    } catch { /* noop */ }
+    safeSet("session", "tn-credit-splash-shown", "1");
+  };
+
+  const dontShowAgain = () => {
+    setOpen(false);
+    safeSet("local", "tn-credit-splash-hidden", "1");
+    safeSet("session", "tn-credit-splash-shown", "1");
   };
 
   const buy = async (packId, customAmount) => {
@@ -116,7 +114,7 @@ export default function CreditSplash() {
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-hairline shrink-0">
           <Coins className="w-5 h-5 text-amber-300" />
           <div className="text-[15px] font-semibold text-ink flex-1">
-            {lowBalance !== null ? "You're almost out of credits" : (promo.splash_title || "Purchase credits")}
+            {reason === "low" ? "You're almost out of credits" : (promo.splash_title || "Purchase credits")}
           </div>
           <button type="button" onClick={dismiss} data-testid="credit-splash-close"
             className="p-1.5 rounded-full text-ink-mute hover:text-ink hover:bg-surface-2">
@@ -124,9 +122,9 @@ export default function CreditSplash() {
           </button>
         </div>
 
-        {lowBalance !== null && (
+        {reason === "low" && remaining !== null && (
           <div className="mx-5 mt-4 rounded-xl bg-rose-500/10 ring-1 ring-rose-500/25 px-4 py-2.5 text-[12.5px] text-rose-300 shrink-0" data-testid="credit-splash-low-banner">
-            Only <strong>{lowBalance}</strong> credits left — top up now so @devmanager and your AI employees keep working.
+            Only <strong>{remaining}</strong> credits left — top up now so @devmanager and your AI employees keep working.
           </div>
         )}
 
@@ -186,7 +184,38 @@ export default function CreditSplash() {
             <p className="text-[11px] text-ink-mute mt-2">$1 = 5 credits · Secure checkout via Stripe · Credits never expire</p>
           </div>
         </div>
+
+        <div className="px-5 py-3 border-t border-hairline shrink-0 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={dontShowAgain}
+            data-testid="credit-splash-dont-show"
+            className="text-[12px] text-ink-mute hover:text-ink underline underline-offset-2"
+          >
+            Don&apos;t show this again
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            data-testid="credit-splash-maybe-later"
+            className="text-[12px] text-ink-mute hover:text-ink"
+          >
+            Maybe later
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+// UI prefs only — never throw if storage is unavailable (private mode, etc.).
+function safeGet(kind, key) {
+  try {
+    return (kind === "local" ? localStorage : sessionStorage).getItem(key);
+  } catch { return null; }
+}
+function safeSet(kind, key, val) {
+  try {
+    (kind === "local" ? localStorage : sessionStorage).setItem(key, val);
+  } catch { /* noop */ }
 }
