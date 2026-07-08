@@ -69,7 +69,7 @@ from routes import (
     voice_notes,
     workspace,
 )
-from seed import seed_demo
+from seed import seed_demo, seed_market_templates
 from services.workspace_membership import migrate_legacy_users
 from storage import init_storage
 from ws_manager import manager
@@ -197,6 +197,10 @@ async def startup():
         await seed_demo(db)
     except Exception as e:
         logger.warning("Seed skipped: %s", e)
+    try:
+        await seed_market_templates(db)
+    except Exception as e:
+        logger.warning("Market template seed skipped: %s", e)
     try:
         await migrate_legacy_users(db)
     except Exception as e:

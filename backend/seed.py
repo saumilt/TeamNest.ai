@@ -421,3 +421,44 @@ async def _seed_phase2_demo(db, workspace_id, users, folders, chats, owner):
         "created_at": (now_dt - timedelta(days=3)).isoformat(),
         "completed_at": None,
     })
+
+
+
+async def seed_market_templates(db) -> None:
+    """Idempotently seed the Template Marketplace apps from a bundled JSON export.
+
+    The 14 demo templates (with their demo files + screenshot filenames) live in
+    data/market_templates_seed.json; the screenshot PNGs ship in
+    static/market_shots/. Inserts any template that isn't already present (by id),
+    so an empty production DB gets the full marketplace on first boot without
+    duplicating on subsequent restarts.
+    """
+    import json
+    import logging
+
+    logger = logging.getLogger("teamnest")
+    path = os.path.join(os.path.dirname(__file__), "data", "market_templates_seed.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r") as f:
+            templates = json.load(f)
+    except Exception as e:  # pragma: no cover
+        logger.warning("[seed] could not read market templates seed: %s", e)
+        return
+
+    inserted = 0
+    for t in templates:
+        if not t.get("id"):
+            continue
+        existing = await db.mkt_templates.find_one({"id": t["id"]}, {"_id": 1, "screenshot_file": 1})
+        if existing is None:
+            await db.mkt_templates.insert_one(t.copy())
+            inserted += 1
+        elif not existing.get("screenshot_file") and t.get("screenshot_file"):
+            # heal a previously-seeded doc that lost its screenshot reference
+            await db.mkt_templates.update_one(
+                {"id": t["id"]}, {"$set": {"screenshot_file": t["screenshot_file"]}}
+            )
+    if inserted:
+        logger.info("[seed] inserted %d market templates", inserted)
