@@ -1473,8 +1473,12 @@ async def pin_message(message_id: str, current=Depends(require_user)):
 
 
 
-async def _resolve_or_create_invitee(payload: InviteGuestToChat, current: dict) -> dict:
-    """Return either an existing user (by user_id / email) or freshly-created guest."""
+async def _resolve_or_create_invitee(
+    payload: InviteGuestToChat, current: dict, role: str = "guest"
+) -> dict:
+    """Return either an existing user (by user_id / email) or a freshly-created
+    account. `role` controls the role stamped on brand-new accounts ("guest"
+    for chat-scoped guests, "member" for full workspace members)."""
     if payload.user_id:
         target_user = await db.users.find_one({"id": payload.user_id}, PROJ)
         if not target_user:
@@ -1486,18 +1490,22 @@ async def _resolve_or_create_invitee(payload: InviteGuestToChat, current: dict) 
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         return existing
-    return await _create_guest_account(payload, current)
+    return await _create_guest_account(payload, current, role=role)
 
 
-async def _create_guest_account(payload: InviteGuestToChat, current: dict) -> dict:
-    """Insert a fresh guest user record with a one-time password."""
+async def _create_guest_account(
+    payload: InviteGuestToChat, current: dict, role: str = "guest"
+) -> dict:
+    """Insert a fresh user record with a one-time password. `role` is "guest"
+    for chat-scoped guests or "member" for full workspace members."""
     phone_norm = normalize_phone(payload.phone)
     if phone_norm:
         phone_clash = await db.users.find_one({"phone_normalized": phone_norm})
         if phone_clash:
             raise HTTPException(400, "Phone number is already registered")
     import secrets as _secrets
-    one_time_pwd = f"Guest-{_secrets.token_urlsafe(6)}"
+    prefix = "Member" if role == "member" else "Guest"
+    one_time_pwd = f"{prefix}-{_secrets.token_urlsafe(6)}"
     target_user = {
         "id": new_id(),
         "name": (payload.name or payload.email.split("@", 1)[0]).strip(),
@@ -1507,7 +1515,7 @@ async def _create_guest_account(payload: InviteGuestToChat, current: dict) -> di
         "password_hash": hash_password(one_time_pwd),
         "must_change_password": True,
         "avatar": None,
-        "role": "guest",
+        "role": role,
         "workspace_id": current["workspace_id"],
         "status": "active",
         "created_at": now_iso(),
@@ -1595,6 +1603,77 @@ async def invite_guest_to_chat(
         response["one_time_password"] = target_user["_one_time_password"]
         response["created_new_account"] = True
     return response
+
+
+@router.post("/chats/{chat_id}/invite-member")
+async def invite_member_to_chat(
+    chat_id: str, payload: InviteGuestToChat, current=Depends(require_user)
+):
+    """Invite someone into this chat as a full workspace **member** (unlike
+    guests, members are not chat-scoped and can see the whole workspace).
+
+    Two paths, mirroring invite-guest:
+    * `user_id` / existing `email` → add that TeamNest user to this workspace
+      as a member (if not already) and to this chat.
+    * brand-new `email` → create a member account with a one-time password
+      (returned so the inviter can share it) and add them to the chat.
+    """
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    _ensure_chat_admin(chat, current["id"])
+
+    target_user = await _resolve_or_create_invitee(payload, current, role="member")
+
+    if target_user["id"] == current["id"]:
+        raise HTTPException(400, "You can't invite yourself")
+    if target_user["id"] in (chat.get("member_ids") or []):
+        raise HTTPException(400, "User is already in this chat")
+
+    # Ensure a full (non-scoped) workspace membership as a member.
+    await ensure_membership(
+        target_user["id"], current["workspace_id"], role="member",
+    )
+
+    await db.chats.update_one(
+        {"id": chat_id}, {"$addToSet": {"member_ids": target_user["id"]}}
+    )
+
+    sys_msg = {
+        "id": new_id(),
+        "chat_id": chat_id,
+        "sender_id": "ai-system",
+        "message_type": "text",
+        "body": f'**{target_user["name"]}** was added by **{current["name"]}**.',
+        "parent_message_id": None,
+        "metadata": {"event": "members_added", "user_ids": [target_user["id"]], "by": current["id"]},
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(sys_msg.copy())
+    await _broadcast_message(chat_id, sys_msg)
+
+    try:
+        await _post_reminder(
+            target_user["id"],
+            f'{current["name"]} added you to "{chat.get("name") or "a chat"}".',
+            {"id": chat_id},
+        )
+    except Exception:
+        pass
+
+    response = public_user(target_user)
+    response["chat_id"] = chat_id
+    response["role"] = "member"
+    if target_user.get("_one_time_password"):
+        response["one_time_password"] = target_user["_one_time_password"]
+        response["created_new_account"] = True
+    return response
+
 
 
 

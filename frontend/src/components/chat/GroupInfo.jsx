@@ -13,12 +13,10 @@ import {
   Megaphone,
   Lock,
   Users as UsersIcon,
-  Search,
   Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import AiBillingTab from "@/components/chat/AiBillingTab";
+import AddMemberDialog from "@/components/AddMemberDialog";
 
 /**
  * GroupInfo — slide-over panel listing chat members with role badges.
@@ -32,8 +30,6 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   const { user } = useAuth();
   const [chat, setChat] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [addQuery, setAddQuery] = useState("");
-  const [candidates, setCandidates] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [aiEmployees, setAiEmployees] = useState([]);
   const [tab, setTab] = useState("members");
@@ -68,26 +64,7 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   useEffect(() => {
     if (!open || !chatId) return;
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, chatId]);
-
-  // Load workspace member candidates for the "Add member" picker.
-  useEffect(() => {
-    if (!showAdd) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get("/workspace/members");
-        if (cancelled) return;
-        setCandidates(data || []);
-      } catch {
-        toast.error("Couldn't load workspace members");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showAdd]);
 
   const isAdmin = !!chat?.is_current_user_admin;
   const members = chat?.members || [];
@@ -121,19 +98,7 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
     }
   };
 
-  const handleAdd = async (uid, name) => {
-    setBusy(true);
-    try {
-      await api.post(`/chats/${chatId}/members`, { user_ids: [uid] });
-      toast.success(`${name} added`);
-      setAddQuery("");
-      await refresh();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Add failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleAddOpen = () => setShowAdd(true);
 
   const handlePolicyChange = async (next, selectedIds) => {
     setBusy(true);
@@ -152,15 +117,6 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   };
 
   if (!open) return null;
-
-  const candidateMatches = candidates
-    .filter((u) => !memberIds.has(u.id) && u.id !== user?.id)
-    .filter((u) => {
-      if (!addQuery.trim()) return true;
-      const q = addQuery.toLowerCase();
-      return (u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
-    })
-    .slice(0, 50);
 
   return (
     <>
@@ -329,53 +285,14 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
               {isAdmin && (
                 <button
                   data-testid="open-add-member-btn"
-                  onClick={() => setShowAdd((v) => !v)}
+                  onClick={handleAddOpen}
                   className="inline-flex items-center gap-1 text-[11px] text-brand hover:underline"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  {showAdd ? "Cancel" : "Add"}
+                  Add
                 </button>
               )}
             </div>
-
-            {showAdd && (
-              <div className="mb-3 p-3 border border-hairline rounded-card bg-surface-2/40" data-testid="add-member-picker">
-                <div className="relative mb-2">
-                  <Search className="w-3.5 h-3.5 text-ink-dim absolute left-2.5 top-2.5" />
-                  <Input
-                    data-testid="add-member-search"
-                    value={addQuery}
-                    onChange={(e) => setAddQuery(e.target.value)}
-                    placeholder="Search workspace members…"
-                    className="h-9 pl-8 text-[13px]"
-                  />
-                </div>
-                <div className="max-h-48 overflow-y-auto -mx-1">
-                  {candidateMatches.length === 0 ? (
-                    <div className="text-[12px] text-ink-dim px-2 py-3">
-                      No more workspace members to add.
-                    </div>
-                  ) : (
-                    candidateMatches.map((u) => (
-                      <button
-                        key={u.id}
-                        data-testid={`add-candidate-${u.id}`}
-                        disabled={busy}
-                        onClick={() => handleAdd(u.id, u.name)}
-                        className="w-full flex items-center gap-2.5 px-2 h-10 rounded-md hover:bg-white/5 text-left"
-                      >
-                        <Avatar name={u.name} src={u.avatar} size={26} />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13px] truncate">{u.name}</div>
-                          <div className="text-[10px] text-ink-dim truncate">{u.email}</div>
-                        </div>
-                        <UserPlus className="w-3.5 h-3.5 text-brand" />
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
 
             <ul className="space-y-1" data-testid="members-list">
               {members.map((m) => (
@@ -433,6 +350,14 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
           )}
         </div>
       </aside>
+      <AddMemberDialog
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        chatId={chatId}
+        chatName={chat?.name}
+        existingMemberIds={memberIds}
+        onAdded={refresh}
+      />
     </>
   );
 }
