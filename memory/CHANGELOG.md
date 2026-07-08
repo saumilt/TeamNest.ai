@@ -2,6 +2,16 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 92 (Jul 2026) — Persistent Credits badge + gated buy-credits modal (web + mobile)
+### What was built
+- **Persistent top-right "Credits" badge** (stays steady on every in-app screen): flame pill with remaining credits (or ∞ for unlimited) + an amber "Credits" button showing the live promo bonus ("X% more", from `max(pack.bonus_pct)` when `promo.enabled`; hidden when no active bonus). Tapping opens the buy sheet.
+  - Web: `frontend/src/components/CreditsBadge.jsx`, mounted in `AppShell.jsx`; dispatches `teamnest:open-credit-splash`.
+  - Mobile: `mobile/src/components/CreditsBadge.tsx` in the Chats/Research/Tasks/You headers; tapping opens the web billing page via `Linking` (no in-app purchase — Apple IAP compliance).
+- **Buy-credits modal now gated**: `CreditSplash.jsx` auto-opens ONLY when the workspace is Free plan OR has < 100 credits (never for unlimited). Replaced the old promo-always + low-balance-interval logic. At most once per session (`tn-credit-splash-shown`).
+- **"Don't show this again"**: permanent opt-out via `localStorage tn-credit-splash-hidden` (survives reload/future logins). Badge stays regardless; clicking it always reopens the sheet. Also added "Maybe later".
+- Verified by the testing agent (report iteration_90.json): 10/10 interactive behaviors pass on web + mobile (auto-open gating, don't-show persistence across reload, badge-click reopen, mobile Linking to /billing, badge persists across navigation).
+
+
 ## Iteration 91 (Jul 2026) — Super admin + unlimited credits for sam@funasia.net
 ### What was built (shared backend + web)
 - **Super admin for sam@funasia.net**: added a code default `deps._DEFAULT_SUPER_ADMIN_EMAILS = {"sam@funasia.net"}` merged into `SUPER_ADMIN_EMAILS` (still overridable via env). Works in production after redeploy with no DB/env wiring. Also set `is_super_admin=True` on sam's user doc in the PREVIEW DB (clone) for immediate preview access.
