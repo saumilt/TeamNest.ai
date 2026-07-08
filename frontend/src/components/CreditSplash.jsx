@@ -33,7 +33,6 @@ export default function CreditSplash() {
       else toast.info("Payment received — credits will appear within a minute.");
     };
     poll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -65,7 +64,14 @@ export default function CreditSplash() {
         if (Date.now() - lastShown < COOLDOWN_MS) return;
         const { data: me } = await api.get("/billing/me");
         const remaining = me?.usage?.credits_remaining;
-        if (typeof remaining === "number" && remaining < threshold) {
+        // Clamp the admin threshold so it never exceeds ~20% of the plan's
+        // monthly grant. Otherwise a high admin threshold (e.g. 1000) would nag
+        // every workspace on a small plan (e.g. Free = 300) on every load.
+        const grant = Number(me?.usage?.monthly_credits) || 0;
+        const effective = grant > 0
+          ? Math.min(threshold, Math.max(10, Math.round(grant * 0.2)))
+          : threshold;
+        if (typeof remaining === "number" && remaining < effective) {
           setLowBalance(remaining);
           setOpen(true);
           try { localStorage.setItem("tn-credit-splash-low-at", String(Date.now())); } catch { /* noop */ }

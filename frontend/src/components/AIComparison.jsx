@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import NewTaskDialog from "@/components/NewTaskDialog";
 import ModelCard from "@/components/aicompare/ModelCard";
@@ -162,31 +161,38 @@ export default function AIComparison({ threadId, chatId, onClose }) {
         onClose={onClose}
       />
 
-      <ScrollArea className="flex-1">
-        <div className="flex gap-px bg-white/10 min-w-max p-px h-full">
-          {thread.selected_models.map((mk) => {
-            const r = responses.find((x) => x.model_key === mk);
-            return (
-              <ModelCard
-                key={mk}
-                modelKey={mk}
-                response={r}
-                isLoading={!r && isLoading}
-                onVote={(cat) => vote(r.id, cat)}
-                onSelectBest={() => selectBest(r.id)}
-                onSave={() => setShowSave(r)}
-                onTask={() => setShowTask(r)}
-              />
-            );
-          })}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div
+          className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
+          data-testid="ai-comparison-scroll"
+        >
+          <div className="flex gap-px bg-white/10 min-w-max p-px h-full">
+            {thread.selected_models.map((mk) => {
+              const r = responses.find((x) => x.model_key === mk);
+              return (
+                <ModelCard
+                  key={mk}
+                  modelKey={mk}
+                  response={r}
+                  isLoading={!r && isLoading}
+                  onVote={(cat) => vote(r.id, cat)}
+                  onSelectBest={() => selectBest(r.id)}
+                  onSave={() => setShowSave(r)}
+                  onTask={() => setShowTask(r)}
+                />
+              );
+            })}
+          </div>
         </div>
-        <SynthesisFooter
-          thread={thread}
-          threadId={threadId}
-          onTask={(payload) => setShowTask(payload)}
-          onSave={(payload) => setShowSave(payload)}
-        />
-      </ScrollArea>
+        <div className="shrink-0 max-h-[45%] overflow-y-auto">
+          <SynthesisFooter
+            thread={thread}
+            threadId={threadId}
+            onTask={(payload) => setShowTask(payload)}
+            onSave={(payload) => setShowSave(payload)}
+          />
+        </div>
+      </div>
 
       <ThreadActions threadId={threadId} parentQuestion={thread.question} />
 

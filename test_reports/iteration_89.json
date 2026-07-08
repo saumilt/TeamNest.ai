@@ -1,0 +1,38 @@
+{
+  "summary": "Web-frontend iteration-89 verification for TeamNest.ai. (1) Add-Member flow in Group Info panel is FULLY VERIFIED WORKING end-to-end: opened Engineering group chat, clicked chat-title-btn -> group-info-panel opened -> Members tab -> open-add-member-btn -> add-member-dialog opened, showing 51 workspace quick-add rows (add-member-ws-*), add-member-search input, add-member-link-card + link input + copy/share/QR controls, and the 'invite new email' form. Submitting add-member-new-email='test_21eeb3b3@example.com' -> add-member-submit-new produced the add-member-credentials block containing the exact email + a 15-char one-time password (Member-xryRJ-_W), plus add-member-copy-creds and add-member-done buttons; a system message '**test_21eeb3b3** was added by **Amit Patel**' was posted in the chat as expected. (2) CreditSplash low-balance nag regression is FIXED: on Free plan (300/300 credits, admin threshold clamped to 20% of monthly grant = 60), the splash opened once on initial login (promo splash only, no low-balance banner), was dismissable via credit-splash-close (verified with three re-checks over 12s: NO reopen), and stayed dismissed after page reload. It never blocked the Group Info side panel or the Add-Member dialog. (3) AI Comparison horizontal scroll fix could NOT be verified live because no open-thread-* pill was found in the seeded Q2 Product Launch / Marketing / Engineering chats within the test session — the chat_id click navigation intermittently returned to the empty 'Pick a chat' state and messages with metadata.thread_id did not render open-thread- pills in the visible timeline. Code review of /app/frontend/src/components/AIComparison.jsx (lines 165-186) and ModelCard.jsx confirms the fix is correctly implemented: the strip uses `overflow-x-auto overflow-y-hidden` on a wrapper testid=ai-comparison-scroll containing an inner `flex gap-px min-w-max` row of `w-[340px] shrink-0` ModelCards, and SynthesisFooter now lives in a separate sibling `shrink-0 max-h-[45%] overflow-y-auto` container (not inside the horizontal strip). This is the correct pattern for reachable last-column horizontal scroll on any number of models.",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [
+        {"flow": "AI compare thread pill", "issue": "Could not click into a live AI-comparison panel via [data-testid^='open-thread-'] in the demo Q2/Engineering/Marketing chats during this session — no open-thread-* elements were found in the rendered message list, even after scrolling. This may be because those seeded messages don't have metadata.thread_id set, OR the Q2 chat click did not fully route (the app returned to 'Pick a chat' empty state a couple of times). Recommend main agent add a synthetic seed message with metadata.thread_id in the Q2 demo chat, or expose a direct URL like /chats/:cid?thread=:tid, so this flow is reproducible in QA.", "affected_selectors": ["[data-testid^=\"open-thread-\"]", "[data-testid=\"ai-comparison\"]", "[data-testid=\"ai-comparison-scroll\"]"]}
+      ],
+      "design_issues": [
+        {"screen": "AddMemberDialog search", "issues": ["Searching first-name 'priya' returned 0 results — /users/search endpoint appears to require a fuller email/phone token rather than a name substring. Not blocking (a hint text is shown), but the placeholder 'teammate@company.co  •  +1 555 0100' implies email/phone only. Consider either supporting name search or make the field label explicit ('email or phone only')."]}
+      ]
+    },
+    "mobile": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []}
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [
+    "Consider seeding at least one message with metadata.thread_id in the Q2 Product Launch demo chat so [data-testid^='open-thread-'] pills render and QA can exercise the AI Comparison panel end-to-end without invoking a live LLM.",
+    "AddMemberDialog.jsx line 59 still uses native browser confirm() for link rotation — pointed out in iteration_88 as inconsistent with shadcn AlertDialog / toasts. Not fixed this iteration.",
+    "AddMemberDialog duplicates a large chunk of UI (link card, search, brand-new-email form) with InviteGuestDialog — a shared <ChatInvitePanel> would remove ~200 lines of drift (also called out in iteration_88).",
+    "CreditSplash promo timer (line 45: setTimeout 4s -> setOpen(true)) is not guarded by the dismissed sessionStorage flag re-read inside the timeout — if a user dismisses within the initial 4s window, the promo splash could still open once. Low-impact (single blink) but easy to fix by re-checking sessionStorage inside the timeout callback."
+  ],
+  "critical_code_review_comments": [
+    "AIComparison.jsx horizontal-scroll fix looks correct: wrapper `overflow-x-auto overflow-y-hidden` + inner `flex gap-px min-w-max` + fixed `w-[340px] shrink-0` cards. SynthesisFooter is a sibling shrink-0 block with its own vertical scroll, so it no longer collapses the columns. All models will be reachable via native horizontal scroll and each column keeps its own vertical scroll (`overflow-y-auto` on the answer body inside ModelCard).",
+    "AddMemberDialog.jsx correctly exposes every advertised testid (add-member-dialog, add-member-new-email, add-member-submit-new, add-member-credentials, add-member-copy-creds, add-member-done, add-member-search, add-member-ws-*, add-member-link-card, add-member-link-input/copy/share/qr-toggle, add-member-link-rotate, add-member-qr-block, add-member-results, add-member-result-*).",
+    "CreditSplash.jsx correctly clamps admin threshold to min(admin, max(10, grant*0.2)); with Free grant=300 the effective threshold is 60, so a fresh workspace at 300/300 no longer trips the low-balance banner. Verified live."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "Add-Member 100% live-verified; Credit-splash regression 100% live-verified; AI-Comparison scroll code-verified only (100% code review, 0% live click-through)"},
+  "test_credentials": "amit@demo.team / Demo@2026 (workspace owner + chat admin)",
+  "seed_data_creation": "Created a real workspace MEMBER via /api/chats/{engineering_chat_id}/invite-member for TEST_-prefixed unique email test_21eeb3b3@example.com in the Engineering chat. One-time password generated (Member-xryRJ-_W). Safe to leave or purge.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Add-Member flow is fully working E2E on WEB with amit@demo.team on the Engineering chat. To retest AI-Comparison scroll: (a) either seed a demo message with metadata.thread_id in Q2 Product Launch, or (b) run '@ai compare <question>' from the composer inside a group chat and wait ~30-60s for the panel to render (this test attempt hit a 45s timeout — allow more or trigger via existing test data). Then click [data-testid^='open-thread-<id>'] to open [data-testid='ai-comparison']. Inside, [data-testid='ai-comparison-scroll'] should have scrollWidth > clientWidth on desktop when 5-6 models are selected; setting el.scrollLeft = el.scrollWidth should move to the far right and the last [data-testid^='model-answer-'] card (width 340px) should fit within the scroll viewport.",
+  "rca of the issue": "N/A — iteration_88 blocker (credit-splash nag re-opening) is confirmed FIXED by the 20%-of-plan-grant threshold clamp in /app/frontend/src/components/CreditSplash.jsx lines 65-73."
+}
