@@ -31,6 +31,24 @@ db = client[os.environ["DB_NAME"]]
 # Mongo projection that strips internal fields from every user lookup.
 PROJ = {"_id": 0, "password_hash": 0}
 
+# Platform "super admin" — has access to app-level (global) settings such as the
+# free-plan credit allowance. Separate from workspace owner/admin. A user is a
+# super admin if their user doc has is_super_admin=True OR their email is listed
+# in the SUPER_ADMIN_EMAILS env var (comma-separated).
+SUPER_ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in (os.environ.get("SUPER_ADMIN_EMAILS", "") or "").split(",")
+    if e.strip()
+}
+
+
+def is_super_admin(u: dict) -> bool:
+    if not u:
+        return False
+    return bool(u.get("is_super_admin")) or (
+        (u.get("email") or "").lower() in SUPER_ADMIN_EMAILS
+    )
+
 # Referral tier thresholds — exposed so the invites router can compute progress.
 BADGE_THRESHOLDS = [("bronze", 1), ("silver", 5), ("gold", 15), ("platinum", 50)]
 
@@ -87,6 +105,7 @@ def public_user(u: dict) -> dict:
         "pro_boost_until": boost_until,
         "pro_boost_active": bool(boost_until and boost_until > now_iso()),
         "must_change_password": bool(u.get("must_change_password")),
+        "is_super_admin": is_super_admin(u),
     }
 
 
@@ -110,6 +129,13 @@ async def get_user(user_id: str) -> dict:
 
 async def require_user(user_id: str = Depends(get_current_user_id)) -> dict:
     return await get_user(user_id)
+
+
+async def require_super_admin(current: dict = Depends(require_user)) -> dict:
+    """Gate app-level (global) settings to platform super admins only."""
+    if not is_super_admin(current):
+        raise HTTPException(403, "Super admin only")
+    return current
 
 
 async def ensure_personal_ai_chat(user_id: str, workspace_id: str) -> dict:

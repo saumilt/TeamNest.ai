@@ -2707,3 +2707,35 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Backend pytest 7/7 (`test_iteration89_attach_ai_research.py`).
 - Web verified E2E: attach orion.txt → `@ai` → "WOMBAT-42 / $88,000" (read from file).
 - Mobile verified: CSV attach → auto AI → correct value; composer testIDs + chips render.
+
+## Iteration 90 — 2026-07-08 — Super Admin (app-level settings) + free credits=100 + file quick-actions
+
+### Super Admin (new platform role)
+- Added platform **super admin** authorization (`deps.is_super_admin` + `require_super_admin`).
+  A user is super admin if `is_super_admin=True` OR email in `SUPER_ADMIN_EMAILS` env.
+  `amit@demo.team` seeded as super admin (idempotent on demo-login + seed.py).
+- `is_super_admin` now returned by `public_user` (drives web nav gating).
+- New global settings store `services/platform_settings.py` (doc `platform_settings/global`,
+  30s cache) + `routes/superadmin.py`: GET/PUT `/api/superadmin/settings`
+  (free/pro/team monthly credits), gated to super admins.
+- Web: `pages/SuperAdmin.jsx` at `/superadmin` (edit per-plan monthly credits + Save),
+  Sidebar "Super Admin" nav entry shown only when `user.is_super_admin`.
+
+### Free plan credits → 100, configurable
+- Free plan grant/cap/description/perks all set to **100** (was inconsistent: grant 100
+  but cap/copy said 300). Demo-login floor now = configured free credits (was hardcoded 300).
+- `services/billing.py`: `plan_monthly_credits()` reads the free-plan allowance from
+  platform settings; `get_usage`/`ensure_credit_floor` use it. Change is live (verified:
+  PUT free=250 → usage reflects 250; reset to 100).
+
+### File quick-action chips (web + mobile)
+- When file(s) are attached in a chat, one-tap chips **Summarize** / **Extract action items**
+  send immediately with a preset `@ai ...` prompt + the attachments.
+- Web: `ChatComposer.jsx` chips + `quickAction()` in `Chats.jsx`.
+- Mobile: `chat/[id].tsx` chips + `sendQuick()`.
+
+### Verified
+- Backend curl: super admin GET/PUT works, gated; usage shows 100 and updates live.
+- Web screenshots: /superadmin (free=100 field + Save), sidebar entry, credits 100/100,
+  quick-action chips render on attach.
+- Mobile screenshot: chat + composer render (chips conditional, lint-clean).

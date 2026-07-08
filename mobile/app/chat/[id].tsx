@@ -218,6 +218,26 @@ export default function ChatScreen() {
     }
   };
 
+  // One-tap document action: send immediately with a preset @ai prompt.
+  const sendQuick = async (prompt: string) => {
+    if (attachments.length === 0 || sending) return;
+    const outAttachments = attachments;
+    setAttachments([]);
+    setSending(true);
+    try {
+      const msg = await apiPost(`/api/chats/${chatId}/messages`, {
+        body: prompt,
+        message_type: "text",
+        metadata: { attachments: outAttachments },
+      });
+      upsertMessage(msg);
+    } catch {
+      setAttachments(outAttachments);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const renderItem = ({ item }: { item: any }) => {
     const agent = isAgent(item.sender_id);
     const mine = item.sender_id === user?.id;
@@ -311,6 +331,32 @@ export default function ChatScreen() {
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           />
           <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
+            {attachments.length > 0 && (
+              <View style={styles.quickRow} testID="file-quick-actions">
+                <TouchableOpacity
+                  testID="quick-action-summarize"
+                  style={styles.quickChip}
+                  onPress={() =>
+                    sendQuick("@ai Summarize the attached file(s) in a few clear bullet points.")
+                  }
+                >
+                  <Ionicons name="sparkles" size={13} color={colors.accent} />
+                  <Text style={styles.quickChipText}>Summarize</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="quick-action-action-items"
+                  style={styles.quickChip}
+                  onPress={() =>
+                    sendQuick(
+                      "@ai Extract the action items, owners and key decisions from the attached file(s) as a checklist.",
+                    )
+                  }
+                >
+                  <Ionicons name="checkbox-outline" size={13} color={colors.accent} />
+                  <Text style={styles.quickChipText}>Extract action items</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {attachments.length > 0 && (
               <View style={styles.chipsRow} testID="composer-attachments">
                 {attachments.map((a, i) => (
@@ -459,6 +505,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
+  quickRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  quickChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+  },
+  quickChipText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
   attChip: {
     flexDirection: "row",
     alignItems: "center",

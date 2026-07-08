@@ -26,6 +26,7 @@ export default function ChatComposer({
   draft,
   onDraftChange,
   onSend,
+  onQuickAction,
   onSendTyping,
   attachments,
   onRemoveAttachment,
@@ -85,6 +86,29 @@ export default function ChatComposer({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+          {/* One-tap document actions — appear only when files are attached */}
+          {attachments.length > 0 && onQuickAction && (
+            <div className="flex flex-wrap gap-2 mb-2" data-testid="file-quick-actions">
+              <button
+                type="button"
+                data-testid="quick-action-summarize"
+                onClick={() => onQuickAction("@ai Summarize the attached file(s) in a few clear bullet points.")}
+                className="h-7 px-3 rounded-full bg-ai-tint text-ai hover:bg-ai/30 inline-flex items-center gap-1.5 text-[12px] font-medium active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Summarize
+              </button>
+              <button
+                type="button"
+                data-testid="quick-action-action-items"
+                onClick={() => onQuickAction("@ai Extract the action items, owners and key decisions from the attached file(s) as a checklist.")}
+                className="h-7 px-3 rounded-full bg-ai-tint text-ai hover:bg-ai/30 inline-flex items-center gap-1.5 text-[12px] font-medium active:scale-95"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                Extract action items
+              </button>
             </div>
           )}
           {/* Toolbar */}

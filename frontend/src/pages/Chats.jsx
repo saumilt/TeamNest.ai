@@ -810,6 +810,21 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     }
   };
 
+  // One-tap quick action on attached files (Summarize / Extract action items).
+  // Sends the message immediately with the preset @ai prompt + current
+  // attachments so the AI runs right away.
+  const quickAction = async (prompt) => {
+    if (attachments.length === 0) return;
+    const metadata = { attachments };
+    setAttachments([]);
+    try {
+      await api.post(`/chats/${chatId}/messages`, { body: prompt, message_type: "text", metadata });
+      onChatChange?.();
+    } catch {
+      toast.error("Failed to send");
+    }
+  };
+
   const sendTyping = () => {
     try {
       wsRef.current?.send({ event: "typing", typing: true });
@@ -936,6 +951,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         draft={draft}
         onDraftChange={setDraft}
         onSend={send}
+        onQuickAction={quickAction}
         onSendTyping={sendTyping}
         attachments={attachments}
         onRemoveAttachment={(idx) =>

@@ -39,7 +39,7 @@ async function req(path: string, method: string, body?: any): Promise<any> {
 export const apiGet = (p: string) => req(p, "GET");
 export const apiPost = (p: string, b?: any) => req(p, "POST", b);
 export const apiPatch = (p: string, b?: any) => req(p, "PATCH", b);
-export const apiDelete = (p: string) => req(p, "DELETE");
+export const apiDelete = (p: string, b?: any) => req(p, "DELETE", b);
 
 // Multipart upload (no JSON Content-Type — let fetch set the boundary).
 export async function apiUpload(

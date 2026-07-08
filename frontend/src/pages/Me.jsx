@@ -29,10 +29,12 @@ import {
         Shield,
         MessageSquareText,
         Cpu,
+        AlertTriangle,
 } from "lucide-react";
 import Avatar from "@/components/ui-v2/Avatar";
 import CreditRing from "@/components/ui-v2/CreditRing";
 import LeaveWorkspaceDialog from "@/components/team/LeaveWorkspaceDialog";
+import DeleteAccountDialog from "@/components/DeleteAccountDialog";
 import { api } from "@/lib/api";
 
 /**
@@ -46,6 +48,7 @@ export default function Me() {
         const [switching, setSwitching] = useState(false);
         const [credits, setCredits] = useState(null);
         const [leaveWsOpen, setLeaveWsOpen] = useState(false);
+        const [deleteAcctOpen, setDeleteAcctOpen] = useState(false);
 
         useEffect(() => {
                 api.get("/billing/usage")
@@ -242,6 +245,14 @@ export default function Me() {
                                 >
                                         <LogOut className="w-4 h-4" />
                                         Sign out
+                                <button
+                                        data-testid="me-delete-account"
+                                        onClick={() => setDeleteAcctOpen(true)}
+                                        className="w-full h-12 mt-2 rounded-2xl text-tn-red/80 hover:text-tn-red hover:bg-tn-red/[0.06] text-[13px] font-semibold transition-colors flex items-center justify-center gap-2"
+                                >
+                                        <AlertTriangle className="w-4 h-4" />
+                                        Delete account
+                                </button>
                                 </button>
                         </div>
 
@@ -254,6 +265,7 @@ export default function Me() {
                                 onOpenChange={setLeaveWsOpen}
                                 workspaceName={activeWs?.name || "this workspace"}
                         />
+                                <DeleteAccountDialog open={deleteAcctOpen} onOpenChange={setDeleteAcctOpen} />
                 </div>
         );
 }

@@ -22,6 +22,7 @@ from deps import (  # noqa: F401 - re-exported for tests/back-compat
 )
 from routes import (
     admin,
+    superadmin,
     ai,
     ai_employees,
     ai_threads,
@@ -100,6 +101,7 @@ api.include_router(voice_notes.router)
 api.include_router(approvals.router)
 api.include_router(exports.router)
 api.include_router(admin.router)
+api.include_router(superadmin.router)
 api.include_router(billing.router)
 api.include_router(calls.router)
 api.include_router(devices.router)

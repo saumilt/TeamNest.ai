@@ -45,6 +45,7 @@ async def seed_demo(db) -> None:
             "role": role,
             "workspace_id": workspace_id,
             "status": "active",
+            "is_super_admin": email == "amit@demo.team",
             "created_at": now,
         })
     await db.users.insert_many([u.copy() for u in users])

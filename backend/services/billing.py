@@ -38,7 +38,7 @@ PLANS = {
         "name": "Free",
         "price_usd": 0,
         "monthly_credits": 100,
-        "credit_cap": 300,
+        "credit_cap": 100,
         "max_workspaces_per_user": 3,
         "max_members": 5,
         "premium_models": True,
@@ -48,13 +48,13 @@ PLANS = {
         "unlimited_transcription": False,
         "screen_sharing": True,
         "stripe_price_id": None,  # No checkout for free
-        "description": "For trying it out. 300 AI credits / month.",
+        "description": "For trying it out. 100 AI credits / month.",
         "perks": [
             "All AI models",
             "Up to 5 teammates",
             "Voice notes & post-call summaries",
             "Audio & video calls (credits apply)",
-            "300 AI credits / month / workspace",
+            "100 AI credits / month / workspace",
         ],
     },
     "pro": {
@@ -230,7 +230,17 @@ async def get_subscription(workspace_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # How many AI credits the demo workspace should always have available so any
 # evaluator can exercise every premium AI flow without hitting the paywall.
-DEMO_LOGIN_CREDIT_FLOOR = 300
+DEMO_LOGIN_CREDIT_FLOOR = 100
+
+
+async def plan_monthly_credits(plan: dict) -> int:
+    """Effective monthly credit grant for a plan. The FREE plan's allowance is
+    a super-admin-configurable app-level setting (defaults to 100); other plans
+    use their static definition."""
+    if plan.get("id") == "free":
+        from services.platform_settings import free_monthly_credits
+        return await free_monthly_credits()
+    return int(plan["monthly_credits"])
 
 
 async def ensure_credit_floor(workspace_id: str, floor: int) -> dict:
@@ -247,7 +257,7 @@ async def ensure_credit_floor(workspace_id: str, floor: int) -> dict:
     plan = PLANS.get(sub["plan_id"]) or PLANS[DEFAULT_PLAN_ID]
     per_seat = bool(plan.get("per_seat"))
     seats = await _active_seat_count(workspace_id) if per_seat else 1
-    base = int(plan["monthly_credits"]) * (seats if per_seat else 1)
+    base = await plan_monthly_credits(plan) * (seats if per_seat else 1)
     extra = int(sub.get("credits_purchased_extra") or 0)
     used = int(sub.get("credits_used_this_period") or 0)
     remaining = max(0, base + extra - used)
@@ -285,12 +295,14 @@ async def get_usage(workspace_id: str) -> dict:
     plan = PLANS.get(sub["plan_id"]) or PLANS[DEFAULT_PLAN_ID]
     per_seat = bool(plan.get("per_seat"))
     seats = await _active_seat_count(workspace_id) if per_seat else 1
-    base_credits = plan["monthly_credits"] * (seats if per_seat else 1)
+    monthly = await plan_monthly_credits(plan)
+    base_credits = monthly * (seats if per_seat else 1)
     total_credits = base_credits + int(sub.get("credits_purchased_extra") or 0)
     used = int(sub.get("credits_used_this_period") or 0)
     remaining = max(0, total_credits - used)
-    # Free-tier balance cap (e.g. the free/demo plan never holds more than 300).
-    cap = plan.get("credit_cap")
+    # Free-tier balance cap. For the free plan the cap tracks the (configurable)
+    # monthly allowance so the balance never exceeds one month's grant.
+    cap = monthly if plan.get("id") == "free" else plan.get("credit_cap")
     if cap:
         remaining = min(remaining, int(cap))
     return {
@@ -299,7 +311,7 @@ async def get_usage(workspace_id: str) -> dict:
         "status": sub["status"],
         "per_seat": per_seat,
         "seats": seats,
-        "monthly_credits": plan["monthly_credits"],
+        "monthly_credits": monthly,
         "monthly_credits_total": base_credits,
         "extra_credits": int(sub.get("credits_purchased_extra") or 0),
         "credits_total": min(total_credits, int(cap)) if cap else total_credits,

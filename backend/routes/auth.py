@@ -1,5 +1,6 @@
 """Auth + user preferences."""
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
 
 from ai_service import MODEL_CONFIG
 from auth_utils import (
@@ -119,7 +120,23 @@ async def demo_login(response: Response):
     """
     user = await db.users.find_one({"email": "amit@demo.team"})
     if not user:
+        # Self-heal: re-seed the demo workspace if it was deleted (e.g. an App
+        # Store reviewer exercised account deletion on the demo account).
+        try:
+            from seed import seed_demo
+            await seed_demo(db)
+            user = await db.users.find_one({"email": "amit@demo.team"})
+        except Exception:
+            pass
+    if not user:
         raise HTTPException(404, "Demo user not seeded")
+    # The public demo owner is also the platform super admin so evaluators can
+    # try the app-level settings (e.g. free-plan credit allowance). Idempotent.
+    if not user.get("is_super_admin"):
+        await db.users.update_one(
+            {"id": user["id"]}, {"$set": {"is_super_admin": True}}
+        )
+        user["is_super_admin"] = True
     # Inactivity cleanup (≥1h idle → wipe + reseed). Wrapped in try/except so
     # a transient mongo issue never blocks a demo login.
     try:
@@ -140,8 +157,9 @@ async def demo_login(response: Response):
     # (research, dev agents, image gen, voice) all "just work" for anyone
     # demoing the product without hitting the paywall.
     try:
-        from services.billing import DEMO_LOGIN_CREDIT_FLOOR, ensure_credit_floor
-        await ensure_credit_floor(user["workspace_id"], DEMO_LOGIN_CREDIT_FLOOR)
+        from services.billing import ensure_credit_floor
+        from services.platform_settings import free_monthly_credits
+        await ensure_credit_floor(user["workspace_id"], await free_monthly_credits())
     except Exception:
         pass
     token = create_token(user["id"])
@@ -158,6 +176,37 @@ async def logout(response: Response):
     """Clear the HttpOnly session cookie."""
     clear_session_cookie(response)
     return {"ok": True}
+
+
+class AccountDeleteRequest(BaseModel):
+    password: str
+    confirm: str | None = None
+
+
+@router.delete("/auth/me")
+async def delete_account(
+    payload: AccountDeleteRequest, response: Response, current=Depends(require_user)
+):
+    """Permanently delete the signed-in user's account + personal data.
+
+    Requires the current password (destructive, App Store 5.1.1(v) compliant).
+    Workspaces solely owned by the user are purged; co-owned ones are transferred.
+    """
+    if (payload.confirm or "").strip().upper() != "DELETE":
+        raise HTTPException(400, "Type DELETE to confirm account deletion")
+
+    # Fetch the FULL user doc (require_user strips password_hash via PROJ).
+    full = await db.users.find_one({"id": current["id"]})
+    if not full:
+        raise HTTPException(404, "Account not found")
+    if not verify_password(payload.password, full.get("password_hash") or ""):
+        raise HTTPException(403, "Incorrect password")
+
+    from services.account_deletion import delete_user_account
+    result = await delete_user_account(full)
+    clear_session_cookie(response)
+    return {"ok": True, **result}
+
 
 
 @router.get("/auth/ws-token")

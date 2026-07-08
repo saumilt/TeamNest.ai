@@ -17,6 +17,7 @@ import {
         Check,
         LogOut,
         Bot,
+        ShieldCheck,
         PanelLeftClose,
         PanelLeft,
 } from "lucide-react";
@@ -254,6 +255,23 @@ export default function Sidebar() {
             {!collapsed && <span className="truncate">{n.label}</span>}
           </NavLink>
         ))}
+        {user?.is_super_admin && (
+          <NavLink
+            to="/superadmin"
+            data-testid="nav-superadmin"
+            title="Super Admin"
+            className={({ isActive }) =>
+              `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
+                isActive
+                  ? "bg-ai-tint text-ai"
+                  : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+              }`
+            }
+          >
+            <ShieldCheck className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+            {!collapsed && <span className="truncate">Super Admin</span>}
+          </NavLink>
+        )}
       </nav>
 
       {/* Credits + user */}

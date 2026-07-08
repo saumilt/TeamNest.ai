@@ -14,6 +14,7 @@ import JoinWorkspace from "@/pages/JoinWorkspace";
 import FindFriends from "@/pages/FindFriends";
 import Approvals from "@/pages/Approvals";
 import AdminDashboard from "@/pages/AdminDashboard";
+import SuperAdmin from "@/pages/SuperAdmin";
 import CallRoom from "@/pages/CallRoom";
 import { ProjectsList, ProjectDetail as FolderDetail } from "@/pages/Projects";
 import Profile from "@/pages/Profile";
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="/find-friends" element={<FindFriends />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/superadmin" element={<SuperAdmin />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/me" element={<Me />} />
