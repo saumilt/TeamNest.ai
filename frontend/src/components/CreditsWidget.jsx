@@ -33,11 +33,14 @@ export default function CreditsWidget({ collapsed = false }) {
   }, [fetchUsage]);
 
   if (!usage) return null;
-  const pct = usage.credits_total
-    ? Math.min(100, Math.round((usage.credits_used / usage.credits_total) * 100))
-    : 0;
+  const unlimited = !!usage.unlimited;
+  const pct = unlimited
+    ? 100
+    : usage.credits_total
+      ? Math.min(100, Math.round((usage.credits_used / usage.credits_total) * 100))
+      : 0;
   const tone =
-    usage.exhausted ? "red" : usage.low ? "yellow" : "emerald";
+    unlimited ? "emerald" : usage.exhausted ? "red" : usage.low ? "yellow" : "emerald";
   const toneClasses = {
     emerald: { bar: "bg-emerald-500", text: "text-emerald-300" },
     yellow:  { bar: "bg-yellow-500",  text: "text-yellow-300" },
@@ -50,7 +53,7 @@ export default function CreditsWidget({ collapsed = false }) {
       <NavLink
         to="/billing"
         data-testid="credits-widget-icon"
-        title={`${usage.credits_remaining} credits left — ${usage.plan_name} plan`}
+        title={unlimited ? `Unlimited credits — ${usage.plan_name} plan` : `${usage.credits_remaining} credits left — ${usage.plan_name} plan`}
         className="hidden md:flex items-center justify-center py-2 text-zinc-500 hover:text-yellow-200"
       >
         <Sparkles className={`w-4 h-4 ${toneClasses.text}`} />
@@ -69,20 +72,28 @@ export default function CreditsWidget({ collapsed = false }) {
           <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
           <span className="capitalize">{usage.plan_name} plan</span>
         </div>
-        {usage.exhausted ? (
+        {usage.exhausted && !unlimited ? (
           <span className="text-xs font-medium text-red-400">Empty</span>
-        ) : usage.low ? (
+        ) : usage.low && !unlimited ? (
           <span className="text-xs font-medium text-yellow-300">Low</span>
+        ) : unlimited ? (
+          <span className="text-xs font-medium text-emerald-300">Unlimited</span>
         ) : null}
       </div>
       <div className="text-sm font-semibold text-zinc-100 mb-1.5">
-        {usage.credits_remaining.toLocaleString()}
-        <span className="text-zinc-500 text-xs font-normal"> / {usage.credits_total.toLocaleString()} credits</span>
+        {unlimited ? (
+          <span data-testid="credits-unlimited">Unlimited credits</span>
+        ) : (
+          <>
+            {usage.credits_remaining.toLocaleString()}
+            <span className="text-zinc-500 text-xs font-normal"> / {usage.credits_total.toLocaleString()} credits</span>
+          </>
+        )}
       </div>
       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
         <div className={`h-full transition-all ${toneClasses.bar}`} style={{ width: `${pct}%` }} />
       </div>
-      {(usage.low || usage.exhausted) && usage.plan_id !== "team" && (
+      {(usage.low || usage.exhausted) && !unlimited && usage.plan_id !== "team" && (
         <div className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${toneClasses.text} group-hover:text-yellow-200`}>
           {usage.exhausted ? <AlertCircle className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
           Upgrade →

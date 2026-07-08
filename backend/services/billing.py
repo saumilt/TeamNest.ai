@@ -123,6 +123,60 @@ DEFAULT_PLAN_ID = "free"
 # (the UI will keep nudging them to upgrade).
 FREE_GRACE_CREDITS = 50
 
+# ---------------------------------------------------------------------------
+# Unlimited-credit allowlist (by workspace-owner email)
+# ---------------------------------------------------------------------------
+# Workspaces OWNED by any of these emails get effectively-unlimited AI credits:
+# metering never blocks them and consumption is not decremented. Configurable
+# via the UNLIMITED_CREDIT_EMAILS env var (comma-separated); the code default
+# below guarantees the allowlist survives a production deploy without extra env
+# wiring.
+import time as _time  # noqa: E402
+
+UNLIMITED_CREDIT_EMAILS = {
+    e.strip().lower()
+    for e in (
+        "sam@funasia.net," + (os.environ.get("UNLIMITED_CREDIT_EMAILS", "") or "")
+    ).split(",")
+    if e.strip()
+}
+
+_UNLIMITED_WS_CACHE = {"ids": None, "at": 0.0}
+_UNLIMITED_TTL = 60.0
+
+
+async def _unlimited_workspace_ids() -> set:
+    """Workspace ids owned by an allowlisted email. Cached for 60s."""
+    now = _time.time()
+    if _UNLIMITED_WS_CACHE["ids"] is not None and now - _UNLIMITED_WS_CACHE["at"] < _UNLIMITED_TTL:
+        return _UNLIMITED_WS_CACHE["ids"]
+    ids: set = set()
+    if UNLIMITED_CREDIT_EMAILS:
+        uids = []
+        async for u in db.users.find(
+            {"email": {"$in": list(UNLIMITED_CREDIT_EMAILS)}},
+            {"_id": 0, "id": 1, "workspace_id": 1},
+        ):
+            uids.append(u["id"])
+            if u.get("workspace_id"):
+                ids.add(u["workspace_id"])
+        if uids:
+            async for m in db.workspace_members.find(
+                {"user_id": {"$in": uids}, "role": "owner"},
+                {"_id": 0, "workspace_id": 1},
+            ):
+                if m.get("workspace_id"):
+                    ids.add(m["workspace_id"])
+    _UNLIMITED_WS_CACHE["ids"] = ids
+    _UNLIMITED_WS_CACHE["at"] = now
+    return ids
+
+
+async def is_unlimited_workspace(workspace_id: str) -> bool:
+    return workspace_id in await _unlimited_workspace_ids()
+
+
+
 # Approximate credit cost per AI response by model key.
 # These are blended costs assuming ~500 input tokens + ~1500 output tokens,
 # already including the 40% margin.
@@ -305,6 +359,9 @@ async def get_usage(workspace_id: str) -> dict:
     cap = monthly if plan.get("id") == "free" else plan.get("credit_cap")
     if cap:
         remaining = min(remaining, int(cap))
+    unlimited = await is_unlimited_workspace(workspace_id)
+    if unlimited:
+        remaining = 1_000_000_000
     return {
         "plan_id": sub["plan_id"],
         "plan_name": plan["name"],
@@ -314,12 +371,13 @@ async def get_usage(workspace_id: str) -> dict:
         "monthly_credits": monthly,
         "monthly_credits_total": base_credits,
         "extra_credits": int(sub.get("credits_purchased_extra") or 0),
-        "credits_total": min(total_credits, int(cap)) if cap else total_credits,
+        "credits_total": 1_000_000_000 if unlimited else (min(total_credits, int(cap)) if cap else total_credits),
         "credits_used": used,
         "credits_remaining": remaining,
+        "unlimited": unlimited,
         "hosting_tier": sub.get("hosting_tier") or "shared",
-        "low": remaining < max(base_credits * 0.2, 25),
-        "exhausted": remaining <= 0,
+        "low": False if unlimited else remaining < max(base_credits * 0.2, 25),
+        "exhausted": False if unlimited else remaining <= 0,
         "period_start": sub["period_start"],
         "period_end": sub["period_end"],
         "cancel_at_period_end": bool(sub.get("cancel_at_period_end")),
@@ -336,6 +394,8 @@ async def can_use_model(workspace_id: str, model_key: str) -> Tuple[bool, str | 
     on free tier (with grace); premium models gated when out of credits."""
     usage = await get_usage(workspace_id)
     cost = credit_cost_for_model(model_key)
+    if usage.get("unlimited"):
+        return True, None
     if usage["credits_remaining"] >= cost:
         return True, None
     # Out of credits — allow free-fallback models up to grace, block others.
@@ -361,6 +421,23 @@ async def consume_credits(
     event. Increments the workspace's used-this-period counter and writes a
     ledger entry for audit."""
     if amount <= 0:
+        return await get_usage(workspace_id)
+    # Unlimited-credit workspaces: never decrement (but still log for audit).
+    if await is_unlimited_workspace(workspace_id):
+        try:
+            await db.ai_credit_ledger.insert_one({
+                "id": new_id(),
+                "workspace_id": workspace_id,
+                "user_id": user_id,
+                "amount": 0,
+                "billed_amount": amount,
+                "source": source,
+                "model_key": model_key,
+                "meta": {**(meta or {}), "unlimited": True},
+                "at": now_iso(),
+            })
+        except Exception as e:
+            logger.warning("[billing] unlimited ledger write failed: %s", e)
         return await get_usage(workspace_id)
     await db.workspace_billing.update_one(
         {"workspace_id": workspace_id},

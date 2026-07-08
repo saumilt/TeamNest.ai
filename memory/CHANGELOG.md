@@ -2,6 +2,16 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 91 (Jul 2026) — Super admin + unlimited credits for sam@funasia.net
+### What was built (shared backend + web)
+- **Super admin for sam@funasia.net**: added a code default `deps._DEFAULT_SUPER_ADMIN_EMAILS = {"sam@funasia.net"}` merged into `SUPER_ADMIN_EMAILS` (still overridable via env). Works in production after redeploy with no DB/env wiring. Also set `is_super_admin=True` on sam's user doc in the PREVIEW DB (clone) for immediate preview access.
+- **Unlimited AI credits for sam's workspace**: new email allowlist `billing.UNLIMITED_CREDIT_EMAILS` (default incl. sam + env override) → resolves to owned workspace ids (`is_unlimited_workspace`, 60s cache). `get_usage` returns `unlimited:true` (remaining=1e9, low/exhausted false), `can_use_model` always allows, `consume_credits` never decrements (logs a 0-amount audit entry with `billed_amount`). UI shows "Unlimited"/"∞" in `CreditsWidget.jsx` + `BillingUsageCard.jsx` instead of the raw number.
+- Verified via direct module calls: is_super_admin(sam)=True, is_unlimited_workspace=True, usage.unlimited=True, premium model allowed, consume 5000 → used stays 0.
+
+### Production note
+- Preview DB is a clone — DB edits here do NOT reach production. The code-level allowlists (super admin + unlimited) apply to PRODUCTION automatically once the app is redeployed (Emergent Publish/Deploy). No production DB edit needed.
+
+
 ## Iteration 90 (Jul 2026) — Add members like guests + AI compare scroll fix + free credits 300
 ### What was built / fixed (WEB + shared backend)
 - **Free plan credits 100 → 300**: `services/platform_settings.py` DEFAULT + `services/billing.py` free plan (`monthly_credits`/`credit_cap`/copy). Preview DB override set to 300. (Production: set via Super Admin panel, live DB value takes precedence.)

@@ -34,8 +34,10 @@ PROJ = {"_id": 0, "password_hash": 0}
 # Platform "super admin" — has access to app-level (global) settings such as the
 # free-plan credit allowance. Separate from workspace owner/admin. A user is a
 # super admin if their user doc has is_super_admin=True OR their email is listed
-# in the SUPER_ADMIN_EMAILS env var (comma-separated).
-SUPER_ADMIN_EMAILS = {
+# in the SUPER_ADMIN_EMAILS env var (comma-separated) OR in the code default set
+# below (the default guarantees production access without extra env wiring).
+_DEFAULT_SUPER_ADMIN_EMAILS = {"sam@funasia.net"}
+SUPER_ADMIN_EMAILS = _DEFAULT_SUPER_ADMIN_EMAILS | {
     e.strip().lower()
     for e in (os.environ.get("SUPER_ADMIN_EMAILS", "") or "").split(",")
     if e.strip()
