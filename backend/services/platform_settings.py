@@ -12,9 +12,9 @@ from typing import Any, Dict
 from deps import db, now_iso
 
 # Editable keys + their defaults. Keep these in sync with services/billing.py
-# plan definitions (the free-plan grant defaults to 100 credits / month).
+# plan definitions (the free-plan grant defaults to 300 credits / month).
 DEFAULTS: Dict[str, int] = {
-    "free_monthly_credits": 100,
+    "free_monthly_credits": 300,
     "pro_monthly_credits": 3000,
     "team_monthly_credits": 9000,
 }

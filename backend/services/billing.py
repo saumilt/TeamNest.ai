@@ -37,8 +37,8 @@ PLANS = {
         "id": "free",
         "name": "Free",
         "price_usd": 0,
-        "monthly_credits": 100,
-        "credit_cap": 100,
+        "monthly_credits": 300,
+        "credit_cap": 300,
         "max_workspaces_per_user": 3,
         "max_members": 5,
         "premium_models": True,
@@ -48,13 +48,13 @@ PLANS = {
         "unlimited_transcription": False,
         "screen_sharing": True,
         "stripe_price_id": None,  # No checkout for free
-        "description": "For trying it out. 100 AI credits / month.",
+        "description": "For trying it out. 300 AI credits / month.",
         "perks": [
             "All AI models",
             "Up to 5 teammates",
             "Voice notes & post-call summaries",
             "Audio & video calls (credits apply)",
-            "100 AI credits / month / workspace",
+            "300 AI credits / month / workspace",
         ],
     },
     "pro": {
