@@ -874,7 +874,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   return (
     <div className="h-[100dvh] flex bg-bg">
       {/* Left: chat column. Full width on mobile / non-dev. ~58% on desktop dev chats. */}
-      <div className={`flex flex-col flex-1 ${isDevChat ? "lg:max-w-[58%]" : ""}`}>
+      <div className={`flex flex-col flex-1 min-w-0 ${isDevChat ? "lg:max-w-[58%]" : ""}`}>
       <ChatHeader
         chat={chat}
         chatId={chatId}

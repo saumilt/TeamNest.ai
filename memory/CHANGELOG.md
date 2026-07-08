@@ -2,6 +2,18 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 90 (Jul 2026) — Add members like guests + AI compare scroll fix + free credits 300
+### What was built / fixed (WEB + shared backend)
+- **Free plan credits 100 → 300**: `services/platform_settings.py` DEFAULT + `services/billing.py` free plan (`monthly_credits`/`credit_cap`/copy). Preview DB override set to 300. (Production: set via Super Admin panel, live DB value takes precedence.)
+- **Add members like Invite-guest**: new `POST /api/chats/{chat_id}/invite-member` (chat-admin gated) — invite by brand-new email creates a full workspace **MEMBER** (role=member, not chat-scoped guest) with a one-time password and adds to chat; existing user by `user_id`/email added as member; duplicate → 400. Refactored `_resolve_or_create_invitee`/`_create_guest_account` to take a `role` param. New `frontend/src/components/AddMemberDialog.jsx` (share link + QR, quick-add workspace members, find by email/phone, invite new email → credentials card). `GroupInfo.jsx` "Add" button now opens this dialog (replaced the workspace-members-only inline picker). Verified E2E by testing agent.
+- **AI Comparison horizontal scroll bug**: last model column was truncated/unreachable. Root cause: chat conversation column (`Chats.jsx` line ~877) was `flex-1` without `min-w-0`, so the `min-w-max` compare strip expanded the column instead of clipping. Fixed by adding `min-w-0`; `AIComparison.jsx` strip switched from Radix `ScrollArea` to native `overflow-x-auto` with the SynthesisFooter in a capped (`max-h-45%`) sibling. Verified: scrollWidth(1706) > clientWidth(1608), scroll reveals 5th model (Grok) fully.
+- **Credit low-balance nag no longer blocks free workspaces**: admin `low_balance_threshold` was 1000 > free grant 300 → nagged every free load. `CreditSplash.jsx` now clamps effective threshold to ~20% of the plan's monthly grant (free → 60). Dismiss-once-per-session + 6h cooldown retained.
+
+### Open / pending
+- Production Cloudflare origin error for sam@funasia.net — awaiting repro details from user (persistent vs intermittent, triggering action). Deployment readiness scan is clean.
+- P1 Super Admin Feature Flags (invite vs public, delete workspace, delete subuser, approve template) — NOT started.
+
+
 ## Iteration 24 — Native iOS & Android via Capacitor (May 2026)
 **Goal**: Ship TeamNest as App Store + Play Store native apps with zero React rewrite.
 
