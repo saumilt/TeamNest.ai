@@ -962,7 +962,17 @@ async def hire_dev_team_checkout(
         cancel_url=cancel_url,
         metadata=metadata,
     )
-    session = await checkout.create_checkout_session(req)
+    try:
+        session = await checkout.create_checkout_session(req)
+    except Exception as e:
+        import logging
+        logging.getLogger("teamnest").error("[hire] Stripe checkout creation failed: %s", e)
+        raise HTTPException(
+            502,
+            "Payment provider error while starting checkout. This usually means "
+            "Stripe isn't configured for this environment — please try again "
+            "shortly or contact support.",
+        )
 
     await db.payment_transactions.insert_one({
         "session_id": session.session_id,
