@@ -126,6 +126,34 @@ export default function ChatScreen() {
     };
   }, [chatId, upsertMessage]);
 
+  // Polling safety-net (mirrors web): WebSocket delivery can be blocked in some
+  // deployed environments, so poll the open chat and reconcile so new/edited
+  // messages appear without a manual refresh. No-op when WS is already healthy.
+  useEffect(() => {
+    let closed = false;
+    const tick = async () => {
+      try {
+        const msgs = await apiGet(`/api/chats/${chatId}/messages?limit=200`);
+        if (closed || !Array.isArray(msgs)) return;
+        const next = msgs.filter((m: any) => !m.deleted_at);
+        setMessages((prev) => {
+          const a = prev[prev.length - 1];
+          const b = next[next.length - 1];
+          const unchanged =
+            prev.length === next.length &&
+            ((!a && !b) || (a && b && a.id === b.id && a.edited_at === b.edited_at));
+          return unchanged ? prev : next;
+        });
+      } catch {}
+    };
+    const iv = setInterval(tick, 4000);
+    return () => {
+      closed = true;
+      clearInterval(iv);
+    };
+  }, [chatId]);
+
+
   useEffect(() => {
     if (messages.length) {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);

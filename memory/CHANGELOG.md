@@ -2,6 +2,17 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 93 (Jul 2026) — Template marketplace seeding, hire-checkout errors, real-time polling fallback
+### Fixes
+- **Templates empty on teamnest.ai (production)**: root cause — `mkt_templates` was never seeded into the production DB (0 templates), while preview had all 14. Added an idempotent startup seeder `seed.seed_market_templates()` (loads `backend/data/market_templates_seed.json` — 14 templates incl. demo files + screenshot filenames; screenshots ship in `backend/static/market_shots/`). Wired into `server.py` startup. Verified: preview stays at 14 (no dupes); production will populate on redeploy.
+- **"Hire @devmanager" → "Could not start checkout"**: PRODUCTION-ONLY (preview works — verified valid Stripe session, 200). Cause = no `STRIPE_API_KEY` in the deployed env (preview uses Emergent's sandbox key). Guidance given to set the user's own Stripe key in production env + redeploy. Also added try/except around `create_checkout_session` in `chats.py` so failures return a clear 502 message instead of a generic 500.
+- **Real-time chat not updating until refresh (PRODUCTION)**: web + mobile relied solely on WebSocket (`/api/ws/{chat}`) with an in-memory broadcaster — blocked in prod by proxy/multi-worker. Added a lightweight 4s **polling safety-net** (open chat only, no-op fast-path when unchanged so no scroll jitter) in `frontend/src/pages/Chats.jsx` and `mobile/app/chat/[id].tsx`. Verified in preview by stubbing WebSocket: a sent message appeared within ~4s without refresh.
+
+### Store assets (partial — from prior turns)
+- Generated exact store-sized PNGs via headless Chromium: iOS 1290×2796 (5 feature shots), Android 1080×1920 (5), Play feature graphic 1024×500, icons 1024/512 → `frontend/public/store-assets/`. Marketing showcase page at `frontend/public/app-showcase.html`.
+- PENDING: privacy policy doc, app description/store listing copy, promo video.
+
+
 ## Iteration 92 (Jul 2026) — Persistent Credits badge + gated buy-credits modal (web + mobile)
 ### What was built
 - **Persistent top-right "Credits" badge** (stays steady on every in-app screen): flame pill with remaining credits (or ∞ for unlimited) + an amber "Credits" button showing the live promo bonus ("X% more", from `max(pack.bonus_pct)` when `promo.enabled`; hidden when no active bonus). Tapping opens the buy sheet.

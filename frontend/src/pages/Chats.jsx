@@ -759,6 +759,38 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     return () => ws.close();
   }, [chatId]);
 
+  // Polling safety-net: WebSocket delivery can be blocked in some deployed
+  // environments (proxy not upgrading WS, or multi-worker in-memory broadcast).
+  // Poll the open chat every few seconds and reconcile so new/edited messages
+  // appear automatically without a manual refresh. When WS is healthy this is a
+  // no-op (the fast-path below returns the same state → no re-render/scroll).
+  useEffect(() => {
+    if (!chatId) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (document.hidden) return;
+      try {
+        const { data } = await api.get(`/chats/${chatId}/messages`);
+        if (cancelled || !Array.isArray(data)) return;
+        setMessages((prev) => {
+          const a = prev[prev.length - 1];
+          const b = data[data.length - 1];
+          const unchanged =
+            prev.length === data.length &&
+            ((!a && !b) || (a && b && a.id === b.id && a.edited_at === b.edited_at && a.deleted_at === b.deleted_at));
+          return unchanged ? prev : data;
+        });
+      } catch {
+        /* transient — try again next tick */
+      }
+    };
+    const iv = setInterval(tick, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [chatId]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
