@@ -292,6 +292,12 @@ async def remove_chat_member(
     chat_id: str, user_id: str, current=Depends(require_user)
 ):
     """Admin-only: remove a member from the group chat."""
+    from services.platform_settings import flag
+    if not await flag("allow_subuser_deletion"):
+        raise HTTPException(
+            403,
+            "Removing members is currently disabled by the platform administrator.",
+        )
     chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0})
     if not chat:
         raise HTTPException(404, "Chat not found")

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ExternalLink, Eye, Maximize2, MessageSquareText, Monitor, RefreshCw, Rocket, Share2, Smartphone, UploadCloud } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Eye, Maximize2, MessageSquareText, Monitor, Pin, RefreshCw, Rocket, Share2, Smartphone, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 import safeStorage from "@/lib/safeStorage";
 import PublishDialog from "@/components/chat/PublishDialog";
@@ -19,9 +19,19 @@ import PreviewCommentsPanel from "@/components/chat/PreviewCommentsPanel";
  */
 export default function LivePreviewPane({ chatId, project, onQuickPrompt }) {
   const storageKey = `chat:live-preview:expanded:${chatId}`;
+  const PIN_KEY = "chat:live-preview:pinned";
+  // "Pinned" is a GLOBAL preference: when on, the preview auto-opens on every
+  // chat that has a linked project (and stays open). When off, expand/collapse
+  // is remembered per chat.
+  const [pinned, setPinned] = useState(() => safeStorage.get(PIN_KEY) === "1");
   const [expanded, setExpanded] = useState(
-    () => safeStorage.get(storageKey) === "1",
+    () => pinned || safeStorage.get(storageKey) === "1",
   );
+
+  // Re-sync open state when switching chats or toggling the pin.
+  useEffect(() => {
+    setExpanded(pinned || safeStorage.get(storageKey) === "1");
+  }, [chatId, pinned, storageKey]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -104,6 +114,22 @@ export default function LivePreviewPane({ chatId, project, onQuickPrompt }) {
     const next = !expanded;
     setExpanded(next);
     safeStorage.set(storageKey, next ? "1" : "0");
+    // Collapsing while pinned releases the global pin (can't be pinned-open
+    // and collapsed at once).
+    if (!next && pinned) {
+      setPinned(false);
+      safeStorage.set(PIN_KEY, "0");
+    }
+  };
+
+  const togglePin = () => {
+    const next = !pinned;
+    setPinned(next);
+    safeStorage.set(PIN_KEY, next ? "1" : "0");
+    if (next) {
+      setExpanded(true);
+      safeStorage.set(storageKey, "1");
+    }
   };
 
   const previewSrc = `/api/dev-projects/${project.id}/preview/index.html`;
@@ -196,6 +222,15 @@ export default function LivePreviewPane({ chatId, project, onQuickPrompt }) {
             {project.status || "draft"} · v{project.version || "0.1.0"} · live preview
           </div>
         </div>
+        <button
+          type="button"
+          onClick={togglePin}
+          data-testid="live-preview-pin"
+          title={pinned ? "Unpin — let the preview auto-collapse per chat" : "Pin the preview open across chats"}
+          className={`p-1 rounded hover:bg-white/5 ${pinned ? "text-amber-300 bg-amber-400/10 ring-1 ring-amber-400/30" : "text-ink-mute hover:text-ink"}`}
+        >
+          <Pin className={`w-3.5 h-3.5 ${pinned ? "fill-amber-300" : ""}`} />
+        </button>
         <button
           type="button"
           onClick={() => setRefreshKey((k) => k + 1)}

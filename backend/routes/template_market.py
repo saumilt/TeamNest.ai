@@ -130,6 +130,11 @@ async def submit_template(payload: TemplateSubmit, current=Depends(require_user)
         raise HTTPException(400, "This project has no code files yet — build it first")
     if payload.pricing_model != "free" and payload.price_usd <= 0:
         raise HTTPException(400, "Set a price greater than 0, or choose Free")
+    # Platform flag: when template approval is NOT required, auto-publish the
+    # submission so it appears in the marketplace immediately.
+    from services.platform_settings import flag
+    approval_required = await flag("require_template_approval")
+    status = "submitted" if approval_required else "approved"
     doc = {
         "id": new_id(),
         "name": payload.name.strip(),
@@ -143,8 +148,8 @@ async def submit_template(payload: TemplateSubmit, current=Depends(require_user)
         "creator_user_id": current["id"],
         "creator_workspace_id": current["workspace_id"],
         "creator_name": current.get("name") or current.get("email", "Seller"),
-        "status": "submitted",
-        "review_notes": "",
+        "status": status,
+        "review_notes": "" if approval_required else "Auto-approved (approval disabled by platform admin)",
         "installs": 0,
         "screenshot_file": None,
         "created_at": now_iso(),

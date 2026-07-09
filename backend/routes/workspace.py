@@ -330,6 +330,18 @@ async def leave_workspace(current=Depends(require_user)):
             "You're the workspace owner. Transfer ownership to another member first, then try again.",
         )
 
+    # Platform flag: block closing (deleting) a workspace when the solo owner
+    # leaves, if the super admin has disabled workspace deletion. Leaving a
+    # workspace that has other members is still allowed (it isn't a deletion).
+    will_close = active_members <= 1
+    if will_close:
+        from services.platform_settings import flag
+        if not await flag("allow_workspace_deletion"):
+            raise HTTPException(
+                403,
+                "Workspace deletion is currently disabled by the platform administrator.",
+            )
+
     # Remove user from all chats in this workspace.
     await db.chats.update_many(
         {"workspace_id": ws_id, "member_ids": current["id"]},

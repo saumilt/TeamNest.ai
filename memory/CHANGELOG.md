@@ -2782,3 +2782,42 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Web screenshots: /superadmin (free=100 field + Save), sidebar entry, credits 100/100,
   quick-action chips render on attach.
 - Mobile screenshot: chat + composer render (chips conditional, lint-clean).
+
+## 2026-06 (fork) — Store assets delivered + Super Admin feature flags
+
+### App Store / Play Store marketing assets (delivered)
+- Generated the promo video via `scripts/gen_promo.py` (installed ffmpeg + Playwright
+  chromium in-container). Output: portrait 1080x1920, ~20s, h264.
+- All assets live + publicly served under `frontend/public/store-assets/`:
+  - Promo video: `/store-assets/promo/teamnest-promo.mp4`
+  - iOS screenshots: `/store-assets/ios/01-chats..05-you.png`
+  - Android screenshots: `/store-assets/android/01-chats..05-you.png`
+  - Graphics: `/store-assets/graphics/{icon-ios-1024,icon-play-512,play-feature-graphic-1024x500}.png`
+  - Listing copy: `/store-assets/APP_STORE_LISTING.md`
+  - Privacy policy: `/store-assets/privacy-policy.html`
+  - Verified all URLs return HTTP 200 on the preview domain (also live on prod after redeploy).
+
+### Super Admin feature flags (web UI + shared-backend enforcement)
+- `services/platform_settings.py`: added `BOOL_DEFAULTS` (allow_workspace_deletion=True,
+  allow_subuser_deletion=True, require_template_approval=True) + `flag(name)` helper;
+  get/set now handle bools alongside the int credit values.
+- `routes/superadmin.py`: GET/PUT `/api/superadmin/settings` now returns/accepts the 3 bool
+  flags PLUS `public_signup` (backed by `launch_settings` — single source of truth for the
+  signup gate; toggling flips mode invite_only<->open immediately).
+- Enforcement (takes effect immediately, no redeploy):
+  - public_signup → `routes/auth.py` signup gate (already reads launch_settings).
+  - allow_workspace_deletion → `routes/workspace.py` `leave_workspace` blocks solo-owner
+    workspace close with 403 when disabled (account-deletion/GDPR path unaffected).
+  - allow_subuser_deletion → `routes/chats.py` `remove_chat_member` 403 when disabled.
+  - require_template_approval → `routes/template_market.py` `submit_template` auto-approves
+    (status=approved) when False; keeps review queue when True.
+- Web: `pages/SuperAdmin.jsx` gains a "Feature flags" card with 4 toggles (testIDs
+  flag-public_signup, flag-allow_workspace_deletion, flag-allow_subuser_deletion,
+  flag-require_template_approval) + single Save.
+- Verified: curl GET/PUT all flags; public_signup ON→signup 200, OFF→signup 403;
+  template/subuser flags persist; SuperAdmin UI renders all toggles (screenshot).
+
+### Mobile production backend URL (publish-time step — NOT a code change)
+- Emergent bakes `mobile/.env` `EXPO_PUBLIC_BACKEND_URL` into the store binary and does NOT
+  auto-swap it. Before clicking Publish, set it to `https://teamnest.ai`, publish, then
+  revert to the preview URL for continued dev. (Protected var — not changed by the agent.)
