@@ -2821,3 +2821,39 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Emergent bakes `mobile/.env` `EXPO_PUBLIC_BACKEND_URL` into the store binary and does NOT
   auto-swap it. Before clicking Publish, set it to `https://teamnest.ai`, publish, then
   revert to the preview URL for continued dev. (Protected var — not changed by the agent.)
+
+## 2026-06 (fork) — P2 Drop announcement generator + P3 Marketplace curation
+
+### P2 — Drop announcement generator (Launch Control → Drops)
+- `services/drop_announce.py`: template copy (instant, no credits) + AI rewrite (Claude via
+  Emergent LLM key) for LinkedIn / X / Instagram / Facebook. Each post carries the code,
+  spots-left, urgency phrase and claim URL. AI rewrite falls back to templates on any error.
+- `ai_service.complete()` — generic single-shot LLM helper (reused by drop_announce).
+- `routes/launch_admin.py`: GET `/api/launch/admin/drops/{code}/announcement` (template) and
+  POST `/api/launch/admin/drops/{code}/announcement/ai` (AI). Unknown code → 404.
+- Web `LaunchAdmin.jsx` Drops tab: per-drop "Generate post" → panel with 4 platform tabs,
+  copy textarea + Copy button + "✨ AI rewrite" button (testids la-announce-*).
+
+### P3 — Marketplace curation (Featured + Categories)
+- `routes/template_market.py`:
+  - `_require_admin` = platform admin (PLATFORM_ADMIN_EMAILS) OR super admin.
+  - `mkt_categories` collection, seeded with 9 defaults (`_ensure_categories`).
+  - Public GET `/api/market/categories` (active only); admin CRUD GET/POST/PATCH/DELETE
+    `/api/market/admin/categories` (create label→slug, rename, active toggle, delete).
+  - Featured: `featured` on templates; POST `/api/market/admin/templates/{id}/feature`;
+    GET `/api/market/admin/templates` (approved, featured-first); public list & `?category=`
+    filter now sort featured-first; `_public` returns `featured`.
+- Web:
+  - `TemplatesMarket.jsx`: "Featured" row (tm-featured-section) + category tabs from API labels;
+    extracted `TemplateCard` (featured variant shows a Featured badge/ring).
+  - `MarketAdmin.jsx`: "Marketplace categories" card (add/rename/activate/delete) + "Featured
+    templates" card (per-template feature toggle).
+  - `SellTemplateSection.jsx`: category dropdown now sourced from `/api/market/categories`
+    (fallback to static list).
+
+### Verified
+- Backend: 10/10 pytest (`tests/test_iteration91_p2p3_curation.py`), report iteration_91.json.
+- Web (Playwright + screenshots): announce panel populated + tab switching; Featured row on
+  /templates; categories-card + featured-card on /market/review. No blocking issues.
+- Non-blocking (pre-existing): editor-overlay hydration warning on LaunchAdmin numeric <option>;
+  category pills use testid `tm-cat-{slug}` (not `tm-cat-tab-{slug}`).
