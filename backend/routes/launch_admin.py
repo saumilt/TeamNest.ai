@@ -285,6 +285,49 @@ async def list_drops(current=Depends(require_user)):
     return {"drops": drops}
 
 
+# ─── Drop announcement generator (LinkedIn / X / Instagram / Facebook) ───────
+async def _drop_context(code: str):
+    code = (code or "").strip().upper()
+    drop = await db.code_drops.find_one({"code": code}, {"_id": 0})
+    if not drop:
+        raise HTTPException(404, "Drop not found")
+    cd = await db.invite_codes.find_one(
+        {"code": code}, {"_id": 0, "used_count": 1, "max_uses": 1}
+    )
+    used = int((cd or {}).get("used_count", 0))
+    max_uses = int((cd or {}).get("max_uses", drop.get("max_uses", 0)))
+    spots_left = max(0, max_uses - used)
+    from services.drop_announce import DROP_BASE_URL
+    return drop, spots_left, f"{DROP_BASE_URL}/{code}"
+
+
+@router.get("/launch/admin/drops/{code}/announcement")
+async def drop_announcement(code: str, current=Depends(require_user)):
+    """Instant, template-based social copy for a drop (no AI credits)."""
+    await _require_admin(current)
+    from services.drop_announce import build_templates
+    drop, spots_left, url = await _drop_context(code)
+    return {
+        "posts": build_templates(drop, spots_left, url),
+        "meta": {"code": drop["code"], "title": drop.get("title"),
+                 "spots_left": spots_left, "url": url},
+    }
+
+
+@router.post("/launch/admin/drops/{code}/announcement/ai")
+async def drop_announcement_ai(code: str, current=Depends(require_user)):
+    """AI-rewritten social copy for a drop (Claude via Emergent LLM key)."""
+    await _require_admin(current)
+    from services.drop_announce import ai_rewrite
+    drop, spots_left, url = await _drop_context(code)
+    posts = await ai_rewrite(drop, spots_left, url)
+    return {
+        "posts": posts,
+        "meta": {"code": drop["code"], "title": drop.get("title"),
+                 "spots_left": spots_left, "url": url},
+    }
+
+
 # ─── Grant extra invites to a user ──────────────────────────────────────────
 class GrantInvites(BaseModel):
     email: str

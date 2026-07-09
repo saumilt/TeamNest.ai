@@ -5,6 +5,12 @@ import { api } from "@/lib/api";
 const TABS = ["Waitlist", "Codes", "Drops", "Leaderboard", "Analytics", "Emails", "Settings"];
 const LEVELS = ["waitlist_only", "demo", "dev_os_demo", "ai_employees_demo", "team_collab_demo", "founder_beta", "agency_beta", "restaurant_ops_beta", "full_beta"];
 const MODES = ["invite_only", "waitlist", "approved_only", "open"];
+const ANNOUNCE_PLATFORMS = [
+  { key: "linkedin", label: "LinkedIn" },
+  { key: "x", label: "X" },
+  { key: "instagram", label: "Instagram" },
+  { key: "facebook", label: "Facebook" },
+];
 
 const Card = ({ children, className = "" }) => (
   <div className={`rounded-2xl bg-surface ring-1 ring-hairline p-4 ${className}`}>{children}</div>
@@ -192,6 +198,7 @@ function CodesTab() {
 
 function DropsTab() {
   const [drops, setDrops] = useState([]);
+  const [announce, setAnnounce] = useState(null);
   const [form, setForm] = useState({ code: "", title: "", max_uses: 100, expires_hours: 24, access_level: "dev_os_demo", invites_granted: 4, source: "linkedin" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const load = () => api.get("/launch/admin/drops").then((r) => setDrops(r.data.drops)).catch(() => {});
@@ -226,10 +233,66 @@ function DropsTab() {
             <span className="font-mono font-bold text-amber-300">{d.code}</span>
             <span className="text-ink">{d.title}</span>
             <span className="text-ink-mute">{d.used}/{d.max_uses} used · {d.access_level} · {d.source}</span>
-            <a href={`/drop/${d.code}`} target="_blank" rel="noreferrer" className="ml-auto text-amber-300 hover:text-amber-200">/drop/{d.code} →</a>
+            <div className="ml-auto flex items-center gap-3">
+              <button type="button" onClick={() => setAnnounce(announce === d.code ? null : d.code)}
+                data-testid={`la-announce-toggle-${d.code}`}
+                className="h-7 px-3 rounded-pill text-[12px] font-medium bg-amber-300 text-black hover:bg-amber-200">
+                {announce === d.code ? "Hide post" : "Generate post"}
+              </button>
+              <a href={`/drop/${d.code}`} target="_blank" rel="noreferrer" className="text-amber-300 hover:text-amber-200">/drop/{d.code} →</a>
+            </div>
           </div>
+          {announce === d.code && <AnnouncePanel code={d.code} />}
         </Card>
       ))}
+    </div>
+  );
+}
+
+function AnnouncePanel({ code }) {
+  const [posts, setPosts] = useState(null);
+  const [meta, setMeta] = useState(null);
+  const [plat, setPlat] = useState("linkedin");
+  const [aiBusy, setAiBusy] = useState(false);
+  useEffect(() => {
+    api.get(`/launch/admin/drops/${code}/announcement`)
+      .then((r) => { setPosts(r.data.posts); setMeta(r.data.meta); })
+      .catch(() => toast.error("Could not load announcement copy"));
+  }, [code]);
+  const aiRewrite = async () => {
+    setAiBusy(true);
+    try {
+      const { data } = await api.post(`/launch/admin/drops/${code}/announcement/ai`);
+      setPosts(data.posts); toast.success("AI rewrote the copy");
+    } catch (e) { toast.error(e?.response?.data?.detail || "AI rewrite failed"); }
+    setAiBusy(false);
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(posts[plat]); toast.success("Copied to clipboard"); }
+    catch { toast.error("Copy failed — select the text manually"); }
+  };
+  if (!posts) return <div className="mt-3 text-[12px] text-ink-mute">Loading copy…</div>;
+  return (
+    <div className="mt-3 rounded-xl bg-surface-2 ring-1 ring-hairline p-3" data-testid={`la-announce-${code}`}>
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        {ANNOUNCE_PLATFORMS.map((p) => (
+          <button key={p.key} type="button" onClick={() => setPlat(p.key)}
+            data-testid={`la-announce-tab-${p.key}`}
+            className={`h-7 px-3 rounded-pill text-[11px] font-medium ${plat === p.key ? "bg-amber-300 text-black" : "bg-surface text-ink-dim ring-1 ring-hairline hover:text-ink"}`}>
+            {p.label}
+          </button>
+        ))}
+        {meta && <span className="ml-auto text-[11px] text-ink-mute">{meta.spots_left} spots left</span>}
+      </div>
+      <textarea readOnly value={posts[plat]} data-testid={`la-announce-text-${code}`}
+        className="w-full h-44 p-3 rounded-lg bg-surface ring-1 ring-hairline text-[12px] text-ink font-mono outline-none resize-none" />
+      <div className="flex gap-2 mt-2">
+        <Btn onClick={copy} data-testid={`la-announce-copy-${code}`}>Copy</Btn>
+        <button type="button" onClick={aiRewrite} disabled={aiBusy} data-testid={`la-announce-ai-${code}`}
+          className="h-8 px-3 rounded-pill text-[12px] font-medium bg-surface ring-1 ring-hairline text-ink-dim hover:text-ink disabled:opacity-50">
+          {aiBusy ? "Rewriting…" : "✨ AI rewrite"}
+        </button>
+      </div>
     </div>
   );
 }

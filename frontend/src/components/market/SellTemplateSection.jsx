@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -7,13 +7,20 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
-const CATEGORIES = ["saas", "crm", "finance", "internal", "marketplace", "community", "healthcare", "ai", "other"];
+const FALLBACK_CATEGORIES = [
+  { slug: "saas", label: "SaaS" }, { slug: "crm", label: "CRM" },
+  { slug: "finance", label: "Finance" }, { slug: "internal", label: "Internal Tools" },
+  { slug: "marketplace", label: "Marketplace" }, { slug: "community", label: "Community" },
+  { slug: "healthcare", label: "Healthcare" }, { slug: "ai", label: "AI" },
+  { slug: "other", label: "Other" },
+];
 
 /** "Sell as template" section for the Release tab. */
 export default function SellTemplateSection({ project }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
   const [form, setForm] = useState({
     name: project.name || "",
     tagline: "",
@@ -22,6 +29,14 @@ export default function SellTemplateSection({ project }) {
     pricing_model: "free",
     price_usd: "",
   });
+
+  useEffect(() => {
+    api.get("/market/categories")
+      .then(({ data }) => {
+        if (data.categories?.length) setCategories(data.categories);
+      })
+      .catch(() => { /* keep fallback */ });
+  }, []);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const needsPrice = form.pricing_model !== "free";
@@ -97,7 +112,7 @@ export default function SellTemplateSection({ project }) {
               <Field label="Category">
                 <select value={form.category} onChange={(e) => set("category")(e.target.value)}
                   data-testid="sell-category" className={inputCls}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {categories.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
                 </select>
               </Field>
               <Field label="Pricing">

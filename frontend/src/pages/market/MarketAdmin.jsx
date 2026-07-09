@@ -13,6 +13,9 @@ export default function MarketAdmin() {
   const [packs, setPacks] = useState(null);
   const [savingPromo, setSavingPromo] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
+  const [approved, setApproved] = useState(null);
+  const [cats, setCats] = useState(null);
+  const [newCat, setNewCat] = useState("");
 
   const load = () => {
     api.get("/market/admin/queue")
@@ -21,6 +24,12 @@ export default function MarketAdmin() {
         if (e?.response?.status === 403) setQueue("forbidden");
         else setQueue([]);
       });
+    api.get("/market/admin/templates")
+      .then(({ data }) => setApproved(data.templates || []))
+      .catch(() => setApproved([]));
+    api.get("/market/admin/categories")
+      .then(({ data }) => setCats(data.categories || []))
+      .catch(() => setCats([]));
     api.get("/admin/billing-settings")
       .then(({ data }) => {
         setMargin(Math.round((data.credit_margin_pct ?? 0.4) * 100));
@@ -30,6 +39,58 @@ export default function MarketAdmin() {
       .catch(() => setMargin(null));
   };
   useEffect(load, []);
+
+  const toggleFeatured = async (t) => {
+    try {
+      await api.post(`/market/admin/templates/${t.id}/feature`, { featured: !t.featured });
+      setApproved((list) => list.map((x) => (x.id === t.id ? { ...x, featured: !x.featured } : x)));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not update featured");
+    }
+  };
+
+  const addCategory = async () => {
+    const label = newCat.trim();
+    if (!label) return;
+    try {
+      const { data } = await api.post("/market/admin/categories", { label });
+      setCats((list) => [...(list || []), data]);
+      setNewCat("");
+      toast.success(`Category "${data.label}" added`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add category");
+    }
+  };
+
+  const renameCategory = async (c, label) => {
+    if (!label.trim() || label === c.label) return;
+    try {
+      await api.patch(`/market/admin/categories/${c.id}`, { label: label.trim() });
+      setCats((list) => list.map((x) => (x.id === c.id ? { ...x, label: label.trim() } : x)));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Rename failed");
+    }
+  };
+
+  const toggleCategoryActive = async (c) => {
+    try {
+      await api.patch(`/market/admin/categories/${c.id}`, { active: !c.active });
+      setCats((list) => list.map((x) => (x.id === c.id ? { ...x, active: !x.active } : x)));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Update failed");
+    }
+  };
+
+  const deleteCategory = async (c) => {
+    if (!window.confirm(`Delete category "${c.label}"?`)) return;
+    try {
+      await api.delete(`/market/admin/categories/${c.id}`);
+      setCats((list) => list.filter((x) => x.id !== c.id));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    }
+  };
+
 
   const savePromo = async () => {
     setSavingPromo(true);
@@ -212,6 +273,73 @@ export default function MarketAdmin() {
           {payoutBusy ? "Running…" : "Run payout now"}
         </button>
       </div>
+
+      {cats !== null && (
+        <div className="rounded-xl bg-surface ring-1 ring-hairline p-4" data-testid="categories-card">
+          <div className="text-[13px] font-semibold text-ink mb-1">Marketplace categories</div>
+          <p className="text-[12px] text-ink-mute mb-3">
+            Sellers pick from these when submitting. Deactivate to hide from filters without deleting.
+          </p>
+          <div className="flex gap-2 mb-3">
+            <input type="text" value={newCat} placeholder="New category name"
+              onChange={(e) => setNewCat(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addCategory()}
+              data-testid="category-new-input"
+              className="flex-1 h-9 px-3 rounded-lg bg-surface-2 ring-1 ring-hairline text-[13px] text-ink outline-none focus:ring-amber-400/40" />
+            <button type="button" onClick={addCategory} disabled={!newCat.trim()}
+              data-testid="category-add-btn"
+              className="h-9 px-4 rounded-pill bg-amber-300 hover:bg-amber-200 text-black font-semibold text-[12px] disabled:opacity-40">
+              Add
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {cats.map((c) => (
+              <div key={c.id} className="flex items-center gap-2" data-testid={`category-row-${c.slug}`}>
+                <input type="text" defaultValue={c.label}
+                  onBlur={(e) => renameCategory(c, e.target.value)}
+                  data-testid={`category-label-${c.slug}`}
+                  className="flex-1 h-8 px-3 rounded-lg bg-surface-2 ring-1 ring-hairline text-[12px] text-ink outline-none focus:ring-amber-400/40" />
+                <span className="text-[10px] font-mono text-ink-mute w-24 truncate">{c.slug}</span>
+                <button type="button" onClick={() => toggleCategoryActive(c)}
+                  data-testid={`category-toggle-${c.slug}`}
+                  className={`h-7 px-3 rounded-full text-[11px] font-semibold ring-1 ${
+                    c.active ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" : "bg-surface-2 text-ink-mute ring-hairline"}`}>
+                  {c.active ? "Active" : "Hidden"}
+                </button>
+                <button type="button" onClick={() => deleteCategory(c)}
+                  data-testid={`category-delete-${c.slug}`}
+                  className="text-ink-mute hover:text-rose-300 text-[16px] leading-none px-1">×</button>
+              </div>
+            ))}
+            {cats.length === 0 && <div className="text-[12px] text-ink-mute">No categories yet.</div>}
+          </div>
+        </div>
+      )}
+
+      {approved !== null && approved.length > 0 && (
+        <div className="rounded-xl bg-surface ring-1 ring-hairline p-4" data-testid="featured-card">
+          <div className="text-[13px] font-semibold text-ink mb-1">Featured templates</div>
+          <p className="text-[12px] text-ink-mute mb-3">
+            Featured templates appear in a highlighted row at the top of the public marketplace.
+          </p>
+          <div className="space-y-1.5">
+            {approved.map((t) => (
+              <div key={t.id} className="flex items-center gap-3" data-testid={`featured-row-${t.id}`}>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[13px] text-ink">{t.name}</span>
+                  <span className="text-[11px] text-ink-mute ml-2">{t.category || "uncategorised"} · {t.installs} installs</span>
+                </div>
+                <button type="button" onClick={() => toggleFeatured(t)}
+                  data-testid={`featured-toggle-${t.id}`}
+                  className={`h-7 px-3 rounded-full text-[11px] font-semibold ring-1 shrink-0 ${
+                    t.featured ? "bg-amber-400/20 text-amber-300 ring-amber-400/40" : "bg-surface-2 text-ink-mute ring-hairline hover:text-ink"}`}>
+                  {t.featured ? "★ Featured" : "Feature"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {queue.length === 0 ? (
         <div className="rounded-xl bg-surface ring-1 ring-hairline p-8 text-center text-[13px] text-ink-mute">

@@ -277,6 +277,18 @@ async def improve_message(text: str, action: str, language: str = "English") -> 
         return f"[Improvement error: {e}]\n\n{text}"
 
 
+async def complete(system_message: str, prompt: str, model_key: str = "claude") -> str:
+    """Generic single-shot text completion via the Emergent LLM key. Reused by
+    lightweight AI features (e.g. marketing copy generation)."""
+    cfg = MODEL_CONFIG.get(model_key) or MODEL_CONFIG["claude"]
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"complete-{secrets.randbelow(1_000_000) + 1}",
+        system_message=system_message,
+    ).with_model(cfg["provider"], cfg["model"])
+    return str(await chat.send_message(UserMessage(text=prompt)))
+
+
 async def extract_task(message_body: str, team_members: List[Dict]) -> Dict:
     """Use AI to convert a chat message into a structured task draft."""
     import json

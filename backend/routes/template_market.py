@@ -2,19 +2,27 @@
 Stripe checkout (one-time + monthly) with a 70/30 seller/platform split."""
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from deps import db, new_id, now_iso, require_user
+from deps import db, is_super_admin, new_id, now_iso, require_user
 
 router = APIRouter()
 logger = logging.getLogger("teamnest")
 
 PLATFORM_FEE = 0.30
 SHOTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "market_shots")
+
+DEFAULT_CATEGORIES = [
+    ("saas", "SaaS"), ("crm", "CRM"), ("finance", "Finance"),
+    ("internal", "Internal Tools"), ("marketplace", "Marketplace"),
+    ("community", "Community"), ("healthcare", "Healthcare"),
+    ("ai", "AI"), ("other", "Other"),
+]
 
 _MIME_BY_EXT = {
     ".html": "text/html; charset=utf-8",
@@ -31,6 +39,12 @@ def _is_platform_admin(current: Dict[str, Any]) -> bool:
     return (current.get("email") or "").lower() in allowed
 
 
+def _require_admin(current: Dict[str, Any]) -> None:
+    """Platform admins (PLATFORM_ADMIN_EMAILS) and super admins can curate."""
+    if not (_is_platform_admin(current) or is_super_admin(current)):
+        raise HTTPException(403, "Platform admin only")
+
+
 def _public(t: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": t["id"], "name": t["name"], "tagline": t.get("tagline", ""),
@@ -38,6 +52,7 @@ def _public(t: Dict[str, Any]) -> Dict[str, Any]:
         "pricing": t.get("pricing") or {"model": "free", "price_usd": 0},
         "creator_name": t.get("creator_name", "TeamNest"),
         "installs": t.get("installs", 0), "status": t.get("status"),
+        "featured": bool(t.get("featured")),
         "has_screenshot": bool(t.get("screenshot_file")),
         "created_at": t.get("created_at"),
     }
@@ -66,10 +81,32 @@ class CheckoutStart(BaseModel):
 
 
 # ─── Public store ─────────────────────────────────────────────────────────
+async def _ensure_categories() -> None:
+    if await db.mkt_categories.count_documents({}) == 0:
+        for i, (slug, label) in enumerate(DEFAULT_CATEGORIES):
+            await db.mkt_categories.insert_one({
+                "id": new_id(), "slug": slug, "label": label,
+                "order": i, "active": True, "created_at": now_iso(),
+            })
+
+
+@router.get("/market/categories")
+async def list_categories():
+    """Public: active marketplace categories, ordered."""
+    await _ensure_categories()
+    rows = await db.mkt_categories.find(
+        {"active": True}, {"_id": 0}
+    ).sort("order", 1).to_list(100)
+    return {"categories": rows}
+
+
 @router.get("/market/templates")
-async def list_market_templates():
-    rows = await db.mkt_templates.find({"status": "approved"}, {"_id": 0, "files": 0}) \
-        .sort([("installs", -1), ("created_at", -1)]).to_list(200)
+async def list_market_templates(category: str = ""):
+    filt: Dict[str, Any] = {"status": "approved"}
+    if category and category.lower() != "all":
+        filt["category"] = category.lower()
+    rows = await db.mkt_templates.find(filt, {"_id": 0, "files": 0}) \
+        .sort([("featured", -1), ("installs", -1), ("created_at", -1)]).to_list(200)
     return {"templates": [_public(t) for t in rows]}
 
 
@@ -366,6 +403,87 @@ async def reject_template(template_id: str, payload: ReviewDecision, current=Dep
     if r.matched_count == 0:
         raise HTTPException(404, "No submitted template with that id")
     return {"ok": True, "status": "rejected"}
+
+
+# ─── Admin curation: featured + categories ──────────────────────────────────
+class FeatureToggle(BaseModel):
+    featured: bool
+
+
+class CategoryCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=40)
+
+
+class CategoryUpdate(BaseModel):
+    label: Optional[str] = Field(default=None, max_length=40)
+    active: Optional[bool] = None
+    order: Optional[int] = None
+
+
+@router.get("/market/admin/templates")
+async def admin_list_templates(current=Depends(require_user)):
+    """Approved templates for curation (featured-first)."""
+    _require_admin(current)
+    rows = await db.mkt_templates.find({"status": "approved"}, {"_id": 0, "files": 0}) \
+        .sort([("featured", -1), ("installs", -1), ("created_at", -1)]).to_list(200)
+    return {"templates": [_public(t) for t in rows]}
+
+
+@router.post("/market/admin/templates/{template_id}/feature")
+async def feature_template(template_id: str, payload: FeatureToggle, current=Depends(require_user)):
+    _require_admin(current)
+    r = await db.mkt_templates.update_one(
+        {"id": template_id, "status": "approved"},
+        {"$set": {"featured": payload.featured, "updated_at": now_iso()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "No approved template with that id")
+    return {"ok": True, "featured": payload.featured}
+
+
+@router.get("/market/admin/categories")
+async def admin_list_categories(current=Depends(require_user)):
+    _require_admin(current)
+    await _ensure_categories()
+    rows = await db.mkt_categories.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return {"categories": rows}
+
+
+@router.post("/market/admin/categories")
+async def create_category(payload: CategoryCreate, current=Depends(require_user)):
+    _require_admin(current)
+    slug = re.sub(r"[^a-z0-9]+", "-", payload.label.strip().lower()).strip("-") or "category"
+    if await db.mkt_categories.find_one({"slug": slug}):
+        raise HTTPException(400, "A category with that name already exists")
+    order = await db.mkt_categories.count_documents({})
+    doc = {"id": new_id(), "slug": slug, "label": payload.label.strip(),
+           "order": order, "active": True, "created_at": now_iso()}
+    await db.mkt_categories.insert_one(doc.copy())
+    return {k: v for k, v in doc.items()}
+
+
+@router.patch("/market/admin/categories/{cat_id}")
+async def update_category(cat_id: str, payload: CategoryUpdate, current=Depends(require_user)):
+    _require_admin(current)
+    patch = {k: v for k, v in payload.dict().items() if v is not None}
+    if "label" in patch:
+        patch["label"] = patch["label"].strip()
+    if not patch:
+        return {"ok": True}
+    r = await db.mkt_categories.update_one({"id": cat_id}, {"$set": patch})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Category not found")
+    return {"ok": True}
+
+
+@router.delete("/market/admin/categories/{cat_id}")
+async def delete_category(cat_id: str, current=Depends(require_user)):
+    _require_admin(current)
+    r = await db.mkt_categories.delete_one({"id": cat_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Category not found")
+    return {"ok": True}
+
 
 
 # ─── Install ──────────────────────────────────────────────────────────────
