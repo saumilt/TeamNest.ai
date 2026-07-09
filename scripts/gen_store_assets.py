@@ -31,8 +31,7 @@ SCREEN_CSS = """
 .apphead h4{font-family:'Poppins';font-weight:800;font-size:21px;letter-spacing:-.6px}
 .cred{display:flex;gap:5px;align-items:center}
 .flamepill{background:#fff;border-radius:999px;height:24px;padding:0 8px;display:flex;align-items:center;gap:4px;font-weight:800;color:#09090b;font-size:10.5px}
-.creditspill{background:var(--accent);border-radius:999px;height:24px;padding:0 4px 0 8px;display:flex;align-items:center;gap:4px;font-weight:800;color:#09090b;font-size:10.5px}
-.creditspill .more{background:#fff;border-radius:999px;padding:2px 5px;font-size:9px}
+.creditspill{background:var(--accent);border-radius:999px;height:24px;padding:0 10px;display:flex;align-items:center;gap:5px;font-weight:800;color:#09090b;font-size:10.5px}
 .tabbar{height:56px;display:flex;align-items:center;justify-content:space-around;border-top:1px solid var(--line);background:#0c0c10}
 .tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9.5px;color:var(--dim);font-weight:600}
 .tab.on{color:var(--accent)}.tab .dot{font-size:15px}
@@ -90,7 +89,7 @@ SB = '<div class="statusbar"><span>9:41</span><span>&#128246; &nbsp;100%</span><
 SCREENS = {
 "chats": SB + """
 <div class="appbody">
-  <div class="apphead"><h4>Chats</h4><div class="cred"><div class="flamepill">&#128293; 300</div><div class="creditspill">&#10022; Credits <span class="more">20% more</span></div></div></div>
+  <div class="apphead"><h4>Chats</h4><div class="cred"><div class="creditspill">&#10022; 300 credits</div></div></div>
   <div class="row"><div class="av ai">AI</div><div class="rowb"><div class="rowt"><span class="nm">My AI Assistant</span></div><div class="pv">Ask me anything, anytime</div></div></div>
   <div class="row"><div class="av g1">MS</div><div class="rowb"><div class="rowt"><span class="nm">Marketing Site Refresh</span><span class="tm">7:31</span></div><div class="pv">New hero copy proposal is in the doc</div></div></div>
   <div class="row"><div class="av g2">QP</div><div class="rowb"><div class="rowt"><span class="nm">Q2 Product Launch</span><span class="tm">7:28</span></div><div class="pv">Let's lock the Pro-tier launch pricing</div></div></div>
@@ -112,7 +111,7 @@ SCREENS = {
 """,
 "research": SB + """
 <div class="appbody">
-  <div class="apphead"><h4>AI Research</h4><div class="cred"><div class="flamepill">&#128293; 300</div></div></div>
+  <div class="apphead"><h4>AI Research</h4><div class="cred"><div class="creditspill">&#10022; 300 credits</div></div></div>
   <div class="sub">Ask once, compare answers across models, get one synthesized result.</div>
   <div class="label">MODELS TO COMPARE</div>
   <div class="chips"><div class="chip on">ChatGPT</div><div class="chip on">Claude</div><div class="chip on">Gemini</div><div class="chip">DeepSeek</div><div class="chip">Perplexity</div><div class="chip">Grok</div></div>
@@ -122,7 +121,7 @@ SCREENS = {
 """,
 "tasks": SB + """
 <div class="appbody">
-  <div class="apphead"><h4>Tasks</h4><div class="cred"><div class="flamepill">&#128293; 300</div><div class="creditspill">&#10022; Credits <span class="more">20% more</span></div></div></div>
+  <div class="apphead"><h4>Tasks</h4><div class="cred"><div class="creditspill">&#10022; 300 credits</div></div></div>
   <div class="addrow"><div class="addinput">Add a task&hellip;</div><div class="addbtn">+</div></div>
   <div class="task"><div class="cbx"></div><div class="tk"><span class="tt">Finalize Pro-tier launch pricing</span><span class="mt"><span class="pdot p-urgent"></span> urgent &middot; due today</span></div></div>
   <div class="task"><div class="cbx"></div><div class="tk"><span class="tt">Ship pricing page A/B test</span><span class="mt"><span class="pdot p-high"></span> high &middot; due Fri</span></div></div>
@@ -133,7 +132,7 @@ SCREENS = {
 """,
 "you": SB + """
 <div class="appbody">
-  <div class="apphead"><h4>You</h4><div class="cred"><div class="flamepill">&#128293; 300</div><div class="creditspill">&#10022; Credits <span class="more">20% more</span></div></div></div>
+  <div class="apphead"><h4>You</h4><div class="cred"><div class="creditspill">&#10022; 300 credits</div></div></div>
   <div class="profile"><div class="bigav">AP</div><div class="nm">Amit Patel</div><div class="em">amit@demo.team</div><div class="rolebadge">Owner</div></div>
   <div class="card"><div class="inforow"><span class="ic">&#9636;</span><span class="k">Workspace</span><span class="v">Demo Team</span></div><div class="inforow"><span class="ic">&#9993;</span><span class="k">Email</span><span class="v">amit@demo.team</span></div><div class="inforow"><span class="ic">&#9678;</span><span class="k">Workspaces</span><span class="v">3</span></div></div>
   <div class="card"><div class="inforow"><span class="ic">&#128737;</span><span class="k">Privacy Policy</span><span class="ic">&#8599;</span></div><div class="inforow"><span class="ic">&#128196;</span><span class="k">Terms of Service</span><span class="ic">&#8599;</span></div><div class="inforow"><span class="ic">&#9937;</span><span class="k">Help &amp; Support</span><span class="ic">&#8599;</span></div></div>
@@ -177,7 +176,7 @@ html,body{{width:{W}px;height:{H}px}}
   box-shadow:0 40px 90px -25px rgba(0,0,0,.85), 0 0 0 2px #000 inset;}}
 .device .wrap{{width:{288*S}px;height:{604*S}px;border-radius:{br}px;overflow:hidden}}
 {SCREEN_CSS}
-.screen{{border-radius:{br}px;transform:scale({S});transform-origin:top left}}
+.screen{{border-radius:52px;zoom:{S}}}
 .island{{position:absolute;top:{int(pad+8*S)}px;left:50%;transform:translateX(-50%);width:{int(96*S)}px;height:{int(26*S)}px;background:#000;border-radius:{int(16*S)}px;z-index:20}}
 </style></head><body>
 <div class='canvas'>
