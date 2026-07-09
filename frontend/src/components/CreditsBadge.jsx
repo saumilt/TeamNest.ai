@@ -3,10 +3,13 @@ import { api } from "@/lib/api";
 import { Flame, Sparkles } from "lucide-react";
 
 /**
- * CreditsBadge — persistent top-right pill showing the workspace's remaining AI
- * credits and (when a promo is active) the current bonus percentage. Tapping the
- * "Credits" pill opens the buy-credits sheet (CreditSplash listens for the
- * `teamnest:open-credit-splash` event). It stays steady on every screen.
+ * CreditsBadge — persistent top-right "Buy Credits" pill. It shows the current
+ * promotion bonus (configured by the Super Admin) and, for metered workspaces,
+ * the remaining balance. Tapping it opens the Purchase Credits splash
+ * (CreditSplash listens for the `teamnest:open-credit-splash` event).
+ *
+ * It is a single compact pill so it never overlaps a screen's header controls
+ * (headers reserve right padding for it).
  */
 export default function CreditsBadge() {
   const [usage, setUsage] = useState(null);
@@ -44,39 +47,42 @@ export default function CreditsBadge() {
   if (!usage) return null;
   const unlimited = !!usage.unlimited;
   const remaining = unlimited ? "∞" : usage.credits_remaining ?? 0;
+  const openSplash = () => window.dispatchEvent(new Event("teamnest:open-credit-splash"));
 
   return (
-    <div
-      className="fixed top-2.5 right-3 z-40 flex items-center gap-1.5 pointer-events-none"
-      data-testid="credits-badge"
-    >
-      <div className="pointer-events-auto flex items-center gap-1.5 h-9 px-3 rounded-full bg-white shadow-lg ring-1 ring-black/5">
-        <Flame className="w-4 h-4 text-emerald-500" fill="currentColor" />
-        <span className="text-[13px] font-extrabold text-black tabular-nums" data-testid="credits-badge-count">
-          {typeof remaining === "number" ? remaining.toLocaleString() : remaining}
+    <div className="fixed top-2.5 right-3 z-40" data-testid="credits-badge">
+      <button
+        type="button"
+        data-testid="credits-badge-buy"
+        onClick={openSplash}
+        title="Buy credits"
+        aria-label="Buy credits"
+        className="flex items-center gap-1.5 h-9 pl-2.5 pr-2 rounded-full bg-amber-300 hover:bg-amber-200 shadow-lg ring-1 ring-black/10 active:scale-95 transition-transform"
+      >
+        {/* Remaining balance — metered workspaces only */}
+        <span className="flex items-center gap-1 text-black" data-testid="credits-badge-count">
+          <Flame className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" />
+          <span className="text-[12px] font-extrabold tabular-nums leading-none">
+            {typeof remaining === "number" ? remaining.toLocaleString() : remaining}
+          </span>
         </span>
-      </div>
 
-      {!unlimited && (
-        <button
-          type="button"
-          data-testid="credits-badge-buy"
-          onClick={() => window.dispatchEvent(new Event("teamnest:open-credit-splash"))}
-          title="Buy credits"
-          className="pointer-events-auto flex items-center gap-1.5 h-9 pl-3 pr-1.5 rounded-full bg-amber-300 hover:bg-amber-200 shadow-lg ring-1 ring-black/5 active:scale-95 transition-transform"
-        >
-          <Sparkles className="w-4 h-4 text-black" />
-          <span className="text-[13px] font-extrabold text-black">Credits</span>
-          {bonusPct > 0 && (
-            <span
-              className="ml-0.5 px-2 py-0.5 rounded-full bg-white text-black text-[11px] font-extrabold whitespace-nowrap"
-              data-testid="credits-badge-bonus"
-            >
-              {bonusPct}% more
-            </span>
-          )}
-        </button>
-      )}
+        <span className="w-px h-4 bg-black/15" aria-hidden="true" />
+
+        <Sparkles className="w-3.5 h-3.5 text-black" />
+        <span className="hidden sm:inline text-[12.5px] font-extrabold text-black whitespace-nowrap">
+          Buy Credits
+        </span>
+
+        {bonusPct > 0 && (
+          <span
+            className="px-1.5 py-0.5 rounded-full bg-black text-amber-300 text-[10px] font-extrabold whitespace-nowrap leading-none"
+            data-testid="credits-badge-bonus"
+          >
+            +{bonusPct}%
+          </span>
+        )}
+      </button>
     </div>
   );
 }

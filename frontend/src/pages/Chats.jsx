@@ -34,6 +34,7 @@ import ResizableEdge from "@/components/ui-v2/ResizableEdge";
 import EmptyState from "@/components/ui-v2/EmptyState";
 import FAB from "@/components/ui-v2/FAB";
 import ChatHeader from "@/components/chat/ChatHeader";
+import CameraCapture from "@/components/chat/CameraCapture";
 import GroupInfo from "@/components/chat/GroupInfo";
 import DevWorkspacePane from "@/components/chat/DevWorkspacePane";
 import LivePreviewPane from "@/components/chat/LivePreviewPane";
@@ -801,14 +802,13 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const [showCamera, setShowCamera] = useState(false);
 
   const onPickFile = () => fileInputRef.current?.click();
-  const onPickCamera = () => cameraInputRef.current?.click();
+  const onPickCamera = () => setShowCamera(true);
 
-  const onFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  const uploadFile = async (file) => {
     if (!file) return;
-    e.target.value = "";
     setUploading(true);
     try {
       const form = new FormData();
@@ -826,6 +826,13 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     } finally {
       setUploading(false);
     }
+  };
+
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadFile(file);
   };
 
   const send = async () => {
@@ -1003,6 +1010,13 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }
+      />
+
+      <CameraCapture
+        open={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={uploadFile}
+        onFallback={() => cameraInputRef.current?.click()}
       />
 
       <AskAIDrawer

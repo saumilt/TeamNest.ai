@@ -18,6 +18,7 @@ from deps import (
     _broadcast_message,
     _post_reminder,
     db,
+    is_super_admin,
     logger,
     new_id,
     normalize_phone,
@@ -891,12 +892,12 @@ async def hire_dev_team_checkout(
     if chat.get("dev_team_hired"):
         raise HTTPException(400, "AI dev team is already hired for this chat")
 
-    # ── Demo workspace bypass ────────────────────────────────────────
-    # The public demo account gets the team provisioned for free so people
-    # evaluating TeamNest can actually exercise the hire → build flow.
-    # Real workspaces still go through Stripe. The inactivity reset (1h)
-    # plus the demo-only email gate keeps this from being abused.
-    if current.get("email") == "amit@demo.team":
+    # ── Demo workspace & super-admin bypass ─────────────────────────
+    # The public demo account AND platform super admins (e.g. the workspace
+    # owner) get the team provisioned for free so they can exercise the
+    # hire → build flow without a payment step. Real workspaces still go
+    # through Stripe.
+    if current.get("email") == "amit@demo.team" or is_super_admin(current):
         result = await _provision_dev_team_for_chat(chat_id, current["id"])
         return {
             "provisioned": True,

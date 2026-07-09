@@ -2857,3 +2857,40 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   /templates; categories-card + featured-card on /market/review. No blocking issues.
 - Non-blocking (pre-existing): editor-overlay hydration warning on LaunchAdmin numeric <option>;
   category pills use testid `tm-cat-{slug}` (not `tm-cat-tab-{slug}`).
+
+## 2026-06 (fork) — Web fixes: store screenshots, credits badge, camera, @devmanager
+
+### Store screenshot cropping (scripts/gen_store_assets.py)
+- Device mockup used transform:scale() whose layout box stayed wider than its
+  window → Chromium center-clipped both edges (titles lost first letter, credits
+  pill cut, only 2 of 4 tabs shown). Switched to CSS `zoom` (scales the layout
+  box). Also simplified the header to one compact "✦ 300 credits" pill.
+- Regenerated all iOS+Android screenshots, promo video (needs ffmpeg + playwright
+  chromium reinstalled per session), and rebuilt store-assets/teamnest-store-assets.zip.
+
+### Credits badge redesign (CreditsBadge.jsx + ChatHeader.jsx)
+- Was two fixed pills; the unlimited-user ∞ pill overlapped chat-header controls.
+- Now ONE compact pill: "🔥 {balance} · ✦ Buy Credits +{bonus}%" for all users,
+  opens the Purchase Credits splash (teamnest:open-credit-splash). Bonus % comes
+  from the Super Admin promo config (max pack bonus).
+- ChatHeader reserves right padding (pr-[112px] md:pr-[210px]) so nothing renders
+  under the fixed badge. Verified: no overlap, badge → splash opens.
+
+### Real webcam capture (components/chat/CameraCapture.jsx)
+- Desktop had no live camera (capture="environment" input only opens a file
+  dialog). New getUserMedia modal: live preview → shutter → retake/use photo →
+  uploads via the shared uploadFile() (extracted from onFileChange in Chats.jsx).
+  Permission-denied/no-camera falls back to the file picker. Verified capture →
+  "Use photo" → attachment chip.
+
+### Hire @devmanager (routes/chats.py)
+- Free-provision bypass extended from the demo account to ALL super admins
+  (is_super_admin), so the workspace owner (e.g. sam@funasia.net) provisions
+  @devmanager without the Stripe paywall — which was erroring on production.
+- Verified demo/bypass provision returns 200 and links a Dev OS project.
+
+### File + @ai analysis — VERIFIED WORKING (no code change)
+- Reproduced in preview: upload report.txt + "@ai What is the launch date and
+  budget?" → AI answered correctly from the document. Extraction libs
+  (pdfplumber/python-docx/openpyxl/python-pptx) are in requirements.txt. If still
+  failing on production, it's a redeploy/object-storage-retrieval matter.

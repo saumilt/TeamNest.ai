@@ -48,7 +48,7 @@ export default function ChatHeader({
 
 	return (
 		<div
-			className="border-b border-hairline px-3 md:px-6 py-2.5 md:py-3 flex items-center justify-between gap-2 sticky top-0 bg-bg/95 backdrop-blur z-10 pt-[calc(env(safe-area-inset-top)+10px)]"
+			className="border-b border-hairline pl-3 md:pl-6 pr-[112px] md:pr-[210px] py-2.5 md:py-3 flex items-center justify-between gap-2 sticky top-0 bg-bg/95 backdrop-blur z-10 pt-[calc(env(safe-area-inset-top)+10px)]"
 			data-testid="chat-header"
 		>
 			<div className="flex items-center gap-3 min-w-0 flex-1">
