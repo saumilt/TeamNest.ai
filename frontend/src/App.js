@@ -28,6 +28,8 @@ import ImportWhatsApp from "@/pages/ImportWhatsApp";
 import ProjectMemoryTimeline from "@/pages/ProjectMemoryTimeline";
 import NotificationsPrefs from "@/pages/NotificationsPrefs";
 import AIEmployees from "@/pages/AIEmployees";
+import AIEmployeeBuilder from "@/pages/ai_builder/AIEmployeeBuilder";
+import EmployeeProfile from "@/pages/ai_builder/EmployeeProfile";
 import Bookkeeper from "@/pages/Bookkeeper";
 import SmsContacts from "@/pages/SmsContacts";
 import DevOsHub from "@/pages/dev_os/DevOsHub";
@@ -165,6 +167,8 @@ export default function App() {
             <Route path="/invites" element={<InviteDashboard />} />
             <Route path="/launch-admin" element={<LaunchAdmin />} />
             <Route path="/employees" element={<AIEmployees />} />
+            <Route path="/ai-builder" element={<AIEmployeeBuilder />} />
+            <Route path="/ai-builder/:id" element={<EmployeeProfile />} />
             <Route path="/bookkeeper" element={<Bookkeeper />} />
             <Route path="/sms" element={<SmsContacts />} />
             <Route path="/dev-os" element={<DevOsHub />} />

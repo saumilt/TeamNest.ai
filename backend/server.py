@@ -25,6 +25,7 @@ from routes import (
     superadmin,
     ai,
     ai_employees,
+    ai_employee_builder,
     ai_threads,
     approvals,
     auth,
@@ -112,6 +113,7 @@ api.include_router(decisions.router)
 api.include_router(notifications.router)
 api.include_router(changelog.router)
 api.include_router(ai_employees.router)
+api.include_router(ai_employee_builder.router)
 api.include_router(bookkeeper.router)
 api.include_router(quickbooks.router)
 api.include_router(plaid.router)
