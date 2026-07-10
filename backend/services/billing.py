@@ -297,6 +297,46 @@ async def plan_monthly_credits(plan: dict) -> int:
     return int(plan["monthly_credits"])
 
 
+async def effective_monthly_credits(sub: dict, plan: dict) -> int:
+    """Per-workspace monthly allowance. A super-admin can override the plan
+    default via `monthly_credits_override` on the workspace billing record."""
+    override = sub.get("monthly_credits_override")
+    if override is not None and int(override) >= 0:
+        return int(override)
+    return await plan_monthly_credits(plan)
+
+
+async def set_monthly_override(workspace_id: str, credits: int | None) -> dict:
+    """Super-admin: set (or clear with None) a workspace's recurring monthly
+    credit allowance, overriding its plan default."""
+    await get_subscription(workspace_id)  # ensure record exists
+    if credits is None:
+        await db.workspace_billing.update_one(
+            {"workspace_id": workspace_id},
+            {"$unset": {"monthly_credits_override": ""}, "$set": {"updated_at": now_iso()}},
+        )
+    else:
+        await db.workspace_billing.update_one(
+            {"workspace_id": workspace_id},
+            {"$set": {"monthly_credits_override": max(0, int(credits)), "updated_at": now_iso()}},
+        )
+    return await get_usage(workspace_id)
+
+
+async def add_extra_credits(workspace_id: str, amount: int) -> dict:
+    """Super-admin: one-time credit top-up added to the current balance
+    (via `credits_purchased_extra`). Positive adds, negative deducts (floored
+    so the field never goes below 0)."""
+    sub = await get_subscription(workspace_id)
+    extra = int(sub.get("credits_purchased_extra") or 0)
+    new_extra = max(0, extra + int(amount))
+    await db.workspace_billing.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {"credits_purchased_extra": new_extra, "updated_at": now_iso()}},
+    )
+    return await get_usage(workspace_id)
+
+
 async def ensure_credit_floor(workspace_id: str, floor: int) -> dict:
     """Bump `credits_purchased_extra` so total credits (plan + extra − used) is
     at least `floor`. Idempotent and one-directional: never decrements a
@@ -311,7 +351,7 @@ async def ensure_credit_floor(workspace_id: str, floor: int) -> dict:
     plan = PLANS.get(sub["plan_id"]) or PLANS[DEFAULT_PLAN_ID]
     per_seat = bool(plan.get("per_seat"))
     seats = await _active_seat_count(workspace_id) if per_seat else 1
-    base = await plan_monthly_credits(plan) * (seats if per_seat else 1)
+    base = await effective_monthly_credits(sub, plan) * (seats if per_seat else 1)
     extra = int(sub.get("credits_purchased_extra") or 0)
     used = int(sub.get("credits_used_this_period") or 0)
     remaining = max(0, base + extra - used)
@@ -349,7 +389,7 @@ async def get_usage(workspace_id: str) -> dict:
     plan = PLANS.get(sub["plan_id"]) or PLANS[DEFAULT_PLAN_ID]
     per_seat = bool(plan.get("per_seat"))
     seats = await _active_seat_count(workspace_id) if per_seat else 1
-    monthly = await plan_monthly_credits(plan)
+    monthly = await effective_monthly_credits(sub, plan)
     base_credits = monthly * (seats if per_seat else 1)
     total_credits = base_credits + int(sub.get("credits_purchased_extra") or 0)
     used = int(sub.get("credits_used_this_period") or 0)

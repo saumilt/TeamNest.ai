@@ -3,7 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { ShieldCheck, Coins, Loader2, Save, ToggleRight } from "lucide-react";
+import { ShieldCheck, Coins, Loader2, Save, ToggleRight, SlidersHorizontal, Building2, Users2, Ticket } from "lucide-react";
+import WorkspacesTab from "./superadmin/WorkspacesTab";
+import UsersTab from "./superadmin/UsersTab";
+import InvitesTab from "./superadmin/InvitesTab";
+
+const TABS = [
+  { id: "settings", label: "Settings", icon: SlidersHorizontal },
+  { id: "workspaces", label: "Workspaces", icon: Building2 },
+  { id: "users", label: "Users", icon: Users2 },
+  { id: "invites", label: "Invites", icon: Ticket },
+];
 
 const FIELDS = [
   { key: "free_monthly_credits", label: "Free plan", hint: "AI credits granted each month to every free workspace (also caps the free balance)." },
@@ -67,6 +77,7 @@ function Toggle({ checked, onChange, testId }) {
 export default function SuperAdmin() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const [tab, setTab] = useState("settings");
   const [values, setValues] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -116,18 +127,44 @@ export default function SuperAdmin() {
 
   return (
     <div className="min-h-screen bg-bg text-ink px-6 py-10 md:px-10">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-ai-tint flex items-center justify-center">
             <ShieldCheck className="w-5 h-5 text-ai" />
           </div>
           <div>
             <h1 className="text-2xl font-extrabold">Super Admin</h1>
-            <p className="text-sm text-ink-dim">App-level settings · applies to all workspaces</p>
+            <p className="text-sm text-ink-dim">Platform controls · applies to all workspaces</p>
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-surface-2 p-6">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-2 border border-white/10 w-fit mb-6">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                data-testid={`sa-tab-${t.id}`}
+                className={`inline-flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold transition-colors ${
+                  active ? "bg-ai text-black" : "text-ink-dim hover:text-ink"
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {tab === "workspaces" && <WorkspacesTab />}
+        {tab === "users" && <UsersTab />}
+        {tab === "invites" && <InvitesTab />}
+
+        {tab === "settings" && (
+        <>
+        <div className="rounded-2xl border border-white/10 bg-surface-2 p-6">
           <div className="flex items-center gap-2 mb-5">
             <Coins className="w-4 h-4 text-ai" />
             <h2 className="text-sm font-bold tracking-wide uppercase text-ink-dim">
@@ -195,6 +232,8 @@ export default function SuperAdmin() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save changes
         </button>
+        </>
+        )}
       </div>
     </div>
   );

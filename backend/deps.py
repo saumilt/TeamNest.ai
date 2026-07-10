@@ -130,7 +130,11 @@ async def get_user(user_id: str) -> dict:
 
 
 async def require_user(user_id: str = Depends(get_current_user_id)) -> dict:
-    return await get_user(user_id)
+    user = await get_user(user_id)
+    # Super-admin deactivation: a suspended account cannot use the app.
+    if (user.get("status") or "").lower() == "suspended":
+        raise HTTPException(403, "Your account has been suspended. Contact support.")
+    return user
 
 
 async def require_super_admin(current: dict = Depends(require_user)) -> dict:

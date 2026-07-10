@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 92 — Super Admin management (workspaces, users, invites, guardrails, regression). Backend: 12 passed + 1 xfailed (documented bug) via pytest. Web UI end-to-end verified via Playwright: all 4 tabs render (sa-tab-settings/workspaces/users/invites), Add-user modal creates a user (must_change_password=true, can login), toggle super-admin adds SUPER badge, reset password modal works, suspend adds SUSPENDED badge, delete removes the row, credits editor opens with sa-ws-monthly-{id}/sa-ws-topup-{id}, plan dropdown renders 100 workspace rows with sa-ws-plan-{id}. Invites tab generates codes and lists recent invites with sa-invite-copy-{code}. All guardrails (self-suspend / self-revoke-super / self-delete) return 400. One-time top-up regression works on non-free plans (750=500+250 style). BUG FOUND: workspace suspension does not cascade to workspace_members.status, so suspended workspace owners still get 200 on /api/auth/me.",
+  "platforms_tested": ["web"],
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/superadmin/workspaces/{ws_id} with {suspended: true}", "issue": "Suspension updates workspaces.status and users.status but does NOT update workspace_members.status. In get_user(), the workspace_members overlay sets user.status back to 'active' (line ~127 of deps.py), so suspended workspace owners still pass require_user and get 200 on /api/auth/me. The point of workspace suspension (blocking members) is defeated. Fix: mirror status onto workspace_members like the /users PATCH does.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/superadmin/workspaces/{ws_id}/credits", "issue": "For free-plan workspaces, credits_remaining is capped to the plan's monthly allowance (billing.py:399 `cap = monthly if plan.id == 'free'`). One-time top-up therefore has NO observable effect on credits_remaining until the plan is switched to pro/team (or monthly is raised via override). credits_total also shows the capped value, so admins get no UI signal that the top-up was applied. Consider surfacing 'extra_credits' separately or exempting extra credits from the free-plan cap."}
+    ]
+  },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "/superadmin Workspaces tab", "issues": ["Plan <select> uses browser's native dropdown instead of the shadcn Select component used elsewhere in the app — inconsistent styling. Low priority."]},
+        {"screen": "/superadmin Users tab guardrail UI", "issues": ["Row for the current super admin (amit@demo.team) shows suspend/delete/revoke-super buttons enabled, even though the backend refuses (400). Consider disabling these buttons or hiding them for the row where u.id === current user id to avoid a dead-click UX."]}
+      ]
+    },
+    "mobile": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []}
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration92_superadmin.py",
+    "/app/test_reports/pytest/iteration92.xml"
+  ],
+  "action_items": [
+    "HIGH — Cascade workspace suspension to workspace_members.status in PATCH /api/superadmin/workspaces/{ws_id} (mirror the /users PATCH which already updates workspace_members). Otherwise workspace suspension is a no-op for owner/member access.",
+    "MEDIUM — In UI, disable/hide sa-user-suspend-{me}, sa-user-super-{me}, sa-user-delete-{me} buttons where the row is the current super admin — the backend already 400s but UX shows an interactive control.",
+    "LOW — In services/billing.py get_usage(), decide whether extra_credits should be exempt from the free-plan monthly cap. Currently a one-time top-up is silently swallowed for free-plan workspaces."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/superadmin.py:177-180 — workspace suspension updates users.status but not workspace_members.status; combined with deps.py:127 (`user['status'] = m.get('status') or user.get('status')`), the membership overlay reverts the user to active. This is the core RCA of the workspace-suspend bug.",
+    "backend/routes/superadmin.py:283 — After insert, ensure_membership() is called with role but not with an explicit status. This is OK for new users, but confirms the assumption that membership.status defaults to 'active' and will always mask a workspace-level suspension.",
+    "InvitesTab.jsx doesn't validate the count input server-side result — a user could type 999 in the number box; backend clamps to 25 silently. Consider adding max=25 hint in UI toast."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration92_superadmin.py (new — 14 test cases, 12 pass, 1 xfail documenting the workspace-suspend bug, 1 asserts full topup regression)"
+  ],
+  "success_rate": {"backend": "92% (12/13 pass, 1 xfail documenting real bug)", "frontend": "100% of UI actions verified end-to-end"},
+  "test_credentials": "amit@demo.team / Demo@2026 via POST /api/auth/demo-login (HttpOnly cookie session; grants is_super_admin=true).",
+  "seed_data_creation": "Test users created during UI + pytest runs were cleaned up via DELETE /api/superadmin/users/{id} in the pytest fixture teardown and a follow-up cleanup script. amit@demo.team and sam@funasia.net were preserved. Test invites (2 codes) created during UI test remain in DB — inviter is amit@demo.team so they surface in /superadmin Invites but do not affect any user flow.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression file /app/backend/tests/test_iteration92_superadmin.py exercises all 3 tabs + guardrails + billing regression. Requires REACT_APP_BACKEND_URL env var. Cleanup fixture deletes all TEST_-prefixed users/workspaces. XFAIL test test_suspend_workspace_blocks_owner will start PASSING once the workspace-suspend bug is fixed — flip it to a normal test then. UI selectors follow: sa-tab-*, sa-ws-{uuid}, sa-ws-plan-{uuid}, sa-ws-manage-{uuid}, sa-ws-monthly-{uuid}, sa-ws-monthly-save-{uuid}, sa-ws-topup-{uuid}, sa-ws-topup-add-{uuid}, sa-ws-suspend-{uuid}, sa-ws-delete-{uuid}, sa-user-{uuid}, sa-user-super-{uuid}, sa-user-reset-{uuid}, sa-user-suspend-{uuid}, sa-user-delete-{uuid}, sa-add-name/email/password/submit, sa-reset-input/submit, sa-invite-email/count/level/sendemail/generate, sa-invite-copy-{code}.",
+  "rca of the issue": "Workspace-suspend no-op RCA: PATCH /api/superadmin/workspaces/{id} (backend/routes/superadmin.py:169-180) sets workspaces.status='suspended' and users.status='suspended' but omits workspace_members.status. In deps.get_user() (line 122-128), for any user whose active workspace has a workspace_members row, `user['status']` is unconditionally overlaid from `m.get('status')` — the membership row still says 'active', so the raw users.status='suspended' is masked. require_user() (line 135) then sees 'active' and allows the request. Reproduction: 1) POST /api/superadmin/users to create a fresh user (returns uid + ws_id). 2) Login as that user in a separate session — /api/auth/me returns 200. 3) As super admin, PATCH /api/superadmin/workspaces/{ws_id} {suspended:true}. 4) In the user session, GET /api/auth/me — expected 403, actual 200. Fix: add `await db.workspace_members.update_many({'workspace_id': ws_id, 'status': {'$ne': 'removed'}}, {'$set': {'status': new_status}})` alongside the existing users.update_many call."
+}
