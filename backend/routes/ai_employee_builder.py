@@ -11,6 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from deps import db, new_id, now_iso, require_user
+from services.ai_employee_style import (
+    connector_samples, generate_style_profile, list_connectors,
+)
 from services.ai_employee_templates import get_template, list_templates
 
 router = APIRouter()
@@ -209,7 +212,8 @@ async def delete_employee(eid: str, current=Depends(require_user)):
     r = await db.ai_employees.delete_one({"id": eid, "workspace_id": current["workspace_id"]})
     if r.deleted_count == 0:
         raise HTTPException(404, "AI employee not found")
-    for coll in ("ai_employee_training_documents", "ai_employee_examples"):
+    for coll in ("ai_employee_training_documents", "ai_employee_examples",
+                 "ai_employee_style_sources", "ai_employee_style_profiles"):
         await db[coll].delete_many({"employee_id": eid})
     return {"ok": True}
 
@@ -306,3 +310,144 @@ async def dashboard(current=Depends(require_user)):
         "marketplace": sum(1 for r in rows if r.get("marketplace_status") in ("Published", "Published to Marketplace")),
         "by_status": {s: count(s) for s in VALID_STATUSES if count(s)},
     }
+
+
+# ══ Phase 2 · Style training ═════════════════════════════════════════════
+async def _require_emp(eid: str, ws: str) -> dict:
+    emp = await db.ai_employees.find_one({"id": eid, "workspace_id": ws}, {"_id": 0})
+    if not emp:
+        raise HTTPException(404, "AI employee not found")
+    return emp
+
+
+@router.get("/ai-builder/style-connectors")
+async def style_connectors(current=Depends(require_user)):
+    """Available (MOCKED) style-source connectors — sample data only, no OAuth."""
+    return {"connectors": list_connectors()}
+
+
+class ConnectSource(BaseModel):
+    source: str                          # gmail | slack | whatsapp
+    label: Optional[str] = None
+
+
+@router.post("/ai-builder/employees/{eid}/style-sources")
+async def connect_style_source(eid: str, payload: ConnectSource, current=Depends(require_user)):
+    """Connect a MOCKED style source and pull sample writing snippets from it."""
+    await _require_emp(eid, current["workspace_id"])
+    samples = connector_samples(payload.source)
+    if not samples:
+        raise HTTPException(400, "Unknown style source")
+    row = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "source": payload.source, "label": payload.label or payload.source.title(),
+        "is_mock": True, "samples": samples, "created_at": now_iso(),
+    }
+    # Replace any existing connection for the same source.
+    await db.ai_employee_style_sources.delete_many({"employee_id": eid, "source": payload.source})
+    await db.ai_employee_style_sources.insert_one(row.copy())
+    return _public_emp(row)
+
+
+class AddSampleText(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    label: Optional[str] = "Pasted sample"
+
+
+@router.post("/ai-builder/employees/{eid}/style-sources/manual")
+async def add_manual_sample(eid: str, payload: AddSampleText, current=Depends(require_user)):
+    """Paste your own writing sample as a style source."""
+    await _require_emp(eid, current["workspace_id"])
+    row = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "source": "manual", "label": payload.label or "Pasted sample",
+        "is_mock": False, "samples": [payload.text.strip()], "created_at": now_iso(),
+    }
+    await db.ai_employee_style_sources.insert_one(row.copy())
+    return _public_emp(row)
+
+
+@router.get("/ai-builder/employees/{eid}/style-sources")
+async def list_style_sources(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    rows = await db.ai_employee_style_sources.find(
+        {"employee_id": eid}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"sources": rows}
+
+
+@router.delete("/ai-builder/employees/{eid}/style-sources/{sid}")
+async def delete_style_source(eid: str, sid: str, current=Depends(require_user)):
+    r = await db.ai_employee_style_sources.delete_one(
+        {"id": sid, "employee_id": eid, "workspace_id": current["workspace_id"]}
+    )
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Style source not found")
+    return {"ok": True}
+
+
+@router.post("/ai-builder/employees/{eid}/style-profile/generate")
+async def gen_style_profile(eid: str, current=Depends(require_user)):
+    """Analyse connected sources + good examples via Claude Fable 5 → draft profile."""
+    emp = await _require_emp(eid, current["workspace_id"])
+    samples: List[dict] = []
+    async for src in db.ai_employee_style_sources.find({"employee_id": eid}, {"_id": 0}):
+        for txt in src.get("samples", []):
+            samples.append({"source": src.get("label") or src.get("source"), "text": txt})
+    # Good examples double as style samples.
+    good = await db.ai_employee_examples.find(
+        {"employee_id": eid, "is_good": True}, {"_id": 0}
+    ).to_list(50)
+    for ex in good:
+        samples.append({"source": f"Good example: {ex.get('title')}", "text": ex.get("content", "")})
+    if not samples:
+        raise HTTPException(400, "Connect a style source or add good examples first")
+    try:
+        profile = await generate_style_profile(emp, samples)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    now = now_iso()
+    doc = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "status": "draft", "profile": profile, "sample_count": len(samples),
+        "created_at": now, "updated_at": now,
+    }
+    await db.ai_employee_style_profiles.delete_many({"employee_id": eid, "status": "draft"})
+    await db.ai_employee_style_profiles.insert_one(doc.copy())
+    return _public_emp(doc)
+
+
+class SaveStyleProfile(BaseModel):
+    profile: dict
+
+
+@router.post("/ai-builder/employees/{eid}/style-profile")
+async def save_style_profile(eid: str, payload: SaveStyleProfile, current=Depends(require_user)):
+    """Persist an (optionally edited) style profile as the saved voice."""
+    await _require_emp(eid, current["workspace_id"])
+    now = now_iso()
+    await db.ai_employee_style_profiles.delete_many({"employee_id": eid})
+    doc = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "status": "saved", "profile": payload.profile, "created_at": now, "updated_at": now,
+    }
+    await db.ai_employee_style_profiles.insert_one(doc.copy())
+    return _public_emp(doc)
+
+
+@router.get("/ai-builder/employees/{eid}/style-profile")
+async def get_style_profile(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    saved = await db.ai_employee_style_profiles.find_one(
+        {"employee_id": eid, "status": "saved"}, {"_id": 0}
+    )
+    draft = await db.ai_employee_style_profiles.find_one(
+        {"employee_id": eid, "status": "draft"}, {"_id": 0}
+    )
+    return {"saved": saved, "draft": draft}
+
+
+@router.delete("/ai-builder/employees/{eid}/style-profile")
+async def delete_style_profile(eid: str, current=Depends(require_user)):
+    await db.ai_employee_style_profiles.delete_many({"employee_id": eid})
+    return {"ok": True}
