@@ -105,6 +105,21 @@ export default function YouScreen() {
         />
       </View>
 
+      {/* AI Employees */}
+      <View style={[styles.card, { marginTop: spacing.md }]}>
+        <TouchableOpacity testID="you-ai-builder" style={styles.linkRow} onPress={() => router.push("/builder")}>
+          <Ionicons name="construct-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>AI Employee Builder</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity testID="you-marketplace" style={styles.linkRow} onPress={() => router.push("/marketplace")}>
+          <Ionicons name="storefront-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>AI Employee Marketplace</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       {/* Legal & support */}
       <View style={[styles.card, { marginTop: spacing.md }]}>
         {LEGAL_LINKS.map((l, i) => (
