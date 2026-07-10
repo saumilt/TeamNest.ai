@@ -323,7 +323,7 @@ function StyleTab({ employee, onChanged }) {
     } catch { toast.error("Failed to load style data"); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, [employee.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [employee.id]);
 
   const connect = async (source) => {
     setBusy(`c-${source}`);
@@ -354,7 +354,8 @@ function StyleTab({ employee, onChanged }) {
       const { data } = await api.post(`/ai-builder/employees/${employee.id}/style-profile/generate`);
       setDraft(data);
       setEditing(data.profile);
-      toast.success("Style profile generated with Claude Fable 5");
+      const byFable = data.profile?.generated_by === "claude-fable-5";
+      toast.success(byFable ? "Style profile generated with Claude Fable 5" : "Style profile generated");
     } catch (e) { toast.error(e?.response?.data?.detail || "Generation failed"); }
     setBusy("");
   };

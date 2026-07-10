@@ -13,6 +13,18 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 94 (Jul 2026) — AI Employee Builder Phase 2: Style Training Center
+- **Style sources (MOCKED connectors)**: Gmail/Slack/WhatsApp demo writing samples (no OAuth — sample data only) + paste-your-own manual samples. Endpoints: `GET /api/ai-builder/style-connectors`, `POST/GET/DELETE /api/ai-builder/employees/{eid}/style-sources`, `POST .../style-sources/manual`. Reconnecting a source replaces the prior row (idempotent per source).
+- **Style profile generation via Claude Fable 5** (`services/ai_employee_style.py`): analyses connected samples + good examples → structured JSON profile (tone, formality, avg_sentence_length, vocabulary, greeting, sign_off, emoji_usage, signature_phrases[], avoid_phrases[], summary, generated_by). Uses `anthropic/claude-fable-5` with automatic fallback to `claude-sonnet-4-6`, and a deterministic fallback profile if both fail. `POST .../style-profile/generate` (draft), `POST .../style-profile` (save), `GET`/`DELETE`.
+- **Training completeness**: "Style profile added" flips true only after a profile is SAVED (draft doesn't count). Employee delete now cascades `ai_employee_style_sources` + `ai_employee_style_profiles`.
+- **Web UI** (`EmployeeProfile.jsx`): new "Style" tab (connect sources, paste samples, generate → editable profile card with phrase chips, save). Training tab gained file upload (`/uploads` → document with file_id). Toast reflects whether Fable 5 or the fallback produced the profile.
+- New collections: `ai_employee_style_sources`, `ai_employee_style_profiles`.
+- Tested: 19/19 backend pytest (`tests/test_iteration94_style_training.py`) + web UI verified via screenshot (Gmail connect → Fable 5 generation). Report: `/app/test_reports/iteration_94.json`. No blockers.
+
+### Iteration 93 (Jul 2026) — AI Employee Builder Phase 1 (verified)
+- Builder dashboard + 16-template gallery + create modal (blank/template/job-description) + employee profile editor (Profile/Training/Examples) with live training-completeness panel. Backend `routes/ai_employee_builder.py` + `services/ai_employee_templates.py`. Verified 12/12 backend pytest + full web UI flow (`tests/test_iteration93_ai_employee_builder.py`).
+
+## Prior Features
 ### Iteration 87 (Jul 2026) — Invite-only viral launch system + access-gated billing
 - **Launch Access Mode** (launch_settings, default invite_only; waitlist/approved_only/open) + 7 admin toggles. `GET /api/launch/config` drives all UI gating (hooks/useLaunchConfig.js).
 - **Signup gated**: /auth/signup → 403 invite_required unless open mode. New accounts only via `POST /api/launch/code/redeem` (creates user+workspace, grants access level, badges, N personal invites, sets session).
