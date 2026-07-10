@@ -581,6 +581,7 @@ async def delete_escalation(eid: str, rule_id: str, current=Depends(require_user
 # ══ Phase 3 · Sandbox testing ════════════════════════════════════════════
 class SandboxMessage(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    session_id: Optional[str] = None
 
 
 @router.post("/ai-builder/employees/{eid}/sandbox")
@@ -594,12 +595,20 @@ async def sandbox_reply(eid: str, payload: SandboxMessage, current=Depends(requi
     esc = await db.ai_employee_escalation_rules.find({"employee_id": eid}, {"_id": 0}).to_list(50)
     perm = await _permission_level(eid)
 
+    # Multi-turn memory: reuse the session's prior turns as history.
+    session_id = payload.session_id or new_id()
+    prior = await db.ai_employee_test_runs.find(
+        {"employee_id": eid, "session_id": session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+    history = [{"user": r["user_message"], "ai": r["ai_response"]} for r in prior]
+
     system = build_system_prompt(emp, style, docs, examples, perm, esc)
-    result = await generate_reply(system, payload.message)
+    result = await generate_reply(system, payload.message, history=history)
 
     now = now_iso()
     run = {
         "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "session_id": session_id,
         "user_message": payload.message, "ai_response": result["reply"],
         "model": result["model"], "escalated": result["escalated"],
         "rating": None, "correction": None, "created_at": now,
@@ -641,10 +650,13 @@ async def rate_run(eid: str, run_id: str, payload: RateRun, current=Depends(requ
 
 
 @router.get("/ai-builder/employees/{eid}/test-runs")
-async def list_test_runs(eid: str, current=Depends(require_user)):
+async def list_test_runs(eid: str, session_id: Optional[str] = None, current=Depends(require_user)):
     await _require_emp(eid, current["workspace_id"])
+    query = {"employee_id": eid}
+    if session_id:
+        query["session_id"] = session_id
     rows = await db.ai_employee_test_runs.find(
-        {"employee_id": eid}, {"_id": 0}).sort("created_at", 1).to_list(200)
+        query, {"_id": 0}).sort("created_at", 1).to_list(200)
     return {"runs": rows}
 
 

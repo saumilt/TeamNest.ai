@@ -106,8 +106,23 @@ def build_system_prompt(
     return "\n".join(parts)
 
 
-async def generate_reply(system_prompt: str, user_message: str) -> Dict:
-    """Returns {reply, model, escalated}."""
+async def generate_reply(system_prompt: str, user_message: str,
+                         history: Optional[List[Dict]] = None) -> Dict:
+    """Returns {reply, model, escalated}. `history` is a list of prior turns
+    [{"user": str, "ai": str}] used to give the sandbox multi-turn memory."""
+    if history:
+        transcript = "\n".join(
+            f"User: {h.get('user', '')}\nYou: {h.get('ai', '')}" for h in history[-10:]
+        )
+        prompt = (
+            "Continue this ongoing conversation, staying consistent with what you "
+            "already said.\n\n--- Conversation so far ---\n"
+            f"{transcript}\n\n--- Latest message ---\nUser: {user_message}\n\n"
+            "Reply to the latest message only (do not repeat prior answers)."
+        )
+    else:
+        prompt = user_message
+
     for provider, model in (PRIMARY, FALLBACK):
         try:
             chat = LlmChat(
@@ -115,7 +130,7 @@ async def generate_reply(system_prompt: str, user_message: str) -> Dict:
                 session_id=f"sandbox-{secrets.randbelow(1_000_000) + 1}",
                 system_message=system_prompt,
             ).with_model(provider, model)
-            raw = str(await chat.send_message(UserMessage(text=user_message)))
+            raw = str(await chat.send_message(UserMessage(text=prompt)))
             return {
                 "reply": raw.strip(),
                 "model": model,

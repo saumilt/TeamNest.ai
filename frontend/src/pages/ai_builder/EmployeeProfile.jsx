@@ -489,11 +489,17 @@ function SandboxTab({ employee, onChanged }) {
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionId, setSessionId] = useState(null);
 
   const load = async () => {
     try {
+      // Load the most recent session so the conversation resumes.
       const { data } = await api.get(`/ai-builder/employees/${employee.id}/test-runs`);
-      setRuns(data.runs);
+      const all = data.runs;
+      const latest = all.length ? all[all.length - 1].session_id : null;
+      const sessionRuns = latest ? all.filter((r) => r.session_id === latest) : [];
+      setSessionId(latest);
+      setRuns(sessionRuns);
     } catch { /* noop */ }
     setLoading(false);
   };
@@ -505,7 +511,9 @@ function SandboxTab({ employee, onChanged }) {
     const text = msg;
     setMsg("");
     try {
-      const { data } = await api.post(`/ai-builder/employees/${employee.id}/sandbox`, { message: text });
+      const { data } = await api.post(`/ai-builder/employees/${employee.id}/sandbox`,
+        { message: text, session_id: sessionId || undefined });
+      if (!sessionId) setSessionId(data.session_id);
       setRuns((p) => [...p, data]);
       onChanged();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); setMsg(text); }
@@ -526,8 +534,9 @@ function SandboxTab({ employee, onChanged }) {
     } catch { toast.error("Failed"); }
   };
 
-  const clear = async () => {
-    try { await api.delete(`/ai-builder/employees/${employee.id}/test-runs`); setRuns([]); onChanged(); }
+  const newConversation = () => { setSessionId(null); setRuns([]); };
+  const clearAll = async () => {
+    try { await api.delete(`/ai-builder/employees/${employee.id}/test-runs`); setRuns([]); setSessionId(null); onChanged(); }
     catch { toast.error("Failed"); }
   };
 
@@ -536,11 +545,10 @@ function SandboxTab({ employee, onChanged }) {
       <div className="flex items-center gap-2">
         <FlaskConical className="w-4 h-4 text-ai" />
         <div className="text-sm font-bold flex-1">Sandbox — test {employee.name}</div>
-        {runs.length > 0 && (
-          <button type="button" onClick={clear} data-testid="ep-sandbox-clear" className="text-xs text-ink-dim hover:text-rose-400">Clear</button>
-        )}
+        <button type="button" onClick={newConversation} data-testid="ep-sandbox-new" className="text-xs text-ink-dim hover:text-ai">New conversation</button>
+        <button type="button" onClick={clearAll} data-testid="ep-sandbox-clear" className="text-xs text-ink-dim hover:text-rose-400">Clear all</button>
       </div>
-      <p className="text-xs text-ink-dim">Replies use the profile, style, knowledge, permissions and escalation rules you configured. Rate them to teach the employee.</p>
+      <p className="text-xs text-ink-dim">Replies use the profile, style, knowledge, permissions and escalation rules you configured — and remember earlier turns in this conversation. Rate them to teach the employee.</p>
 
       <div className="rounded-xl border border-white/10 bg-surface-2 p-3 space-y-3 min-h-[240px]" data-testid="ep-sandbox-thread">
         {loading ? (

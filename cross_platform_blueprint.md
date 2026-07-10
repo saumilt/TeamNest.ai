@@ -1,90 +1,95 @@
-# Cross-Platform Port Blueprint: TeamNest.ai
+# Cross-Platform Port Blueprint: AI Employee Builder
 
 ## 1. Detection
-- **Source Platform**: Web (`/app/frontend/src/`). A mature React 19 SPA using Shadcn, Tailwind, and React Router.
-- **Target Platform**: Mobile (`/app/mobile/`). An empty Expo SDK scaffold using `expo-router`.
-- **Goal**: Add a native iOS/Android client via Expo that connects to the existing shared backend, porting the web functionality into mobile-native patterns.
+- **Source Platform**: Web (`/app/frontend/`). Mature React 19 SPA. Contains the recently completed "AI Employee Builder" (Phase 1-4) under `src/pages/ai_builder/`.
+- **Target Platform**: Mobile (`/app/mobile/`). Expo SDK scaffold using `expo-router`. Currently has a basic 4-tab shell (`Chats`, `Research`, `Tasks`, `You`), but entirely lacks the AI Employee Builder and Marketplace functionality.
+- **Assumption**: The cross-platform task is to port the comprehensive **AI Employee Builder** ecosystem (Iterations 93-95) from Web to Mobile.
 
-## 2. Existing App Map
-**Screens / Routes (Web)**
-- **Auth & Launch**: `/login`, `/signup`, `/waitlist`, `/invite` (Invite-only viral launch system).
-- **App Shell (Tabs)**: `Chats`, `Research` (AI), `Tasks`, `Calls`, `You` (Profile/Billing/Admin).
-- **Core Detail Views**: 
-  - `/chats/:chatId`: Real-time chat with AI agents (@devmanager) and WebSockets.
-  - `/call/:callId`: LiveKit WebRTC video/audio call room.
-- **Dev OS**: `/dev-os/projects/:projectId/studio` (IDE, code viewer, UI builder, build console).
+## 2. Existing App Map (Web)
+**Screens / Routes**
+- **AI Employee Builder** (`/ai-builder`): Builder dashboard, template gallery (16 templates), and "Create" modal (blank/template/job description).
+- **Employee Profile** (`/ai-builder/:id`): Dense configuration hub with 7 tabs:
+  - *Profile*: Basic info, role, avatar.
+  - *Training*: File uploads (knowledge docs).
+  - *Examples*: Few-shot Q&A pairs.
+  - *Style*: Faux connector integrations (Gmail/Slack/WhatsApp) + text samples -> Claude Fable 5 style profile generation.
+  - *Sandbox*: Test chat with the employee (includes rate/correction thumbs up/down).
+  - *Permissions*: Autonomy level, tool access, escalation rules.
+  - *Deploy*: Assign a `@handle` or deploy into a specific chat, plus "Publish to Marketplace".
+- **Marketplace** (`/ai-builder/marketplace`): Browse (12 categories), My Listings, Installed. Includes a Listing Detail Modal with an "Install" button.
 
-**Components & State**
-- Global `AuthContext` managing user, JWT tokens, and workspace state.
-- Shadcn/Radix UI components (dark theme, "Swiss Brutalism").
-- WebSocket client for real-time messaging.
-
-**Primary User Flows**
-1. **Viral Onboarding**: User enters invite code -> registers -> joins workspace.
-2. **Team & AI Chat**: Users message each other or @mention AIs (`@ai`, `@devmanager`) in real-time.
-3. **Task Management**: AI suggests tasks, users manage kanban tasks.
-4. **Dev OS App Generation**: User requests an app -> `@devmanager` writes code -> Preview renders in an iframe.
-5. **Real-time Calls**: Video/Voice calls via LiveKit with live AI transcription.
+**Components & User Flows**
+- *Completeness Panel*: Live progress bar evaluating if the employee has enough training data.
+- *Sandbox Testing Flow*: `POST` message -> hit escalation rules -> rate good/bad.
+- *Marketplace Flow*: Creator "Publishes" snapshot -> User "Installs" clone into workspace -> records license.
 
 ## 3. Shared Backend API Surface
-The mobile app must reuse these existing FastAPI endpoints (Prefix: `REACT_APP_BACKEND_URL` -> `EXPO_PUBLIC_BACKEND_URL`):
+The mobile app must reuse these endpoints (Base: `EXPO_PUBLIC_BACKEND_URL`).
 
-**Auth & Launch**
-- `GET /api/launch/config` - Fetches gating rules.
-- `POST /api/launch/code/redeem` - {code, email, password, name} -> Redeems code & registers.
-- `POST /api/auth/login` - {email, password} -> Returns JWT.
-- `GET /api/auth/me` - Returns active user and workspaces.
+**Builder & Profile Core**
+- `GET /api/ai-builder/dashboard` - Dashboard stats.
+- `GET /api/ai-builder/templates` - Catalog of 16 starter templates.
+- `POST /api/ai-builder/employees` - Create (Blank, Template, JobDesc).
+- `GET /api/ai-builder/employees/{eid}` - Fetch full employee state.
+- `DELETE /api/ai-builder/employees/{eid}` - Cascade delete.
+- `POST /api/ai-builder/employees/{eid}/documents` & `DELETE .../documents/{doc_id}` - Knowledge base.
+- `POST /api/ai-builder/employees/{eid}/examples` & `DELETE .../examples/{ex_id}` - Q&A pairs.
 
-**Chats & Messages**
-- `GET /api/chats` - Lists user's chats.
-- `GET /api/chats/{chat_id}/messages` - Fetches history.
-- `POST /api/chats/{chat_id}/messages` - {text, ...} -> Sends a REST message.
-- `WS /api/ws/{chat_id}?token={jwt}` - Real-time WebSocket connection for live messages/typing.
+**Style Training (Phase 2)**
+- `GET /api/ai-builder/style-connectors`
+- `POST /api/ai-builder/employees/{eid}/style-sources` (and `/manual`)
+- `POST /api/ai-builder/employees/{eid}/style-profile/generate` (Calls Fable 5)
+- `POST /api/ai-builder/employees/{eid}/style-profile` (Save generated profile)
 
-**Tasks & AI**
-- `GET /api/tasks` - Lists tasks.
-- `POST /api/ai/research` - Submits a multi-model AI query.
+**Sandbox & Deploy (Phase 3)**
+- `GET /api/ai-builder/permission-options`
+- `PUT /api/ai-builder/employees/{eid}/permissions`
+- `POST /api/ai-builder/employees/{eid}/tools` & `DELETE .../tools/{tool_id}`
+- `POST /api/ai-builder/employees/{eid}/escalation-rules` & `DELETE .../escalation-rules/{rule_id}`
+- `POST /api/ai-builder/employees/{eid}/sandbox` - Test chat.
+- `POST /api/ai-builder/employees/{eid}/test-runs/{run_id}/rate`
+- `POST /api/ai-builder/employees/{eid}/deploy` & `POST .../undeploy`
 
-**Calls & Dev OS**
-- `GET /api/calls/by-chat/{chat_id}` - Fetches call history.
-- `POST /api/calls/start` - Initiates LiveKit room.
-- `GET /api/dev-projects` - Lists generated software projects.
+**Marketplace (Phase 4)**
+- `POST /api/ai-builder/employees/{eid}/marketplace/publish` & `unpublish`
+- `GET /api/ai-builder/marketplace` (categories, search, installed)
+- `GET /api/ai-builder/marketplace/{id}`
+- `POST /api/ai-builder/marketplace/{id}/install`
 
 ## 4. Data Models & Integrations
-- **MongoDB Models**: `users`, `workspaces`, `chats`, `messages`, `tasks`, `dev_projects`, `calls`.
-- **Integrations to adapt**:
-  - **LiveKit (WebRTC)**: The web uses `@livekit/components-react`. Mobile must use `@livekit/react-native` and requires specific iOS/Android camera/microphone permissions.
-  - **Stripe Connect**: Web uses Stripe Checkout redirection. Mobile may need a `react-native-webview` or native In-App Purchases (IAP) depending on App Store policies for digital goods.
-  - **Emergent LLMs / Object Storage**: Handled server-side, no direct mobile change needed.
+- **MongoDB Collections**: `ai_employees`, `ai_employee_style_sources`, `ai_employee_style_profiles`, `ai_employee_test_runs`, `ai_employee_permissions`, `ai_employee_tool_access`, `ai_employee_escalation_rules`, `ai_employee_deployments`, `ai_employee_marketplace_listings`, `ai_employee_marketplace_licenses`.
+- **Integrations**: 
+  - **Claude Fable 5**: Used server-side for Sandbox replies and Style Profile generation. No mobile changes needed.
+  - **File Storage**: Web uploads files to `/api/uploads` (Emergent Object Storage). Mobile will need to adapt `FormData` uploads.
 
 ## 5. Port Requirements (Target Platform: Mobile / Expo)
-The Expo mobile app will use `expo-router` and React Native primitives (`View`, `Text`, `StyleSheet`, `TouchableOpacity`).
 
-**Navigation Structure (`mobile/app/`)**
-- `(auth)/login.tsx`, `(auth)/signup.tsx`, `(auth)/invite.tsx` -> Native stack for gated entry.
-- `(tabs)/_layout.tsx` -> Bottom tab bar mirroring `MobileTabBar.jsx` (Chats, AI, Tasks, Calls, You).
+**Navigation additions (`mobile/app/`)**
+- Add entry points to the AI Builder and Marketplace. Given the complexity, this might live under a new `(tabs)/builder/` structure, or be linked from the existing `You` tab.
+- `app/builder/index.tsx` (Builder Dashboard & Templates)
+- `app/builder/[id].tsx` (Employee Profile Editor)
+- `app/marketplace/index.tsx` (Marketplace Hub)
 
-**Screen-by-Screen Porting Requirements:**
-1. **Chats List (`(tabs)/chats/index.tsx`)**:
-   - Native `FlatList` of conversations.
-   - Fetch via `GET /api/chats`.
-2. **Chat Room (`(tabs)/chats/[id].tsx`)**:
-   - `KeyboardAvoidingView` + `ScrollView` for message bubbles.
-   - Standard `WebSocket` API connection to `/api/ws/{chat_id}`.
-   - AI mentions (@devmanager) must render correctly natively.
-3. **Tasks (`(tabs)/tasks/index.tsx`)**:
-   - Native list rendering for active tasks.
-4. **Call Room (`(tabs)/calls/[id].tsx`)**:
-   - Must migrate to `livekit-react-native`.
-   - Requires updating `app.json` with `ios.infoPlist` for `NSCameraUsageDescription` and `NSMicrophoneUsageDescription`.
-5. **Dev OS / Live Previews (`(tabs)/chats/dev-preview.tsx`)**:
-   - Instead of a complex Monaco IDE, mobile should use `react-native-webview` to render the published `/p/:slug` or `/dev-projects/:id/preview` endpoints so users can *view* their AI-generated apps natively.
+**Screen-by-Screen Porting**
+1. **Builder Dashboard**:
+   - `ScrollView` containing stat cards and the template catalog `FlatList`.
+   - Native Modals (`react-native-modal` or Expo router modals) for the "Create" wizard.
+2. **Employee Profile Editor**:
+   - **UI Density Adaptation**: The 7-tab Web interface is too dense for a phone screen. Recommend using a `react-native-tab-view` (swipeable top tabs) or converting the tabs into a Stack Navigator where each "tab" is a distinct screen pushed onto the stack (e.g. `app/builder/[id]/style.tsx`).
+   - **Training Tab (File Uploads)**: Swap web `<input type="file">` for `expo-document-picker`.
+   - **Style Tab**: Mock connectors can just be buttons. The generated profile cards will use `ScrollView` and standard `Text`/`View` chips.
+   - **Sandbox Tab**: Must implement a `KeyboardAvoidingView` Chat UI specifically for the Sandbox, complete with the inline Thumbs Up/Down and Correction inputs.
+   - **Completeness Panel**: A sticky bottom `SafeAreaView` or a progress bar in the header.
+3. **Marketplace**:
+   - `FlatList` with horizontal categories (chips) and vertical listing cards.
+   - Install confirmation must use native `Alert.alert`.
 
-**Styling & Platform Notes**:
-- Translate Tailwind `bg-[#0a0a0a]` and Shadcn tokens to React Native styles. Use `SafeAreaView` extensively.
-- No `div` or `span` — strictly `View` and `Text`.
+**Platform Specifics**:
+- Replace Shadcn elements with React Native primitive equivalents (`TouchableOpacity` for buttons, `TextInput` for inputs).
+- `StyleSheet` translation of "Swiss Brutalism" (dark backgrounds, sharp borders, yellow accents).
+- Keyboard handling is critical for Sandbox and Example creation.
 
 ## 6. Open Questions / Risks
-- **Dev OS Scope**: Should the mobile app attempt to port the entire `DevStudio` (File Explorer, Code Editor) or just provide the Chat interface where the AI does the building + a WebView for the result? (Recommendation: WebView for preview, chat for building).
-- **Stripe vs App Store**: The web uses Stripe Checkout for the $199 `@devmanager` hire fee. Apple/Google strict guidelines usually require In-App Purchases for digital services consumed in the app. Will we use WebViews and risk rejection, or build native IAPs?
-- **LiveKit React Native**: Setting up native WebRTC can be tricky with Expo Go. We may need to configure a custom dev client (`expo prebuild`) for testing camera/audio.
+- **Tab vs Stack Navigation for Profile**: The Web's 7-tab editor will likely break mobile UI conventions if forced into a single screen with horizontal scroll tabs. The main agent should confirm if we convert these 7 sections into a list of menus (Stack Navigation) instead.
+- **Expo Document Picker**: File uploads for the Knowledge tab require ensuring `expo-document-picker` works seamlessly and `FormData` is properly constructed for the React Native `fetch`/`axios` environment.
+- **OAuth Mock Connectors**: The Web uses fake mock connectors for Gmail/Slack style imports. Does Mobile need a `WebView` fake OAuth flow, or just an immediate API call?
