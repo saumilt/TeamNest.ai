@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Loader2, Save, FileText, MessageSquareQuote, User2, Trash2,
   Plus, CheckCircle2, Circle, ThumbsUp, ThumbsDown, Wand2, Palette, Upload,
-  Mail, MessageCircle, Send, Sparkles,
+  Mail, MessageCircle, Send, Sparkles, FlaskConical, ShieldCheck, Rocket,
+  AlertTriangle, Wrench, Store,
 } from "lucide-react";
 
 const TONES = [
@@ -46,6 +47,9 @@ export default function EmployeeProfile() {
     { id: "training", label: `Training (${documents.length})`, icon: FileText },
     { id: "examples", label: `Examples (${examples.length})`, icon: MessageSquareQuote },
     { id: "style", label: "Style", icon: Palette },
+    { id: "sandbox", label: "Sandbox", icon: FlaskConical },
+    { id: "permissions", label: "Permissions", icon: ShieldCheck },
+    { id: "deploy", label: "Deploy", icon: Rocket },
   ];
 
   return (
@@ -69,12 +73,12 @@ export default function EmployeeProfile() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6">
           <div>
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-2 border border-white/10 w-fit mb-5">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-2 border border-white/10 mb-5 overflow-x-auto">
               {TABS.map((t) => {
                 const Icon = t.icon; const active = tab === t.id;
                 return (
                   <button key={t.id} type="button" onClick={() => setTab(t.id)} data-testid={`ep-tab-${t.id}`}
-                    className={`inline-flex items-center gap-2 h-9 px-3.5 rounded-lg text-sm font-semibold ${active ? "bg-ai text-black" : "text-ink-dim hover:text-ink"}`}>
+                    className={`inline-flex items-center gap-2 h-9 px-3.5 rounded-lg text-sm font-semibold shrink-0 ${active ? "bg-ai text-black" : "text-ink-dim hover:text-ink"}`}>
                     <Icon className="w-4 h-4" /> {t.label}
                   </button>
                 );
@@ -85,6 +89,9 @@ export default function EmployeeProfile() {
             {tab === "training" && <TrainingTab employee={employee} documents={documents} onChanged={load} />}
             {tab === "examples" && <ExamplesTab employee={employee} examples={examples} onChanged={load} />}
             {tab === "style" && <StyleTab employee={employee} onChanged={load} />}
+            {tab === "sandbox" && <SandboxTab employee={employee} onChanged={load} />}
+            {tab === "permissions" && <PermissionsTab employee={employee} onChanged={load} />}
+            {tab === "deploy" && <DeployTab employee={employee} onChanged={load} />}
           </div>
 
           <CompletenessPanel completeness={completeness} />
@@ -473,6 +480,372 @@ function StyleTab({ employee, onChanged }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function SandboxTab({ employee, onChanged }) {
+  const [runs, setRuns] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get(`/ai-builder/employees/${employee.id}/test-runs`);
+      setRuns(data.runs);
+    } catch { /* noop */ }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [employee.id]);
+
+  const send = async () => {
+    if (!msg.trim()) return;
+    setSending(true);
+    const text = msg;
+    setMsg("");
+    try {
+      const { data } = await api.post(`/ai-builder/employees/${employee.id}/sandbox`, { message: text });
+      setRuns((p) => [...p, data]);
+      onChanged();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); setMsg(text); }
+    setSending(false);
+  };
+
+  const rate = async (run, rating) => {
+    let correction = null;
+    if (rating === "bad") {
+      correction = window.prompt("What should it have said? (optional — leave blank to just flag as bad)") || null;
+    }
+    try {
+      await api.post(`/ai-builder/employees/${employee.id}/test-runs/${run.id}/rate`,
+        { rating, correction, save_as_example: rating === "good" || !!correction });
+      setRuns((p) => p.map((r) => r.id === run.id ? { ...r, rating, correction } : r));
+      toast.success(rating === "good" ? "Saved as a good example" : "Feedback recorded");
+      onChanged();
+    } catch { toast.error("Failed"); }
+  };
+
+  const clear = async () => {
+    try { await api.delete(`/ai-builder/employees/${employee.id}/test-runs`); setRuns([]); onChanged(); }
+    catch { toast.error("Failed"); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <FlaskConical className="w-4 h-4 text-ai" />
+        <div className="text-sm font-bold flex-1">Sandbox — test {employee.name}</div>
+        {runs.length > 0 && (
+          <button type="button" onClick={clear} data-testid="ep-sandbox-clear" className="text-xs text-ink-dim hover:text-rose-400">Clear</button>
+        )}
+      </div>
+      <p className="text-xs text-ink-dim">Replies use the profile, style, knowledge, permissions and escalation rules you configured. Rate them to teach the employee.</p>
+
+      <div className="rounded-xl border border-white/10 bg-surface-2 p-3 space-y-3 min-h-[240px]" data-testid="ep-sandbox-thread">
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-ai" /></div>
+        ) : runs.length === 0 ? (
+          <p className="text-sm text-ink-dim text-center py-8">Send a test message to see how your AI employee responds.</p>
+        ) : runs.map((r) => (
+          <div key={r.id} className="space-y-2" data-testid={`ep-run-${r.id}`}>
+            <div className="flex justify-end">
+              <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-ai/20 text-ink px-3 py-2 text-sm">{r.user_message}</div>
+            </div>
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-bg border border-white/10 px-3 py-2 text-sm whitespace-pre-wrap">
+                {r.escalated && (
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-300 mb-1"><AlertTriangle className="w-3.5 h-3.5" /> Escalated</div>
+                )}
+                {r.ai_response}
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
+                  <button type="button" onClick={() => rate(r, "good")} data-testid={`ep-run-good-${r.id}`}
+                    className={`p-1 rounded ${r.rating === "good" ? "text-emerald-400" : "text-ink-dim hover:text-emerald-400"}`}><ThumbsUp className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => rate(r, "bad")} data-testid={`ep-run-bad-${r.id}`}
+                    className={`p-1 rounded ${r.rating === "bad" ? "text-rose-400" : "text-ink-dim hover:text-rose-400"}`}><ThumbsDown className="w-3.5 h-3.5" /></button>
+                  <span className="text-[10px] text-ink-dim ml-auto">{r.model}</span>
+                </div>
+                {r.correction && <div className="mt-1.5 text-[11px] text-ink-dim">Correction: {r.correction}</div>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <input value={msg} onChange={(e) => setMsg(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !sending) send(); }}
+          placeholder="Ask your AI employee something…" data-testid="ep-sandbox-input" className={inputCls} />
+        <button type="button" onClick={send} disabled={sending || !msg.trim()} data-testid="ep-sandbox-send"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-ai text-black font-bold text-sm disabled:opacity-50 shrink-0">
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PermissionsTab({ employee, onChanged }) {
+  const [levels, setLevels] = useState([]);
+  const [allTools, setAllTools] = useState([]);
+  const [permission, setPermission] = useState(null);
+  const [tools, setTools] = useState([]);
+  const [rules, setRules] = useState([]);
+  const [level, setLevel] = useState("Answer only");
+  const [risk, setRisk] = useState("Low");
+  const [newTool, setNewTool] = useState("");
+  const [rule, setRule] = useState({ trigger: "", action: "", notify_role: "" });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+
+  const load = async () => {
+    try {
+      const [opt, p] = await Promise.all([
+        api.get("/ai-builder/permission-options"),
+        api.get(`/ai-builder/employees/${employee.id}/permissions`),
+      ]);
+      setLevels(opt.data.levels); setAllTools(opt.data.tools);
+      setPermission(p.data.permission); setTools(p.data.tools); setRules(p.data.escalation_rules);
+      if (p.data.permission) { setLevel(p.data.permission.permission_level); setRisk(p.data.permission.risk_level || "Low"); }
+      setNewTool(opt.data.tools[0] || "");
+    } catch { toast.error("Failed to load permissions"); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [employee.id]);
+
+  const savePerm = async () => {
+    setBusy("perm");
+    try {
+      await api.put(`/ai-builder/employees/${employee.id}/permissions`, { permission_level: level, risk_level: risk });
+      toast.success("Permissions saved"); await load(); onChanged();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    setBusy("");
+  };
+  const addTool = async () => {
+    if (!newTool) return;
+    try { await api.post(`/ai-builder/employees/${employee.id}/tools`, { tool: newTool, requires_approval: true }); await load(); onChanged(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  const delTool = async (id) => { try { await api.delete(`/ai-builder/employees/${employee.id}/tools/${id}`); await load(); onChanged(); } catch { toast.error("Failed"); } };
+  const addRule = async () => {
+    if (!rule.trigger.trim() || !rule.action.trim()) return;
+    try { await api.post(`/ai-builder/employees/${employee.id}/escalation-rules`, rule); setRule({ trigger: "", action: "", notify_role: "" }); await load(); onChanged(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  const delRule = async (id) => { try { await api.delete(`/ai-builder/employees/${employee.id}/escalation-rules/${id}`); await load(); onChanged(); } catch { toast.error("Failed"); } };
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-ai" /></div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-white/10 bg-surface-2 p-4 space-y-3">
+        <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-ai" /><div className="text-sm font-bold">Permission level</div></div>
+        <select value={level} onChange={(e) => setLevel(e.target.value)} data-testid="ep-perm-level" className={inputCls}>
+          {levels.map((l) => <option key={l}>{l}</option>)}
+        </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Risk level"><select value={risk} onChange={(e) => setRisk(e.target.value)} data-testid="ep-perm-risk" className={inputCls}>{RISKS.map((r) => <option key={r}>{r}</option>)}</select></Field>
+        </div>
+        <button type="button" onClick={savePerm} disabled={busy === "perm"} data-testid="ep-perm-save"
+          className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-ai text-black font-bold text-xs disabled:opacity-50">
+          {busy === "perm" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save permissions
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-surface-2 p-4 space-y-3">
+        <div className="flex items-center gap-2"><Wrench className="w-4 h-4 text-ai" /><div className="text-sm font-bold">Tool access</div></div>
+        <div className="flex gap-2">
+          <select value={newTool} onChange={(e) => setNewTool(e.target.value)} data-testid="ep-tool-select" className={inputCls}>
+            {allTools.map((t) => <option key={t}>{t}</option>)}
+          </select>
+          <button type="button" onClick={addTool} data-testid="ep-tool-add" className="inline-flex items-center gap-1 h-10 px-4 rounded-full bg-white/10 hover:bg-white/15 text-ink font-semibold text-xs shrink-0"><Plus className="w-4 h-4" /> Add</button>
+        </div>
+        <div className="space-y-1.5">
+          {tools.length === 0 && <p className="text-xs text-ink-dim">No tools enabled yet.</p>}
+          {tools.map((t) => (
+            <div key={t.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-white/10 bg-bg" data-testid={`ep-tool-${t.id}`}>
+              <Wrench className="w-3.5 h-3.5 text-ai shrink-0" />
+              <span className="text-sm flex-1">{t.tool}</span>
+              {t.requires_approval && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">needs approval</span>}
+              <button type="button" onClick={() => delTool(t.id)} data-testid={`ep-tool-del-${t.id}`} className="p-1 text-ink-dim hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-surface-2 p-4 space-y-3">
+        <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-ai" /><div className="text-sm font-bold">Escalation rules</div></div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <input placeholder="When… (trigger)" value={rule.trigger} onChange={(e) => setRule((p) => ({ ...p, trigger: e.target.value }))} data-testid="ep-esc-trigger" className={inputCls} />
+          <input placeholder="Then… (action)" value={rule.action} onChange={(e) => setRule((p) => ({ ...p, action: e.target.value }))} data-testid="ep-esc-action" className={inputCls} />
+          <input placeholder="Notify role (optional)" value={rule.notify_role} onChange={(e) => setRule((p) => ({ ...p, notify_role: e.target.value }))} className={inputCls} />
+        </div>
+        <button type="button" onClick={addRule} disabled={!rule.trigger.trim() || !rule.action.trim()} data-testid="ep-esc-add"
+          className="inline-flex items-center gap-1 h-9 px-4 rounded-full bg-white/10 hover:bg-white/15 text-ink font-semibold text-xs disabled:opacity-50"><Plus className="w-4 h-4" /> Add rule</button>
+        <div className="space-y-1.5">
+          {rules.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-white/10 bg-bg text-sm" data-testid={`ep-esc-${r.id}`}>
+              <span className="flex-1"><span className="text-ink-dim">If</span> {r.trigger} <span className="text-ink-dim">→</span> {r.action}{r.notify_role ? <span className="text-ink-dim"> · notify {r.notify_role}</span> : ""}</span>
+              <button type="button" onClick={() => delRule(r.id)} data-testid={`ep-esc-del-${r.id}`} className="p-1 text-ink-dim hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeployTab({ employee, onChanged }) {
+  const [deployment, setDeployment] = useState(null);
+  const [chats, setChats] = useState([]);
+  const [channel, setChannel] = useState("handle");
+  const [handle, setHandle] = useState("");
+  const [chatId, setChatId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      const [d, c] = await Promise.all([
+        api.get(`/ai-builder/employees/${employee.id}/deployment`),
+        api.get("/chats").catch(() => ({ data: { chats: [] } })),
+      ]);
+      setDeployment(d.data.deployment);
+      const list = c.data.chats || c.data || [];
+      setChats(Array.isArray(list) ? list : []);
+      if (d.data.deployment) { setChannel(d.data.deployment.channel); setHandle(d.data.deployment.handle || ""); setChatId(d.data.deployment.chat_id || ""); }
+      else { setHandle((employee.name || "employee").toLowerCase().replace(/[^a-z0-9]+/g, "")); }
+    } catch { /* noop */ }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [employee.id]);
+
+  const deploy = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/ai-builder/employees/${employee.id}/deploy`, {
+        channel, handle: handle || undefined, chat_id: channel === "chat" ? chatId : undefined,
+      });
+      toast.success("AI employee deployed"); await load(); onChanged();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    setBusy(false);
+  };
+  const undeploy = async () => {
+    setBusy(true);
+    try { await api.post(`/ai-builder/employees/${employee.id}/undeploy`); toast.success("Undeployed"); await load(); onChanged(); }
+    catch { toast.error("Failed"); }
+    setBusy(false);
+  };
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-ai" /></div>;
+
+  return (
+    <div className="space-y-4">
+      {deployment ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5" data-testid="ep-deploy-active">
+          <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm mb-1"><Rocket className="w-4 h-4" /> Deployed & live</div>
+          <p className="text-sm text-ink">Reachable as <span className="font-mono text-emerald-300">@{deployment.handle}</span> via {deployment.channel === "chat" ? "a specific chat" : "@mention"}.</p>
+          <button type="button" onClick={undeploy} disabled={busy} data-testid="ep-undeploy"
+            className="mt-4 inline-flex items-center gap-2 h-9 px-4 rounded-full bg-white/10 hover:bg-rose-500/20 hover:text-rose-300 text-ink font-semibold text-xs disabled:opacity-50">Undeploy</button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/10 bg-surface-2 p-5 space-y-4">
+          <div className="flex items-center gap-2"><Rocket className="w-4 h-4 text-ai" /><div className="text-sm font-bold">Deploy this AI employee</div></div>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: "handle", label: "As an @mention" }, { id: "chat", label: "Into a chat" }].map((c) => (
+              <button key={c.id} type="button" onClick={() => setChannel(c.id)} data-testid={`ep-deploy-channel-${c.id}`}
+                className={`h-11 rounded-xl border text-sm font-semibold ${channel === c.id ? "border-ai bg-ai-tint text-ai" : "border-white/10 text-ink-dim hover:text-ink"}`}>{c.label}</button>
+            ))}
+          </div>
+          <Field label="Handle">
+            <div className="flex items-center gap-1">
+              <span className="text-ink-dim">@</span>
+              <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))} data-testid="ep-deploy-handle" className={inputCls} />
+            </div>
+          </Field>
+          {channel === "chat" && (
+            <Field label="Chat">
+              <select value={chatId} onChange={(e) => setChatId(e.target.value)} data-testid="ep-deploy-chat" className={inputCls}>
+                <option value="">Select a chat…</option>
+                {chats.map((c) => <option key={c.id} value={c.id}>{c.name || c.title || c.id}</option>)}
+              </select>
+            </Field>
+          )}
+          <button type="button" onClick={deploy} disabled={busy || !handle || (channel === "chat" && !chatId)} data-testid="ep-deploy-btn"
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-ai text-black font-bold text-sm disabled:opacity-50">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />} Deploy
+          </button>
+        </div>
+      )}
+
+      <MarketplacePublishCard employee={employee} onChanged={onChanged} />
+    </div>
+  );
+}
+
+function MarketplacePublishCard({ employee, onChanged }) {
+  const [cats, setCats] = useState([]);
+  const [f, setF] = useState({
+    title: employee.name || "", tagline: "", description: employee.description || "",
+    category: "Productivity", price_usd: 0, share_knowledge: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const published = employee.marketplace_status === "Published to Marketplace";
+
+  useEffect(() => {
+    api.get("/ai-builder/marketplace/categories").then(({ data }) => setCats(data.categories)).catch(() => {});
+  }, []);
+  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+
+  const publish = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/ai-builder/employees/${employee.id}/marketplace/publish`, {
+        ...f, price_usd: Number(f.price_usd) || 0,
+      });
+      toast.success(published ? "Listing updated" : "Published to marketplace");
+      onChanged();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    setBusy(false);
+  };
+  const unpublish = async () => {
+    setBusy(true);
+    try { await api.post(`/ai-builder/employees/${employee.id}/marketplace/unpublish`); toast.success("Unpublished"); onChanged(); }
+    catch { toast.error("Failed"); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-surface-2 p-5 space-y-3" data-testid="ep-market-publish">
+      <div className="flex items-center gap-2">
+        <Store className="w-4 h-4 text-ai" />
+        <div className="text-sm font-bold flex-1">Share on Marketplace</div>
+        {published && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">Listed</span>}
+      </div>
+      <p className="text-xs text-ink-dim">Publish a shareable copy so other workspaces can install this AI employee. Private knowledge stays private unless you opt in below.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Listing title"><input value={f.title} onChange={set("title")} data-testid="ep-market-title" className={inputCls} /></Field>
+        <Field label="Category"><select value={f.category} onChange={set("category")} data-testid="ep-market-cat" className={inputCls}>{cats.map((c) => <option key={c}>{c}</option>)}</select></Field>
+      </div>
+      <Field label="Tagline"><input value={f.tagline} onChange={set("tagline")} maxLength={160} data-testid="ep-market-tagline" className={inputCls} /></Field>
+      <Field label="Description"><textarea value={f.description} onChange={set("description")} rows={3} className={inputCls} /></Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+        <Field label="Price (USD, 0 = free)"><input type="number" min="0" value={f.price_usd} onChange={set("price_usd")} data-testid="ep-market-price" className={inputCls} /></Field>
+        <label className="flex items-center gap-2 h-10 text-sm text-ink cursor-pointer">
+          <input type="checkbox" checked={f.share_knowledge} onChange={(e) => setF((p) => ({ ...p, share_knowledge: e.target.checked }))} data-testid="ep-market-share-knowledge" className="w-4 h-4 accent-ai" />
+          Include my training docs & examples
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={publish} disabled={busy || !f.title.trim()} data-testid="ep-market-publish-btn"
+          className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-ai text-black font-bold text-xs disabled:opacity-50">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Store className="w-4 h-4" />} {published ? "Update listing" : "Publish"}
+        </button>
+        {published && (
+          <button type="button" onClick={unpublish} disabled={busy} data-testid="ep-market-unpublish-btn"
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-white/10 hover:bg-rose-500/20 hover:text-rose-300 text-ink font-semibold text-xs disabled:opacity-50">Unpublish</button>
+        )}
+      </div>
     </div>
   );
 }

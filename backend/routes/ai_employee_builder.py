@@ -11,6 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from deps import db, new_id, now_iso, require_user
+from services.ai_employee_runtime import (
+    PERMISSION_LEVELS, build_system_prompt, generate_reply,
+)
 from services.ai_employee_style import (
     connector_samples, generate_style_profile, list_connectors,
 )
@@ -213,8 +216,16 @@ async def delete_employee(eid: str, current=Depends(require_user)):
     if r.deleted_count == 0:
         raise HTTPException(404, "AI employee not found")
     for coll in ("ai_employee_training_documents", "ai_employee_examples",
-                 "ai_employee_style_sources", "ai_employee_style_profiles"):
+                 "ai_employee_style_sources", "ai_employee_style_profiles",
+                 "ai_employee_test_runs", "ai_employee_permissions",
+                 "ai_employee_tool_access", "ai_employee_escalation_rules",
+                 "ai_employee_deployments"):
         await db[coll].delete_many({"employee_id": eid})
+    # Remove any marketplace listing this employee published + licenses for it,
+    # plus any license where this (installed) employee was the target.
+    await db.ai_employee_marketplace_listings.delete_many({"employee_id": eid})
+    await db.ai_employee_marketplace_licenses.delete_many(
+        {"$or": [{"installed_employee_id": eid}]})
     return {"ok": True}
 
 
@@ -450,4 +461,256 @@ async def get_style_profile(eid: str, current=Depends(require_user)):
 @router.delete("/ai-builder/employees/{eid}/style-profile")
 async def delete_style_profile(eid: str, current=Depends(require_user)):
     await db.ai_employee_style_profiles.delete_many({"employee_id": eid})
+    return {"ok": True}
+
+
+
+# ══ Phase 3 · Permissions, tools & escalation ════════════════════════════
+DEFAULT_TOOLS = [
+    "TeamNest chat", "TeamNest tasks", "TeamNest files", "TeamNest calendar",
+    "Gmail (mock)", "Slack (mock)", "Web research (mock)",
+]
+
+
+async def _permission_level(eid: str) -> str:
+    doc = await db.ai_employee_permissions.find_one({"employee_id": eid}, {"_id": 0})
+    return (doc or {}).get("permission_level", "Answer only")
+
+
+@router.get("/ai-builder/permission-options")
+async def permission_options(current=Depends(require_user)):
+    return {"levels": PERMISSION_LEVELS, "tools": DEFAULT_TOOLS}
+
+
+class SetPermissions(BaseModel):
+    permission_level: str
+    risk_level: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.put("/ai-builder/employees/{eid}/permissions")
+async def set_permissions(eid: str, payload: SetPermissions, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    if payload.permission_level not in PERMISSION_LEVELS:
+        raise HTTPException(400, "Invalid permission level")
+    now = now_iso()
+    doc = {
+        "employee_id": eid, "workspace_id": current["workspace_id"],
+        "permission_level": payload.permission_level,
+        "risk_level": payload.risk_level or "Low",
+        "notes": payload.notes or "", "updated_at": now,
+    }
+    existing = await db.ai_employee_permissions.find_one({"employee_id": eid}, {"_id": 1})
+    if existing:
+        await db.ai_employee_permissions.update_one({"employee_id": eid}, {"$set": doc})
+    else:
+        doc["id"] = new_id()
+        doc["created_at"] = now
+        await db.ai_employee_permissions.insert_one(doc.copy())
+    if payload.risk_level:
+        await db.ai_employees.update_one(
+            {"id": eid}, {"$set": {"permissions_risk_level": payload.risk_level, "updated_at": now}})
+    saved = await db.ai_employee_permissions.find_one({"employee_id": eid}, {"_id": 0})
+    return saved
+
+
+@router.get("/ai-builder/employees/{eid}/permissions")
+async def get_permissions(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    perm = await db.ai_employee_permissions.find_one({"employee_id": eid}, {"_id": 0})
+    tools = await db.ai_employee_tool_access.find({"employee_id": eid}, {"_id": 0}).to_list(100)
+    esc = await db.ai_employee_escalation_rules.find({"employee_id": eid}, {"_id": 0}).sort("created_at", 1).to_list(100)
+    return {"permission": perm, "tools": tools, "escalation_rules": esc}
+
+
+class AddTool(BaseModel):
+    tool: str = Field(min_length=1, max_length=100)
+    requires_approval: bool = True
+
+
+@router.post("/ai-builder/employees/{eid}/tools")
+async def add_tool(eid: str, payload: AddTool, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    if await db.ai_employee_tool_access.find_one({"employee_id": eid, "tool": payload.tool}, {"_id": 1}):
+        raise HTTPException(400, "Tool already added")
+    row = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "tool": payload.tool, "requires_approval": payload.requires_approval,
+        "enabled": True, "created_at": now_iso(),
+    }
+    await db.ai_employee_tool_access.insert_one(row.copy())
+    return _public_emp(row)
+
+
+@router.delete("/ai-builder/employees/{eid}/tools/{tool_id}")
+async def delete_tool(eid: str, tool_id: str, current=Depends(require_user)):
+    r = await db.ai_employee_tool_access.delete_one(
+        {"id": tool_id, "employee_id": eid, "workspace_id": current["workspace_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Tool not found")
+    return {"ok": True}
+
+
+class AddEscalation(BaseModel):
+    trigger: str = Field(min_length=1, max_length=200)
+    action: str = Field(min_length=1, max_length=200)
+    notify_role: Optional[str] = None
+
+
+@router.post("/ai-builder/employees/{eid}/escalation-rules")
+async def add_escalation(eid: str, payload: AddEscalation, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    row = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "trigger": payload.trigger.strip(), "action": payload.action.strip(),
+        "notify_role": payload.notify_role or "", "created_at": now_iso(),
+    }
+    await db.ai_employee_escalation_rules.insert_one(row.copy())
+    return _public_emp(row)
+
+
+@router.delete("/ai-builder/employees/{eid}/escalation-rules/{rule_id}")
+async def delete_escalation(eid: str, rule_id: str, current=Depends(require_user)):
+    r = await db.ai_employee_escalation_rules.delete_one(
+        {"id": rule_id, "employee_id": eid, "workspace_id": current["workspace_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Rule not found")
+    return {"ok": True}
+
+
+# ══ Phase 3 · Sandbox testing ════════════════════════════════════════════
+class SandboxMessage(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+
+
+@router.post("/ai-builder/employees/{eid}/sandbox")
+async def sandbox_reply(eid: str, payload: SandboxMessage, current=Depends(require_user)):
+    emp = await _require_emp(eid, current["workspace_id"])
+    style_doc = await db.ai_employee_style_profiles.find_one(
+        {"employee_id": eid, "status": "saved"}, {"_id": 0})
+    style = style_doc.get("profile") if style_doc else None
+    docs = await db.ai_employee_training_documents.find({"employee_id": eid}, {"_id": 0}).to_list(20)
+    examples = await db.ai_employee_examples.find({"employee_id": eid}, {"_id": 0}).to_list(20)
+    esc = await db.ai_employee_escalation_rules.find({"employee_id": eid}, {"_id": 0}).to_list(50)
+    perm = await _permission_level(eid)
+
+    system = build_system_prompt(emp, style, docs, examples, perm, esc)
+    result = await generate_reply(system, payload.message)
+
+    now = now_iso()
+    run = {
+        "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+        "user_message": payload.message, "ai_response": result["reply"],
+        "model": result["model"], "escalated": result["escalated"],
+        "rating": None, "correction": None, "created_at": now,
+    }
+    await db.ai_employee_test_runs.insert_one(run.copy())
+    return _public_emp(run)
+
+
+class RateRun(BaseModel):
+    rating: str                          # good | bad
+    correction: Optional[str] = None
+    save_as_example: bool = False
+
+
+@router.post("/ai-builder/employees/{eid}/test-runs/{run_id}/rate")
+async def rate_run(eid: str, run_id: str, payload: RateRun, current=Depends(require_user)):
+    if payload.rating not in ("good", "bad"):
+        raise HTTPException(400, "Rating must be good or bad")
+    run = await db.ai_employee_test_runs.find_one(
+        {"id": run_id, "employee_id": eid, "workspace_id": current["workspace_id"]}, {"_id": 0})
+    if not run:
+        raise HTTPException(404, "Test run not found")
+    await db.ai_employee_test_runs.update_one(
+        {"id": run_id},
+        {"$set": {"rating": payload.rating, "correction": payload.correction or None}})
+    # Optionally capture as a training example (good = the AI reply; bad = the correction).
+    if payload.save_as_example:
+        is_good = payload.rating == "good"
+        content = run["ai_response"] if is_good else (payload.correction or run["ai_response"])
+        ex = {
+            "id": new_id(), "employee_id": eid, "workspace_id": current["workspace_id"],
+            "title": f"From sandbox: {run['user_message'][:60]}",
+            "example_type": "Sandbox", "is_good": is_good, "content": content,
+            "rationale": payload.correction or ("Rated good in sandbox" if is_good else "Rated bad in sandbox"),
+            "apply_as_rule": False, "private_only": True, "created_at": now_iso(),
+        }
+        await db.ai_employee_examples.insert_one(ex.copy())
+    return {"ok": True}
+
+
+@router.get("/ai-builder/employees/{eid}/test-runs")
+async def list_test_runs(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    rows = await db.ai_employee_test_runs.find(
+        {"employee_id": eid}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    return {"runs": rows}
+
+
+@router.delete("/ai-builder/employees/{eid}/test-runs")
+async def clear_test_runs(eid: str, current=Depends(require_user)):
+    await db.ai_employee_test_runs.delete_many(
+        {"employee_id": eid, "workspace_id": current["workspace_id"]})
+    return {"ok": True}
+
+
+# ══ Phase 3 · Deployment ═════════════════════════════════════════════════
+def _norm_handle(h: str) -> str:
+    return "".join(ch for ch in h.strip().lstrip("@").lower() if ch.isalnum() or ch in ("_", "-"))
+
+
+class Deploy(BaseModel):
+    channel: str = "handle"              # handle | chat
+    handle: Optional[str] = None
+    chat_id: Optional[str] = None
+
+
+@router.post("/ai-builder/employees/{eid}/deploy")
+async def deploy_employee(eid: str, payload: Deploy, current=Depends(require_user)):
+    emp = await _require_emp(eid, current["workspace_id"])
+    ws = current["workspace_id"]
+    handle = _norm_handle(payload.handle or emp.get("name", "employee"))
+    if not handle:
+        raise HTTPException(400, "Invalid handle")
+    # Handle must be unique across the workspace's deployed employees.
+    clash = await db.ai_employee_deployments.find_one(
+        {"workspace_id": ws, "handle": handle, "employee_id": {"$ne": eid}, "status": "active"},
+        {"_id": 1})
+    if clash:
+        raise HTTPException(409, f"Handle @{handle} is already in use")
+    if payload.channel == "chat":
+        if not payload.chat_id:
+            raise HTTPException(400, "chat_id required for chat deployment")
+        if not await db.chats.find_one({"id": payload.chat_id, "workspace_id": ws}, {"_id": 1}):
+            raise HTTPException(404, "Chat not found")
+    now = now_iso()
+    await db.ai_employee_deployments.delete_many({"employee_id": eid})
+    dep = {
+        "id": new_id(), "employee_id": eid, "workspace_id": ws,
+        "channel": payload.channel, "handle": handle, "chat_id": payload.chat_id,
+        "status": "active", "deployed_by": current["id"],
+        "created_at": now, "updated_at": now,
+    }
+    await db.ai_employee_deployments.insert_one(dep.copy())
+    await db.ai_employees.update_one(
+        {"id": eid}, {"$set": {"status": "Deployed", "deployment_handle": handle, "updated_at": now}})
+    return _public_emp(dep)
+
+
+@router.get("/ai-builder/employees/{eid}/deployment")
+async def get_deployment(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    dep = await db.ai_employee_deployments.find_one(
+        {"employee_id": eid, "status": "active"}, {"_id": 0})
+    return {"deployment": dep}
+
+
+@router.post("/ai-builder/employees/{eid}/undeploy")
+async def undeploy_employee(eid: str, current=Depends(require_user)):
+    await _require_emp(eid, current["workspace_id"])
+    await db.ai_employee_deployments.delete_many({"employee_id": eid})
+    await db.ai_employees.update_one(
+        {"id": eid}, {"$set": {"status": "Ready", "updated_at": now_iso()},
+                      "$unset": {"deployment_handle": ""}})
     return {"ok": True}
