@@ -172,8 +172,14 @@ async def update_workspace(ws_id: str, payload: WorkspacePatch, current=Depends(
             {"id": ws_id}, {"$set": {"status": new_status, "updated_at": now_iso()}}
         )
         # Suspension cascades to the workspace's members so it actually blocks
-        # access (require_user rejects suspended users). Owners of OTHER active
-        # workspaces are left alone.
+        # access. deps.get_user() overlays the per-workspace membership status
+        # onto the user, so we MUST update workspace_members (updating
+        # users.status alone is overridden by that overlay). Owners of OTHER
+        # active workspaces are unaffected — only this membership is flipped.
+        await db.workspace_members.update_many(
+            {"workspace_id": ws_id, "status": {"$ne": "removed"}},
+            {"$set": {"status": new_status}},
+        )
         await db.users.update_many(
             {"workspace_id": ws_id, "status": {"$ne": "removed"}},
             {"$set": {"status": new_status}},

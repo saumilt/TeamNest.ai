@@ -2894,3 +2894,37 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   budget?" → AI answered correctly from the document. Extraction libs
   (pdfplumber/python-docx/openpyxl/python-pptx) are in requirements.txt. If still
   failing on production, it's a redeploy/object-storage-retrieval matter.
+
+## 2026-06 (fork) — Super Admin: workspace + user management, add users, invites, manual credits
+
+### Backend (routes/superadmin.py, services/billing.py, deps.py)
+- Workspaces: GET /api/superadmin/workspaces (+ ?search), GET /{id} (with members),
+  PATCH /{id} (plan_id free|pro|team, monthly_credits recurring override [-1 clears],
+  suspended), POST /{id}/credits (one-time top-up +/-), DELETE /{id} (purges via
+  account_deletion._delete_workspace_data + removes home users).
+- Users: GET /api/superadmin/users (+search, cross-workspace, with workspace name +
+  super badge), POST (create user; new workspace as owner; must_change_password=true),
+  PATCH /{id} (status active|suspended, is_super_admin), POST /{id}/reset-password
+  (sets pw + must_change_password), DELETE /{id} (delete_user_account).
+- Invites: POST /api/superadmin/invites (grant_personal_invites, optional email via
+  send_launch_email_bg), GET /api/superadmin/invites (recent).
+- billing.py: effective_monthly_credits (per-workspace override), set_monthly_override,
+  add_extra_credits. Free-plan cap now applies to the recurring grant ONLY — admin
+  top-ups (credits_purchased_extra) sit ON TOP (verified free 300→800 after +500).
+- deps.require_user now rejects suspended accounts (403). Guardrails: cannot suspend/
+  revoke-super/delete your own account (400).
+- Workspace suspend cascades to workspace_members.status (get_user overlays membership
+  status, so updating users.status alone was a no-op — fixed; verified owner 403 on /me).
+
+### Frontend (pages/SuperAdmin.jsx + pages/superadmin/*)
+- SuperAdmin gets 4 tabs: Settings | Workspaces | Users | Invites.
+- WorkspacesTab: list, plan select, credits editor (monthly override + one-time top-up),
+  suspend/reactivate, delete.
+- UsersTab: list + search, Add-user modal, super-admin toggle, reset-password modal,
+  suspend/reactivate, delete. Self-row destructive buttons hidden.
+- InvitesTab: generate codes (email/count/access-level/send-email) + recent list w/ copy.
+
+### Testing
+- 13-case pytest (test_iteration92_superadmin.py) + Playwright UI, report iteration_92.json.
+- Two bugs found by testing agent FIXED + curl-verified: (1) workspace-suspend no-op,
+  (2) free-plan top-up swallowed by cap.

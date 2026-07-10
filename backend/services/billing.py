@@ -393,12 +393,17 @@ async def get_usage(workspace_id: str) -> dict:
     base_credits = monthly * (seats if per_seat else 1)
     total_credits = base_credits + int(sub.get("credits_purchased_extra") or 0)
     used = int(sub.get("credits_used_this_period") or 0)
+    extra = int(sub.get("credits_purchased_extra") or 0)
     remaining = max(0, total_credits - used)
     # Free-tier balance cap. For the free plan the cap tracks the (configurable)
-    # monthly allowance so the balance never exceeds one month's grant.
+    # monthly allowance so the recurring grant never exceeds one month — BUT
+    # purchased / admin-added top-ups (credits_purchased_extra) always sit ON
+    # TOP of the cap so a manual top-up actually increases available credits.
     cap = monthly if plan.get("id") == "free" else plan.get("credit_cap")
+    capped_total = total_credits
     if cap:
-        remaining = min(remaining, int(cap))
+        capped_total = min(base_credits, int(cap)) + extra
+        remaining = min(remaining, capped_total)
     unlimited = await is_unlimited_workspace(workspace_id)
     if unlimited:
         remaining = 1_000_000_000
@@ -410,8 +415,8 @@ async def get_usage(workspace_id: str) -> dict:
         "seats": seats,
         "monthly_credits": monthly,
         "monthly_credits_total": base_credits,
-        "extra_credits": int(sub.get("credits_purchased_extra") or 0),
-        "credits_total": 1_000_000_000 if unlimited else (min(total_credits, int(cap)) if cap else total_credits),
+        "extra_credits": extra,
+        "credits_total": 1_000_000_000 if unlimited else capped_total,
         "credits_used": used,
         "credits_remaining": remaining,
         "unlimited": unlimited,

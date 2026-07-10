@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { UserPlus, Trash2, Ban, CheckCircle2, ShieldCheck, KeyRound, X } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { SearchBar, Loading, Empty } from "./WorkspacesTab";
 
 /** Super Admin → Users: list all users across workspaces + manage them. */
 export default function UsersTab() {
+  const { user: me } = useAuth();
   const [rows, setRows] = useState(null);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -63,15 +65,17 @@ export default function UsersTab() {
                 </div>
                 <div className="text-xs text-ink-dim truncate">{u.email} · {u.workspace_name || "no workspace"} · {u.role}</div>
               </div>
-              <button type="button" onClick={() => patch(u.id, { is_super_admin: !u.is_super_admin }, u.is_super_admin ? "Super-admin revoked" : "Super-admin granted")}
-                data-testid={`sa-user-super-${u.id}`}
-                className={`p-2 rounded-lg hover:bg-white/5 ${u.is_super_admin ? "text-ai" : "text-ink-dim hover:text-ai"}`} title="Toggle super-admin">
-                <ShieldCheck className="w-4 h-4" />
-              </button>
               <button type="button" onClick={() => setResetFor(u)}
                 data-testid={`sa-user-reset-${u.id}`}
                 className="p-2 rounded-lg text-ink-dim hover:text-ink hover:bg-white/5" title="Reset password">
                 <KeyRound className="w-4 h-4" />
+              </button>
+              {u.id !== me?.id && (
+              <>
+              <button type="button" onClick={() => patch(u.id, { is_super_admin: !u.is_super_admin }, u.is_super_admin ? "Super-admin revoked" : "Super-admin granted")}
+                data-testid={`sa-user-super-${u.id}`}
+                className={`p-2 rounded-lg hover:bg-white/5 ${u.is_super_admin ? "text-ai" : "text-ink-dim hover:text-ai"}`} title="Toggle super-admin">
+                <ShieldCheck className="w-4 h-4" />
               </button>
               <button type="button" onClick={() => patch(u.id, { status: u.status === "suspended" ? "active" : "suspended" }, u.status === "suspended" ? "Reactivated" : "Suspended")}
                 data-testid={`sa-user-suspend-${u.id}`}
@@ -83,6 +87,8 @@ export default function UsersTab() {
                 className="p-2 rounded-lg text-ink-dim hover:text-rose-400 hover:bg-white/5" title="Delete">
                 <Trash2 className="w-4 h-4" />
               </button>
+              </>
+              )}
             </div>
           ))}
         </div>
