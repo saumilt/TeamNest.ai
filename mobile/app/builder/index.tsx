@@ -20,8 +20,10 @@ export default function BuilderDashboard() {
   const [employees, setEmployees] = useState<any[] | null>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [access, setAccess] = useState<any>(null);
 
   const load = useCallback(() => {
+    apiGet("/api/builder-program/me").then(setAccess).catch(() => setAccess({ builder_access: false }));
     apiGet("/api/ai-builder/dashboard").then(setStats).catch(() => {});
     apiGet("/api/ai-builder/employees").then((d) => setEmployees(d.employees)).catch(() => setEmployees([]));
     apiGet("/api/ai-builder/templates").then((d) => setTemplates(d.templates)).catch(() => {});
@@ -35,6 +37,36 @@ export default function BuilderDashboard() {
       router.push(`/builder/${emp.id}`);
     } catch (e: any) { /* toast-less; surfaced in modal */ throw e; }
   };
+
+  if (access && !access.builder_access) {
+    const st = access.application?.status;
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingTop: insets.top + spacing.md }}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity testID="mb-back" onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="chevron-back" size={22} color={colors.textSecondary} /></TouchableOpacity>
+            <View style={{ flex: 1 }}><Text style={styles.h1}>AI Employee Builder</Text><Text style={styles.sub}>Beta · invite-only access</Text></View>
+          </View>
+          <View style={[styles.tplCard, { marginTop: spacing.lg, gap: spacing.sm }]} testID="mb-builder-gate">
+            <Text style={{ color: colors.textPrimary, fontSize: font.h3, fontWeight: "800" }}>
+              {st === "pending" ? "Application under review" : "Become an AI Employee Builder"}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: font.small, lineHeight: 20 }}>
+              {st === "pending"
+                ? "Thanks for applying! We'll grant access here once approved."
+                : "Get approved to build & sell AI employees on the marketplace — or unlock instantly on the Team plan ($19.99)."}
+            </Text>
+            {st !== "pending" && (
+              <TouchableOpacity testID="mb-builder-apply" onPress={() => router.push("/builder-program")} style={styles.primaryBtn}>
+                <Text style={styles.primaryBtnText}>Apply to build</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

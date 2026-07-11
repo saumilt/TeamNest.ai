@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from deps import db, new_id, now_iso, require_user
+from routes.builder_program import require_builder
 from services.ai_employee_runtime import (
     PERMISSION_LEVELS, build_system_prompt, generate_reply,
 )
@@ -109,7 +110,7 @@ class CreateEmployee(BaseModel):
 
 
 @router.post("/ai-builder/employees")
-async def create_employee(payload: CreateEmployee, current=Depends(require_user)):
+async def create_employee(payload: CreateEmployee, current=Depends(require_builder)):
     ws = current["workspace_id"]
     now = now_iso()
     emp = {

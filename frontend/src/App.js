@@ -30,6 +30,7 @@ import NotificationsPrefs from "@/pages/NotificationsPrefs";
 import AIEmployees from "@/pages/AIEmployees";
 import AIEmployeeBuilder from "@/pages/ai_builder/AIEmployeeBuilder";
 import AIEmployeeMarketplace from "@/pages/ai_builder/AIEmployeeMarketplace";
+import BuilderProgram from "@/pages/ai_builder/BuilderProgram";
 import EmployeeProfile from "@/pages/ai_builder/EmployeeProfile";
 import Bookkeeper from "@/pages/Bookkeeper";
 import SmsContacts from "@/pages/SmsContacts";
@@ -169,6 +170,7 @@ export default function App() {
             <Route path="/launch-admin" element={<LaunchAdmin />} />
             <Route path="/employees" element={<AIEmployees />} />
             <Route path="/ai-builder" element={<AIEmployeeBuilder />} />
+            <Route path="/builder-program" element={<BuilderProgram />} />
             <Route path="/ai-builder/marketplace" element={<AIEmployeeMarketplace />} />
             <Route path="/ai-builder/:id" element={<EmployeeProfile />} />
             <Route path="/bookkeeper" element={<Bookkeeper />} />

@@ -3,16 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { ShieldCheck, Coins, Loader2, Save, ToggleRight, SlidersHorizontal, Building2, Users2, Ticket } from "lucide-react";
+import { ShieldCheck, Coins, Loader2, Save, ToggleRight, SlidersHorizontal, Building2, Users2, Ticket, Bot } from "lucide-react";
 import WorkspacesTab from "./superadmin/WorkspacesTab";
 import UsersTab from "./superadmin/UsersTab";
 import InvitesTab from "./superadmin/InvitesTab";
+import BuildersTab from "./superadmin/BuildersTab";
 
 const TABS = [
   { id: "settings", label: "Settings", icon: SlidersHorizontal },
   { id: "workspaces", label: "Workspaces", icon: Building2 },
   { id: "users", label: "Users", icon: Users2 },
   { id: "invites", label: "Invites", icon: Ticket },
+  { id: "builders", label: "Builders", icon: Bot },
 ];
 
 const FIELDS = [
@@ -161,6 +163,7 @@ export default function SuperAdmin() {
         {tab === "workspaces" && <WorkspacesTab />}
         {tab === "users" && <UsersTab />}
         {tab === "invites" && <InvitesTab />}
+        {tab === "builders" && <BuildersTab />}
 
         {tab === "settings" && (
         <>

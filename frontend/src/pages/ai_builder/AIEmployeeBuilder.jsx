@@ -25,13 +25,17 @@ export default function AIEmployeeBuilder() {
   const [employees, setEmployees] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [access, setAccess] = useState(null);   // null=loading, {builder_access, reason, application}
 
   const load = () => {
     api.get("/ai-builder/dashboard").then(({ data }) => setStats(data)).catch(() => {});
     api.get("/ai-builder/employees").then(({ data }) => setEmployees(data.employees)).catch(() => setEmployees([]));
     api.get("/ai-builder/templates").then(({ data }) => setTemplates(data.templates)).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(() => {
+    api.get("/builder-program/me").then(({ data }) => setAccess(data)).catch(() => setAccess({ builder_access: false }));
+    load();
+  }, []);
 
   const createFrom = async (body) => {
     try {
@@ -42,6 +46,10 @@ export default function AIEmployeeBuilder() {
       toast.error(e?.response?.data?.detail || "Failed to create");
     }
   };
+
+  if (access && !access.builder_access) {
+    return <BuilderGate application={access.application} nav={nav} />;
+  }
 
   return (
     <div className="min-h-screen bg-bg text-ink px-5 py-8 md:px-10">
@@ -193,6 +201,54 @@ function CreateModal({ onClose, onCreate, templates }) {
             Create employee
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+function BuilderGate({ application, nav }) {
+  const status = application?.status;
+  return (
+    <div className="min-h-screen bg-bg text-ink px-5 py-8 md:px-10">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-start gap-3 mb-6">
+          <div className="w-11 h-11 rounded-xl bg-ai-tint flex items-center justify-center shrink-0">
+            <Bot className="w-6 h-6 text-ai" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-extrabold">AI Employee Builder <sup className="text-xs text-ai font-bold">Beta</sup></h1>
+            <p className="text-sm text-ink-dim">Design, train and sell custom AI employees. Access is currently invite-only.</p>
+          </div>
+        </div>
+
+        {status === "pending" ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6" data-testid="aeb-gate-pending">
+            <div className="flex items-center gap-2 text-amber-300 font-bold mb-1"><Loader2 className="w-4 h-4 animate-spin" /> Application under review</div>
+            <p className="text-sm text-ink-dim">Thanks for applying! Our team is reviewing your application to become an AI Employee Builder. You'll get access here once approved.</p>
+          </div>
+        ) : status === "rejected" ? (
+          <div className="rounded-2xl border border-white/10 bg-surface-2 p-6" data-testid="aeb-gate-rejected">
+            <div className="font-bold mb-1">Application not approved</div>
+            <p className="text-sm text-ink-dim">{application?.decision_note || "Your application wasn't approved this time. You can upgrade to the Team plan to unlock the builder instantly."}</p>
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={() => nav("/billing")} data-testid="aeb-gate-upgrade" className="h-10 px-5 rounded-full bg-ai text-black font-bold text-sm">Upgrade to Team</button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-surface-2 p-6" data-testid="aeb-gate-apply">
+            <div className="font-bold text-lg mb-1">Become an AI Employee Builder</div>
+            <p className="text-sm text-ink-dim mb-4">Get approved to build and publish AI employees to the marketplace — and earn when other teams license them. Two ways in:</p>
+            <ul className="space-y-2 text-sm mb-5">
+              <li className="flex gap-2"><Sparkles className="w-4 h-4 text-ai mt-0.5 shrink-0" /> Apply to the Builder Program — tell us how you'll add value (free, reviewed by our team).</li>
+              <li className="flex gap-2"><Store className="w-4 h-4 text-ai mt-0.5 shrink-0" /> Or upgrade to the Team plan ($19.99) for instant builder access.</li>
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => nav("/builder-program")} data-testid="aeb-gate-apply-btn" className="h-10 px-5 rounded-full bg-ai text-black font-bold text-sm">Apply to build</button>
+              <button type="button" onClick={() => nav("/billing")} data-testid="aeb-gate-team-btn" className="h-10 px-5 rounded-full bg-white/10 hover:bg-white/15 text-ink font-bold text-sm">Upgrade to Team</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

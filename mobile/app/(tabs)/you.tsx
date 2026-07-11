@@ -110,6 +110,7 @@ export default function YouScreen() {
         <TouchableOpacity testID="you-ai-builder" style={styles.linkRow} onPress={() => router.push("/builder")}>
           <Ionicons name="construct-outline" size={18} color={colors.accent} />
           <Text style={styles.linkLabel}>AI Employee Builder</Text>
+          <Text style={styles.betaTag}>✦ Beta</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -253,6 +254,7 @@ const styles = StyleSheet.create({
   infoValue: { color: colors.textPrimary, fontSize: font.body, fontWeight: "600", maxWidth: "50%" },
   linkRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   linkLabel: { color: colors.textPrimary, fontSize: font.body, flex: 1 },
+  betaTag: { color: colors.accent, fontSize: font.tiny, fontWeight: "800" },
   divider: { height: 1, backgroundColor: colors.borderSubtle },
   logoutBtn: {
     marginTop: spacing.xl,

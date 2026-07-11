@@ -28,6 +28,10 @@ from datetime import datetime, timezone
 from typing import Tuple
 
 from deps import db, logger, new_id, now_iso
+try:
+    from deps import SUPER_ADMIN_EMAILS
+except Exception:  # pragma: no cover
+    SUPER_ADMIN_EMAILS = set()
 
 # ---------------------------------------------------------------------------
 # Plan + Pricing config
@@ -105,6 +109,7 @@ PLANS = {
         "perks": [
             "Everything in Pro",
             "9,000 AI credits / seat / month",
+            "AI Employee Builder access (Beta) — build & sell custom AI employees",
             "Live transcription during calls (FREE)",
             "Unlimited recorded audio + video transcription",
             "Screen sharing",
@@ -167,6 +172,24 @@ async def _unlimited_workspace_ids() -> set:
             ):
                 if m.get("workspace_id"):
                     ids.add(m["workspace_id"])
+    # Super admins get effectively-unlimited credits in EVERY workspace they
+    # operate in (not just ones they own) — any workspace with a super-admin
+    # member is treated as unlimited.
+    sa_uids: list = []
+    async for u in db.users.find(
+        {"$or": [{"is_super_admin": True},
+                 {"email": {"$in": list(SUPER_ADMIN_EMAILS)}}]},
+        {"_id": 0, "id": 1, "workspace_id": 1},
+    ):
+        sa_uids.append(u["id"])
+        if u.get("workspace_id"):
+            ids.add(u["workspace_id"])
+    if sa_uids:
+        async for m in db.workspace_members.find(
+            {"user_id": {"$in": sa_uids}}, {"_id": 0, "workspace_id": 1},
+        ):
+            if m.get("workspace_id"):
+                ids.add(m["workspace_id"])
     _UNLIMITED_WS_CACHE["ids"] = ids
     _UNLIMITED_WS_CACHE["at"] = now
     return ids
