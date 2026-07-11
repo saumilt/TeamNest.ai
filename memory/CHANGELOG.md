@@ -2,6 +2,20 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 101 (Jul 2026) — Content-aware "hire an AI employee" banner + Phase 3 licensing/billing
+### Content-aware chat recommendation (web)
+- Fixed hardcoded "Turn this chat into a full AI engineering team / Hire @devmanager" banner that showed regardless of chat topic.
+- New `services/employee_recommender.py` + `GET /api/chats/{chat_id}/employee-recommendation`: analyses recent chat messages with Claude (Fable 5 → Sonnet 4.6) and recommends the best-suited AI employee from published marketplace listings + the workspace's own AI employees + built-in @devmanager. Result cached on the chat doc keyed by latest message id.
+- New `components/chat/SmartHireBanner.jsx` (replaces the static banner in Chats.jsx): devmanager match → existing @devmanager hire; specific employee match → tailored "Hire <name> · $price" → marketplace listing; no confident match → generic "Get an AI employee for this chat → Hire an AI employee" → `/ai-builder/marketplace`.
+- Verified: Engineering chat → @devmanager; restaurant-ops chat with matching employee → "Restaurant Ops Advisor · $49"; restaurant chat with no match → generic marketplace fallback.
+- Known: the chat-header "Hire @devmanager · $199" pill and the bottom-right "AI Sales Employee" promo are still @devmanager/AI-sales hardcoded (separate components) — not yet content-aware.
+
+### Workspace AI licensing & revenue share (Phase 3, web + backend)
+- `routes/workspace_ai.py` + `services/ai_employee_billing.py`: owner/admin deploy AI employees to team (scope: workspace/departments/roles/users), consent+pricing preview, computed billing ledger. Defaults: $10 min builder fee, $3/active user, 30% platform fee / 70% creator. Super-admin revenue-share rules editor. Dashboards: workspace / creator / platform.
+- Usage hook in deploy dispatcher counts monthly-active users. Nav "Workspace AI" (owner/admin/super-admin only) + `pages/WorkspaceAI.jsx` (tabs).
+- Tested via testing_agent iteration_100 (16/16 backend pass). Post-test fixes applied: PATCH no longer nulls pricing (scope-only update verified), billing fallback uses explicit None check, client-side route guard (non-managers default to Creator tab, no error-toast spam).
+
+
 ## Iteration 100 (Jul 2026) — Forgot password / reset flow (web) + marketplace seller weekly digest
 ### Auth — password reset (web)
 - Backend `routes/auth.py`: `POST /api/auth/forgot-password` (generic non-enumerating response; single-use SHA-256-hashed token in `password_reset_tokens`, 1h expiry; emails link via Mailgun) and `POST /api/auth/reset-password` (validates token + expiry + single-use, updates bcrypt `password_hash`). Reuses existing `hash_password`. Reset link base = `PUBLIC_BACKEND_URL`.

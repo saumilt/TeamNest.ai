@@ -39,7 +39,7 @@ import GroupInfo from "@/components/chat/GroupInfo";
 import DevWorkspacePane from "@/components/chat/DevWorkspacePane";
 import LivePreviewPane from "@/components/chat/LivePreviewPane";
 import NextIdeasPanel from "@/components/chat/NextIdeasPanel";
-import HireDevTeamButton from "@/components/chat/HireDevTeamButton";
+import SmartHireBanner from "@/components/chat/SmartHireBanner";
 import PreviewViewersChip from "@/components/chat/PreviewViewersChip";
 import { LeaveChatDialog, DeleteChatDialog } from "@/components/chat/LeaveDeleteChatDialogs";
 import MessageList from "@/components/chat/MessageList";
@@ -962,8 +962,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         topSlot={
           <>
             <PreviewViewersChip chatId={chatId} />
-            {chat.type === "group" && !chat.dev_team_hired ? (
-              <HireDevTeamButton chatId={chatId} variant="banner" />
+            {chat.type === "group" ? (
+              <SmartHireBanner chatId={chatId} chat={chat} />
             ) : null}
           </>
         }

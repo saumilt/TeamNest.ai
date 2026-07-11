@@ -139,21 +139,22 @@ async def enable_employee(eid: str, cfg: DeployConfig, current=Depends(require_u
 async def update_employee(eid: str, cfg: DeployConfig, current=Depends(require_user)):
     _owner_only(current)
     ws = current["workspace_id"]
+    update = {
+        "availability_scope": cfg.availability_scope,
+        "enabled_departments": cfg.enabled_departments,
+        "enabled_roles": cfg.enabled_roles,
+        "enabled_users": cfg.enabled_users,
+        "central_learning_allowed": cfg.central_learning_allowed,
+        "approval_required": cfg.approval_required,
+        "updated_at": now_iso(),
+    }
+    # Only overwrite pricing when explicitly provided (don't null it out).
+    for k in ("base_monthly_fee", "per_user_monthly_fee", "platform_fee_percent", "monthly_budget"):
+        v = getattr(cfg, k)
+        if v is not None:
+            update[k] = v
     r = await db.workspace_ai_employees.update_one(
-        {"workspace_id": ws, "employee_id": eid},
-        {"$set": {
-            "availability_scope": cfg.availability_scope,
-            "enabled_departments": cfg.enabled_departments,
-            "enabled_roles": cfg.enabled_roles,
-            "enabled_users": cfg.enabled_users,
-            "base_monthly_fee": cfg.base_monthly_fee,
-            "per_user_monthly_fee": cfg.per_user_monthly_fee,
-            "platform_fee_percent": cfg.platform_fee_percent,
-            "monthly_budget": cfg.monthly_budget,
-            "central_learning_allowed": cfg.central_learning_allowed,
-            "approval_required": cfg.approval_required,
-            "updated_at": now_iso(),
-        }},
+        {"workspace_id": ws, "employee_id": eid}, {"$set": update},
     )
     if r.matched_count == 0:
         raise HTTPException(404, "Deployment not found")

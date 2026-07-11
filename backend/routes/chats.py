@@ -175,6 +175,26 @@ async def create_chat(payload: ChatCreate, current=Depends(require_user)):
     return chat
 
 
+@router.get("/chats/{chat_id}/employee-recommendation")
+async def employee_recommendation(chat_id: str, current=Depends(require_user)):
+    """Content-aware AI-employee recommendation for this chat.
+
+    Returns `{recommendation: {...} | null, marketplace_url}`. When null, the
+    UI shows a generic "Hire an AI employee" banner linking to the marketplace.
+    """
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    from services.employee_recommender import recommend_for_chat
+    try:
+        reco = await recommend_for_chat(chat)
+    except Exception:
+        reco = None
+    return {"recommendation": reco, "marketplace_url": "/ai-builder/marketplace"}
+
+
 @router.get("/chats/{chat_id}")
 async def get_chat(chat_id: str, current=Depends(require_user)):
     chat = await db.chats.find_one(

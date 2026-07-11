@@ -124,8 +124,8 @@ async def compute_deployment_billing(dep: dict, rules: dict, period: str) -> dic
     category = emp.get("industry")
     platform_pct = float(dep.get("platform_fee_percent") or _pct(rules, category, "platform_fee_percent"))
 
-    base_fee = float(dep.get("base_monthly_fee") or rules["min_builder_fee"])
-    per_user = float(dep.get("per_user_monthly_fee") or rules["per_user_fee"])
+    base_fee = float(dep["base_monthly_fee"] if dep.get("base_monthly_fee") is not None else rules["min_builder_fee"])
+    per_user = float(dep["per_user_monthly_fee"] if dep.get("per_user_monthly_fee") is not None else rules["per_user_fee"])
     if dep.get("status") != "active" and rules.get("charge_only_deployed", True):
         base_fee = 0.0
 

@@ -305,16 +305,20 @@ function AdminTab() {
 export default function WorkspaceAI() {
   const { user } = useAuth();
   const isAdmin = user?.is_super_admin;
+  const canManage = isAdmin || user?.role === "owner" || user?.role === "admin";
   const [tab, setTab] = useState("team");
 
   const tabs = useMemo(() => {
-    const t = [
-      { id: "team", label: "Team AI", icon: Building2 },
-      { id: "creator", label: "Creator earnings", icon: DollarSign },
-    ];
+    const t = [];
+    if (canManage) t.push({ id: "team", label: "Team AI", icon: Building2 });
+    t.push({ id: "creator", label: "Creator earnings", icon: DollarSign });
     if (isAdmin) t.push({ id: "admin", label: "Platform", icon: ShieldCheck });
     return t;
-  }, [isAdmin]);
+  }, [isAdmin, canManage]);
+
+  useEffect(() => {
+    if (!canManage && tab === "team") setTab("creator");
+  }, [canManage, tab]);
 
   return (
     <div className="min-h-screen bg-bg text-ink px-5 pt-16 pb-8 md:px-10" data-testid="workspace-ai-page">
@@ -339,7 +343,7 @@ export default function WorkspaceAI() {
           })}
         </div>
 
-        {tab === "team" && <TeamTab />}
+        {tab === "team" && canManage && <TeamTab />}
         {tab === "creator" && <CreatorTab />}
         {tab === "admin" && isAdmin && <AdminTab />}
       </div>
