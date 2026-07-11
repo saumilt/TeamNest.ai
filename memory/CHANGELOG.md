@@ -2,6 +2,19 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 100 (Jul 2026) — Forgot password / reset flow (web) + marketplace seller weekly digest
+### Auth — password reset (web)
+- Backend `routes/auth.py`: `POST /api/auth/forgot-password` (generic non-enumerating response; single-use SHA-256-hashed token in `password_reset_tokens`, 1h expiry; emails link via Mailgun) and `POST /api/auth/reset-password` (validates token + expiry + single-use, updates bcrypt `password_hash`). Reuses existing `hash_password`. Reset link base = `PUBLIC_BACKEND_URL`.
+- Email helper `services/password_reset_email.py` (Mailgun, no-op if unconfigured).
+- Web UI: "Forgot password?" link on login → in-page `ForgotForm` (email → generic "check your email"). New `/reset-password?token=` page (`pages/web/ResetPassword.jsx`) with new+confirm password, single-use handling; added to public paths + App routes.
+- Verified via curl: full cycle (valid token → reset → login with new pw = 200), token reuse → 400, unknown email → generic 200. UI screenshot confirmed.
+- Note: `emergent-ai-teams.preview.emergentagent.com` is a separate/older deployment; current build preview is `nest-app-prep.preview.emergentagent.com`.
+
+### Marketplace — weekly seller digest (P4)
+- `services/seller_digest.py`: weekly "Your store performance" digest (new/total installs, week/total revenue, top listing) delivered as in-app notification + Mailgun email to every seller with ≥1 Published listing (quiet-week nudge included). Background loop (hourly tick, 7d cadence via `scheduler_state` soft-lock) wired in `server.py`.
+- Super-admin manual trigger `POST /api/ai-builder/marketplace/digest/run` + self-preview `GET /api/ai-builder/marketplace/digest/preview`.
+
+
 ## Iteration 99 (Jul 2026) — Mobile parity: Notifications + Deployed directory; backend refactor
 ### Mobile (parity complete)
 - Added reusable `mobile/src/components/NotificationBell.tsx` (unread badge, focus-refresh) and wired it into ALL FOUR tab headers (Chats/Research/Tasks/You) → routes `/notifications`.

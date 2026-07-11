@@ -63,6 +63,7 @@ import InstallTemplate from "@/pages/market/InstallTemplate";
 import MyTemplates from "@/pages/market/MyTemplates";
 import MarketAdmin from "@/pages/market/MarketAdmin";
 import WebAuth from "@/pages/web/Auth";
+import ResetPassword from "@/pages/web/ResetPassword";
 import Waitlist from "@/pages/launch/Waitlist";
 import InviteCodePage from "@/pages/launch/InviteCode";
 import DropPage from "@/pages/launch/DropPage";
@@ -124,6 +125,7 @@ export default function App() {
           {/* Auth (own layout, two-column product surface) */}
           <Route path="/login" element={<WebAuth defaultMode="login" />} />
           <Route path="/signup" element={<WebAuth defaultMode="signup" />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/waitlist" element={<Waitlist />} />
           <Route path="/invite" element={<InviteCodePage />} />
           <Route path="/drop/:code" element={<DropPage />} />

@@ -36,6 +36,7 @@ const PUBLIC_PATHS = [
   "/changelog",
   "/login",
   "/signup",
+  "/reset-password",
   "/waitlist",
   "/invite",
   "/downloads",

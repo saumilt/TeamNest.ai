@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { toast } from "sonner";
 import { ArrowRight, ChevronLeft, Loader2, Sparkles, Shield } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import SeoHelmet from "@/components/web/SeoHelmet";
 import { LogoMark, Wordmark, PrimaryButton, GhostButton, Pill } from "@/components/web/atoms";
@@ -50,6 +51,81 @@ function ProductSurfacePanel() {
   );
 }
 
+function ForgotForm({ onBack }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.post("/auth/forgot-password", { email });
+      setSent(true);
+    } catch {
+      // Endpoint is intentionally non-enumerating; still show the generic state.
+      setSent(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-[420px]" data-testid="forgot-form">
+      <div className="lg:hidden mb-8">
+        <Link to="/" className="inline-flex items-center gap-2">
+          <LogoMark size={32} />
+          <Wordmark size="md" />
+        </Link>
+      </div>
+      {sent ? (
+        <div data-testid="forgot-sent">
+          <h2 className="text-[28px] font-bold tracking-[-0.02em] text-[var(--w-text)] mb-2">Check your email.</h2>
+          <p className="text-[15px] text-[var(--w-text-dim)] mb-7">
+            If an account exists for <span className="text-[var(--w-text)] font-semibold">{email}</span>, we've sent a
+            password reset link. It expires in 1 hour.
+          </p>
+          <GhostButton onClick={onBack} className="w-full justify-center" data-testid="forgot-back-btn">
+            Back to sign in
+          </GhostButton>
+        </div>
+      ) : (
+        <>
+          <h2 className="text-[28px] font-bold tracking-[-0.02em] text-[var(--w-text)] mb-2">Forgot your password?</h2>
+          <p className="text-[15px] text-[var(--w-text-dim)] mb-7">
+            Enter your account email and we'll send you a link to reset it.
+          </p>
+          <form onSubmit={submit} className="space-y-3">
+            <div>
+              <label className="text-[12px] font-semibold uppercase tracking-widest text-[var(--w-text-mute)] mb-1.5 block">Email</label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
+                data-testid="forgot-email-input"
+              />
+            </div>
+            <PrimaryButton type="submit" disabled={busy || !email} className="w-full mt-2" data-testid="forgot-submit-btn">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+              Send reset link
+            </PrimaryButton>
+          </form>
+          <p className="mt-6 text-center text-[14px] text-[var(--w-text-dim)]">
+            Remembered it?{" "}
+            <button type="button" onClick={onBack} className="font-semibold text-[var(--w-text)] hover:text-[var(--w-brand)]" data-testid="forgot-signin-link">
+              Sign in
+            </button>
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function AuthForm({ mode, setMode }) {
   const { login, signup, demoLogin, completeMfaLogin } = useAuth();
   const nav = useNavigate();
@@ -85,6 +161,10 @@ function AuthForm({ mode, setMode }) {
         </p>
       </div>
     );
+  }
+
+  if (mode === "forgot") {
+    return <ForgotForm onBack={() => setMode("login")} />;
   }
 
   const submit = async (e) => {
@@ -225,6 +305,18 @@ function AuthForm({ mode, setMode }) {
             data-testid="auth-password-input"
           />
         </div>
+        {mode === "login" && (
+          <div className="text-right -mt-1">
+            <button
+              type="button"
+              onClick={() => setMode("forgot")}
+              className="text-[13px] font-semibold text-[var(--w-text-dim)] hover:text-[var(--w-brand)]"
+              data-testid="auth-forgot-link"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
         <PrimaryButton type="submit" disabled={busy} className="w-full mt-2" data-testid="auth-submit-btn">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
           {mode === "login" ? "Sign in" : "Create account"}

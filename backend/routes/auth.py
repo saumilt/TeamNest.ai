@@ -1,4 +1,9 @@
 """Auth + user preferences."""
+import hashlib
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
@@ -107,6 +112,86 @@ async def login(payload: UserLogin, response: Response):
         "user": public_user(user),
         "workspaces": await list_user_workspaces(user["id"]),
     }
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+RESET_TOKEN_TTL_MINUTES = 60
+
+
+def _hash_reset_token(raw: str) -> str:
+    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
+
+
+@router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """Email a single-use, 1-hour reset link. Always returns a generic success
+    so the endpoint can't be used to enumerate registered emails."""
+    generic = {
+        "ok": True,
+        "message": "If an account exists for that email, a reset link has been sent.",
+    }
+    email = (payload.email or "").strip().lower()
+    if not email:
+        return generic
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return generic
+
+    raw = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "id": new_id(),
+        "user_id": user["id"],
+        "token_hash": _hash_reset_token(raw),
+        "used": False,
+        "created_at": now,
+        "expires_at": now + timedelta(minutes=RESET_TOKEN_TTL_MINUTES),
+    })
+
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    link = f"{base}/reset-password?token={raw}"
+    import asyncio
+    from services.password_reset_email import send_reset_email
+    asyncio.create_task(send_reset_email(user.get("name"), email, link))
+    return generic
+
+
+@router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    if len(payload.password or "") < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+    rec = await db.password_reset_tokens.find_one(
+        {"token_hash": _hash_reset_token(payload.token), "used": False}
+    )
+    if not rec:
+        raise HTTPException(400, "Invalid or expired reset link")
+    exp = rec.get("expires_at")
+    if isinstance(exp, str):
+        try:
+            exp = datetime.fromisoformat(exp)
+        except Exception:
+            exp = None
+    if exp is not None and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if not exp or datetime.now(timezone.utc) > exp:
+        raise HTTPException(400, "Invalid or expired reset link")
+
+    await db.users.update_one(
+        {"id": rec["user_id"]},
+        {"$set": {"password_hash": hash_password(payload.password)}},
+    )
+    await db.password_reset_tokens.update_one(
+        {"id": rec["id"]}, {"$set": {"used": True, "used_at": now_iso()}}
+    )
+    return {"ok": True, "message": "Password updated. You can now sign in."}
 
 
 @router.post("/auth/demo-login")
