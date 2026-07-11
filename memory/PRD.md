@@ -13,7 +13,15 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
-### Iteration 97 (Jul 2026) — AI Employee Builder Developer Program (Beta) + credit fix
+### Iteration 98 (Jul 2026) — Deployed-employee chat responder + Builder Program hardening
+- **Deployed AI employee auto-responds in live chats** (`services/ai_employee_deploy_dispatcher.py`, hooked into `routes/chats.py` send flow): when a message @-mentions a deployed employee's handle, it replies in-chat via its full runtime (profile+style+knowledge+permissions+escalation, Claude Fable 5). Chat-bound deployments only answer in their bound chat; handle deployments answer anywhere mentioned. Posts a "thinking…" placeholder then updates it; no reply-loop (AI messages bypass the send route).
+- **Rejection cooldown**: after a rejected Builder application, re-applying is blocked for 30 days (`POST /api/builder-program/apply` → 429). `GET /builder-program/me` now returns `can_reapply` + `reapply_at`.
+- **Decision audit trail**: every approve/reject writes an immutable record to `builder_program_audit`; `GET /api/builder-program/applications/{id}/audit` (super admin).
+- **UI**: web `/builder-program` + mobile `/builder-program` show a "declined / re-apply after <date>" state (`bp-declined` / `mb-bp-declined`).
+- **Mobile fix**: gated builder screens' data fetch on the auth token (via `useAuth().token`) to fix a hydration race that showed the wrong Builder Program state on cold-load.
+- Tested: backend pytest (`tests/test_iteration98_*`) + web chat UI + mobile UI verified. Report: `/app/test_reports/iteration_98.json`. No blockers.
+
+
 - **Builder access gating** (`routes/builder_program.py`): creating AI employees now requires builder access = super admin OR `builder_approved` user OR workspace on the top-level **Team plan ($19.99)**. `POST /api/ai-builder/employees` uses `require_builder` (403 otherwise).
 - **Application + approval flow**: `POST /api/builder-program/apply` (signup sheet: name, company, website, motivation, value_prop, agent_ideas → `builder_applications`, pending). `GET /api/builder-program/me` → {builder_access, reason, application}. Super Admin: `GET /api/builder-program/applications?status=`, `POST .../applications/{id}/decide` (approve sets `users.builder_approved`).
 - **Credit fix**: super admins now get **unlimited credits in every workspace they belong to** (not just owned) — `_unlimited_workspace_ids()` now includes all super-admin memberships. Team plan perks list "AI Employee Builder access (Beta)".

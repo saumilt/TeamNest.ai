@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const SECTIONS = [
@@ -20,6 +21,7 @@ const TONES = ["Professional", "Friendly", "Direct", "Executive summary", "Sales
 export default function EmployeeEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
   const [data, setData] = useState<any>(null);
   const [section, setSection] = useState("profile");
 
@@ -27,7 +29,7 @@ export default function EmployeeEditor() {
     try { setData(await apiGet(`/api/ai-builder/employees/${id}`)); }
     catch { router.back(); }
   }, [id]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (token) load(); }, [load, token]);
 
   if (!data) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
   const { employee, documents, examples, completeness } = data;

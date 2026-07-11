@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const PERKS = [
@@ -17,12 +18,13 @@ const PERKS = [
 
 export default function BuilderProgramScreen() {
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
   const [me, setMe] = useState<any>(null);
   const [f, setF] = useState({ full_name: "", company: "", website: "", motivation: "", value_prop: "", agent_ideas: "" });
   const [busy, setBusy] = useState(false);
 
   const load = () => apiGet("/api/builder-program/me").then(setMe).catch(() => setMe({ builder_access: false }));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (token) load(); }, [token]);
 
   const set = (k: string) => (v: string) => setF((p) => ({ ...p, [k]: v }));
   const submit = async () => {

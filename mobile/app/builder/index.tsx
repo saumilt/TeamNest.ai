@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const RISK_COLOR: Record<string, string> = {
@@ -16,6 +17,7 @@ const RISK_COLOR: Record<string, string> = {
 
 export default function BuilderDashboard() {
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [employees, setEmployees] = useState<any[] | null>(null);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -28,7 +30,7 @@ export default function BuilderDashboard() {
     apiGet("/api/ai-builder/employees").then((d) => setEmployees(d.employees)).catch(() => setEmployees([]));
     apiGet("/api/ai-builder/templates").then((d) => setTemplates(d.templates)).catch(() => {});
   }, []);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { if (token) load(); }, [token, load]));
 
   const create = async (body: any) => {
     try {
@@ -38,6 +40,9 @@ export default function BuilderDashboard() {
     } catch (e: any) { /* toast-less; surfaced in modal */ throw e; }
   };
 
+  if (access === null) {
+    return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+  }
   if (access && !access.builder_access) {
     const st = access.application?.status;
     return (
@@ -202,6 +207,7 @@ function CreateModal({ templates, onClose, onCreate }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
   iconBtn: { padding: 4 },
   h1: { color: colors.textPrimary, fontSize: font.h1, fontWeight: "800" },
