@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/src/components/Avatar";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
+import { NotificationBell } from "@/src/components/NotificationBell";
 import { apiDelete } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
@@ -79,7 +80,10 @@ export default function YouScreen() {
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg }}>
         <Text style={[styles.h1, { marginBottom: 0 }]}>You</Text>
-        <CreditsBadge />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <NotificationBell />
+          <CreditsBadge />
+        </View>
       </View>
 
       <View style={styles.profileCard}>
@@ -111,6 +115,12 @@ export default function YouScreen() {
           <Ionicons name="construct-outline" size={18} color={colors.accent} />
           <Text style={styles.linkLabel}>AI Employee Builder</Text>
           <Text style={styles.betaTag}>✦ Beta</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity testID="you-deployed" style={styles.linkRow} onPress={() => router.push("/builder/deployed")}>
+          <Ionicons name="rocket-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>Deployed Employees</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
+import { NotificationBell } from "@/src/components/NotificationBell";
 import { Markdown } from "@/src/markdown";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -84,7 +85,10 @@ export default function ResearchScreen() {
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={styles.h1}>AI Research</Text>
-          <CreditsBadge />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <NotificationBell />
+            <CreditsBadge />
+          </View>
         </View>
         <Text style={styles.sub}>
           Ask once, compare answers across models, get one synthesized result.

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPatch, apiPost } from "@/src/api";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
+import { NotificationBell } from "@/src/components/NotificationBell";
 import { dueLabel } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -110,7 +111,10 @@ export default function TasksScreen() {
       <View style={{ paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.lg }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
           <Text style={[styles.h1, { marginBottom: 0 }]}>Tasks</Text>
-          <CreditsBadge />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <NotificationBell />
+            <CreditsBadge />
+          </View>
         </View>
         <View style={styles.addRow}>
           <TextInput

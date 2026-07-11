@@ -85,6 +85,9 @@ export default function BuilderDashboard() {
             <Text style={styles.h1}>AI Employees</Text>
             <Text style={styles.sub}>Create, train and deploy AI employees.</Text>
           </View>
+          <TouchableOpacity testID="mb-deployed" onPress={() => router.push("/builder/deployed")} style={styles.iconBtn}>
+            <Ionicons name="rocket-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
           <TouchableOpacity testID="mb-marketplace" onPress={() => router.push("/marketplace")} style={styles.iconBtn}>
             <Ionicons name="storefront-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
