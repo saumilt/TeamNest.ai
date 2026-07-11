@@ -50,6 +50,7 @@ from routes import (
     memory,
     mfa,
     notifications,
+    notifications_feed,
     plaid,
     contacts,
     dev_gates,
@@ -118,6 +119,7 @@ api.include_router(ai_employees.router)
 api.include_router(ai_employee_builder.router)
 api.include_router(ai_employee_marketplace.router)
 api.include_router(builder_program.router)
+api.include_router(notifications_feed.router)
 api.include_router(bookkeeper.router)
 api.include_router(quickbooks.router)
 api.include_router(plaid.router)

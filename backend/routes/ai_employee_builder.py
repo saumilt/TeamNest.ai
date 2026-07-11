@@ -304,6 +304,26 @@ async def delete_example(eid: str, ex_id: str, current=Depends(require_user)):
     return {"ok": True}
 
 
+@router.get("/ai-builder/deployments")
+async def list_deployments(current=Depends(require_user)):
+    """Workspace-wide directory of active deployed AI employees (admins only)."""
+    if not current.get("is_super_admin") and current.get("role") not in ("owner", "admin"):
+        raise HTTPException(403, "Admins only")
+    ws = current["workspace_id"]
+    deps = await db.ai_employee_deployments.find(
+        {"workspace_id": ws, "status": "active"}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    out = []
+    for d in deps:
+        emp = await db.ai_employees.find_one(
+            {"id": d["employee_id"]}, {"_id": 0, "name": 1, "job_title": 1, "department": 1, "status": 1})
+        chat_name = None
+        if d.get("chat_id"):
+            c = await db.chats.find_one({"id": d["chat_id"]}, {"_id": 0, "name": 1})
+            chat_name = (c or {}).get("name")
+        out.append({**d, "employee": emp or {"name": "(deleted)"}, "chat_name": chat_name})
+    return {"deployments": out}
+
+
 # ── Dashboard ───────────────────────────────────────────────────────────
 @router.get("/ai-builder/dashboard")
 async def dashboard(current=Depends(require_user)):

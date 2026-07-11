@@ -99,6 +99,31 @@ async def _respond(chat: dict, sender: dict, message: dict, deployment: dict) ->
     placeholder["metadata"]["escalated"] = escalated
     await _broadcast_message(chat["id"], placeholder)
 
+    if escalated:
+        await _notify_escalation(emp, chat, sender, question, answer)
+
+
+async def _notify_escalation(emp, chat, sender, question, answer):
+    """Alert the employee's creator + workspace owners when an escalation fires."""
+    from routes.notifications_feed import create_notification
+    ws = chat["workspace_id"]
+    recipients = set()
+    if emp.get("creator_user_id"):
+        recipients.add(emp["creator_user_id"])
+    async for m in db.workspace_members.find(
+        {"workspace_id": ws, "role": {"$in": ["owner", "admin"]}}, {"_id": 0, "user_id": 1}
+    ):
+        if m.get("user_id"):
+            recipients.add(m["user_id"])
+    recipients.discard(f"ai-emp-{emp['id']}")
+    title = f"{emp.get('name', 'AI employee')} escalated a request"
+    body = f'In "{chat.get("name") or "a chat"}": "{question[:140]}" — {answer[:160]}'
+    for uid in recipients:
+        await create_notification(
+            uid, "escalation", title, body,
+            meta={"chat_id": chat["id"], "employee_id": emp["id"], "handle": emp.get("deployment_handle", "")},
+        )
+
 
 def schedule_deployed_employee_if_mentioned(chat: dict, sender: dict, message: dict) -> bool:
     """If the message @-mentions a deployed AI employee's handle, schedule its reply."""

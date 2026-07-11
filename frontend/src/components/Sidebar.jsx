@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import CreditsWidget from "@/components/CreditsWidget";
+import NotificationBell from "@/components/NotificationBell";
 import ResizableEdge from "@/components/ui-v2/ResizableEdge";
 import safeStorage from "@/lib/safeStorage";
 import { toast } from "sonner";
@@ -319,6 +320,7 @@ export default function Sidebar() {
           >
             <LogOut className="w-4 h-4" />
           </button>
+          <NotificationBell collapsed={collapsed} />
         </div>
       </div>
 

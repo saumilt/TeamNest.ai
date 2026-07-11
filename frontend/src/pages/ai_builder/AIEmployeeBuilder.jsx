@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
-  Bot, Plus, Loader2, Sparkles, X, FileText, LayoutGrid, ShieldAlert, Store,
+  Bot, Plus, Loader2, Sparkles, X, FileText, LayoutGrid, ShieldAlert, Store, Rocket,
 } from "lucide-react";
 
 const RISK_CLS = {
@@ -62,6 +62,10 @@ export default function AIEmployeeBuilder() {
             <h1 className="text-2xl font-extrabold">AI Employee Builder</h1>
             <p className="text-sm text-ink-dim">Create, train, and deploy AI employees for your company.</p>
           </div>
+          <button type="button" onClick={() => nav("/ai-builder/deployed")} data-testid="aeb-deployed-btn"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-white/10 hover:bg-white/15 text-ink font-bold text-sm active:scale-95">
+            <Rocket className="w-4 h-4" /> Deployed
+          </button>
           <button type="button" onClick={() => nav("/ai-builder/marketplace")} data-testid="aeb-marketplace-btn"
             className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-white/10 hover:bg-white/15 text-ink font-bold text-sm active:scale-95">
             <Store className="w-4 h-4" /> Marketplace
