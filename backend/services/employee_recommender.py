@@ -154,6 +154,18 @@ def _build_reco(cand: Dict, reason: str) -> Dict:
 
 async def recommend_for_chat(chat: Dict, force: bool = False) -> Optional[Dict]:
     chat_id = chat["id"]
+
+    # Developer/engineering group → always default to the @devmanager team.
+    category = (chat.get("category") or "").lower()
+    source = (chat.get("source") or "").lower()
+    if (
+        category == "engineering"
+        or source == "dev_chat"
+        or chat.get("linked_dev_project")
+        or chat.get("dev_team_hired")
+    ):
+        return _build_reco(DEVMANAGER, "This is a developer / engineering workspace.")
+
     text, latest_id, human_count = await _chat_text(chat_id)
 
     cached = chat.get("employee_reco")

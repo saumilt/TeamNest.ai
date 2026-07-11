@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { X, Sparkles, Calculator, Megaphone, Briefcase, Scale, ArrowRight } from "lucide-react";
 import safeStorage from "@/lib/safeStorage";
+import { fetchEmployeeRecommendation } from "@/hooks/useEmployeeRecommendation";
 
 /**
  * EmployeeCrossSell — rotates a "you haven't tried this AI employee yet" prompt
@@ -72,6 +73,31 @@ export default function EmployeeCrossSell() {
     if (SUPPRESS_PATHS.some((p) => pathname.startsWith(p))) {
       setPitch(null);
       return;
+    }
+
+    // On an open chat, mirror the content-aware recommendation so this nudge
+    // matches what the chat is about (instead of the generic day-rotation).
+    // For a devmanager/no-match chat we stay silent — the in-chat SmartHireBanner
+    // already covers it, so we don't double up or contradict it.
+    const chatMatch = pathname.match(/^\/chats\/([^/]+)/);
+    if (chatMatch) {
+      let cancelled = false;
+      fetchEmployeeRecommendation(chatMatch[1]).then((d) => {
+        if (cancelled) return;
+        const r = d.recommendation;
+        const key = `reco-${chatMatch[1]}`;
+        if (r && (r.kind === "marketplace" || r.kind === "employee") && !isDismissed(key)) {
+          setPitch({
+            key, name: r.name, icon: Sparkles,
+            accent: "from-amber-500/20 to-amber-500/0", iconColor: "text-amber-300",
+            pitch: r.reason || "Best match for what this chat is working on.",
+            cta: r.cta_label || "Hire →", link: r.link,
+          });
+        } else {
+          setPitch(null);
+        }
+      });
+      return () => { cancelled = true; };
     }
     let cancelled = false;
     const t = setTimeout(async () => {
@@ -144,7 +170,7 @@ export default function EmployeeCrossSell() {
             data-testid="cross-sell-cta"
             onClick={() => {
               dismiss(pitch.key);
-              nav("/employees");
+              nav(pitch.link || "/employees");
             }}
             className="flex-1 h-9 rounded-full bg-brand text-black hover:bg-brand-deep font-mono uppercase text-[10px] tracking-widest inline-flex items-center justify-center gap-1.5"
           >

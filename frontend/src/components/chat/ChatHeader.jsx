@@ -2,7 +2,7 @@ import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Avatar from "@/components/ui-v2/Avatar";
-import HireDevTeamButton from "@/components/chat/HireDevTeamButton";
+import SmartHirePill from "@/components/chat/SmartHirePill";
 import DevProjectSwitcher from "@/components/chat/DevProjectSwitcher";
 
 /**
@@ -136,8 +136,8 @@ export default function ChatHeader({
 							{devOsBusy ? "Spinning…" : "+ Dev OS"}
 						</button>
 					)}
-					{chat.type === "group" && !chat.dev_team_hired && (
-						<HireDevTeamButton chatId={chatId} variant="pill" />
+					{chat.type === "group" && (
+						<SmartHirePill chatId={chatId} chat={chat} />
 					)}
 				</div>
 			</div>

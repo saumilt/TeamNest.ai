@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Store, ArrowRight } from "lucide-react";
-import { api } from "@/lib/api";
 import HireDevTeamButton from "@/components/chat/HireDevTeamButton";
+import { useEmployeeRecommendation } from "@/hooks/useEmployeeRecommendation";
 
 /**
  * Content-aware "hire an AI employee" banner for a chat.
@@ -15,20 +14,7 @@ import HireDevTeamButton from "@/components/chat/HireDevTeamButton";
  */
 export default function SmartHireBanner({ chatId, chat }) {
   const nav = useNavigate();
-  const [state, setState] = useState({ loading: true, reco: null, marketUrl: "/ai-builder/marketplace" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState((s) => ({ ...s, loading: true }));
-    api.get(`/chats/${chatId}/employee-recommendation`)
-      .then(({ data }) => {
-        if (!cancelled) setState({ loading: false, reco: data.recommendation, marketUrl: data.marketplace_url || "/ai-builder/marketplace" });
-      })
-      .catch(() => { if (!cancelled) setState({ loading: false, reco: null, marketUrl: "/ai-builder/marketplace" }); });
-    return () => { cancelled = true; };
-  }, [chatId]);
-
-  const { loading, reco, marketUrl } = state;
+  const { loading, reco, marketUrl } = useEmployeeRecommendation(chatId);
 
   if (loading) {
     return (
