@@ -237,6 +237,14 @@ async def startup():
 
     try:
         import asyncio as _asyncio
+        from services.seller_digest import weekly_digest_loop as _sd
+        _asyncio.create_task(_sd())
+        logger.info("[startup] seller weekly digest loop scheduled (1h tick, 7d cadence)")
+    except Exception as e:
+        logger.warning("Seller weekly digest loop failed to start: %s", e)
+
+    try:
+        import asyncio as _asyncio
         from routes.template_market import reconcile_pending_market_payments as _mr
 
         async def _market_reconciler():

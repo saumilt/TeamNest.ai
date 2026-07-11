@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from deps import db, new_id, now_iso, require_user
+from deps import db, new_id, now_iso, require_super_admin, require_user
 
 router = APIRouter()
 
@@ -127,6 +127,26 @@ async def unpublish_listing(eid: str, current=Depends(require_user)):
 
 
 # ── Creator dashboard (SPECIFIC route — before /{listing_id}) ────────────
+@router.post("/ai-builder/marketplace/digest/run")
+async def run_seller_digest(send_email: bool = True, current=Depends(require_super_admin)):
+    """Super Admin — manually trigger the weekly seller performance digest.
+    Used for testing without waiting for the weekly background tick."""
+    from services.seller_digest import send_weekly_digests
+    return await send_weekly_digests(send_email=send_email)
+
+
+@router.get("/ai-builder/marketplace/digest/preview")
+async def preview_seller_digest(current=Depends(require_user)):
+    """Preview the current caller's own weekly digest payload (no delivery)."""
+    from datetime import datetime, timedelta, timezone
+    from services.seller_digest import compute_seller_digest
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    d = await compute_seller_digest(current["id"], cutoff)
+    if d is None:
+        return {"has_listings": False}
+    return {"has_listings": True, "digest": d}
+
+
 @router.get("/ai-builder/marketplace/mine")
 async def my_listings(current=Depends(require_user)):
     rows = await db.ai_employee_marketplace_listings.find(
