@@ -16,7 +16,7 @@ export default function DeployedDirectory() {
 
   const load = useCallback(() => {
     apiGet("/api/ai-builder/deployments").then((d) => { setRows(d.deployments); setDenied(false); })
-      .catch((e) => { if (String(e.message).includes("403") || String(e.message).toLowerCase().includes("admin")) setDenied(true); setRows([]); });
+      .catch((e) => { if (e?.status === 403) setDenied(true); setRows([]); });
   }, []);
   useFocusEffect(useCallback(() => { if (token) load(); }, [token, load]));
 

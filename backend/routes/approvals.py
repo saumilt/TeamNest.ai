@@ -158,6 +158,62 @@ async def edit_approval(
     return await db.approvals.find_one({"id": approval_id}, {"_id": 0})
 
 
+async def _audit_approval_decision(current, approval_id, payload, a):
+    try:
+        from services.audit import record_audit
+        await record_audit(
+            workspace_id=current["workspace_id"], actor_id=current["id"], actor_name=current.get("name"),
+            action=f"approval.{payload.status}", target_type="approval", target_id=approval_id,
+            meta={"title": a.get("title"), "creator_id": a.get("created_by")},
+        )
+    except Exception:
+        pass
+
+
+async def _record_approval_memory(current, approval_id, a):
+    """Record an approved final answer as high-importance decision memory."""
+    if not a.get("final_answer"):
+        return
+    try:
+        import asyncio
+        from services.memory_rag import extract_smart_cards, record_memory
+        await record_memory(
+            workspace_id=current["workspace_id"],
+            source_type="approval",
+            source_id=approval_id,
+            raw_content=f"{a.get('title','Approved')}: {a['final_answer']}",
+            chat_id=a.get("chat_id"),
+            project_folder_id=a.get("project_folder_id"),
+            title=a.get("title"),
+            memory_type="decision",
+            visibility="project",
+            importance_score=0.95,
+            created_by=current["id"],
+            extra_meta={
+                "decision_status": "approved",
+                "from_approval_id": approval_id,
+                "decision_history": [{
+                    "status": "approved",
+                    "by": current["id"],
+                    "by_name": current.get("name"),
+                    "at": now_iso(),
+                    "note": f"Auto-logged from approval: {a.get('title')}",
+                }],
+            },
+        )
+        asyncio.create_task(extract_smart_cards(
+            workspace_id=current["workspace_id"],
+            source_type="approval",
+            source_id=approval_id,
+            raw_content=f"{a.get('title','')}\n\n{a['final_answer']}",
+            chat_id=a.get("chat_id"),
+            project_folder_id=a.get("project_folder_id"),
+            created_by=current["id"],
+        ))
+    except Exception:
+        pass
+
+
 @router.post("/approvals/{approval_id}/decision")
 async def decide_approval(
     approval_id: str, payload: ApprovalDecision, current=Depends(require_user)
@@ -197,57 +253,9 @@ async def decide_approval(
         {"id": approval_id},
     )
     a = await db.approvals.find_one({"id": approval_id}, {"_id": 0})
-    # Audit: approval decision
-    try:
-        from services.audit import record_audit
-        await record_audit(
-            workspace_id=current["workspace_id"], actor_id=current["id"], actor_name=current.get("name"),
-            action=f"approval.{payload.status}", target_type="approval", target_id=approval_id,
-            meta={"title": a.get("title"), "creator_id": a.get("created_by")},
-        )
-    except Exception:
-        pass
-    # Phase 4 — record approved final answer as high-importance memory + Decision Log row
-    if payload.status == "approved" and a.get("final_answer"):
-        try:
-            import asyncio
-            from services.memory_rag import extract_smart_cards, record_memory
-            await record_memory(
-                workspace_id=current["workspace_id"],
-                source_type="approval",
-                source_id=approval_id,
-                raw_content=f"{a.get('title','Approved')}: {a['final_answer']}",
-                chat_id=a.get("chat_id"),
-                project_folder_id=a.get("project_folder_id"),
-                title=a.get("title"),
-                memory_type="decision",
-                visibility="project",
-                importance_score=0.95,
-                created_by=current["id"],
-                extra_meta={
-                    "decision_status": "approved",
-                    "from_approval_id": approval_id,
-                    "decision_history": [{
-                        "status": "approved",
-                        "by": current["id"],
-                        "by_name": current.get("name"),
-                        "at": now_iso(),
-                        "note": f"Auto-logged from approval: {a.get('title')}",
-                    }],
-                },
-            )
-            # Background: extract sharper Decision/Risk/Assumption cards via Claude
-            asyncio.create_task(extract_smart_cards(
-                workspace_id=current["workspace_id"],
-                source_type="approval",
-                source_id=approval_id,
-                raw_content=f"{a.get('title','')}\n\n{a['final_answer']}",
-                chat_id=a.get("chat_id"),
-                project_folder_id=a.get("project_folder_id"),
-                created_by=current["id"],
-            ))
-        except Exception:
-            pass
+    await _audit_approval_decision(current, approval_id, payload, a)
+    if payload.status == "approved":
+        await _record_approval_memory(current, approval_id, a)
     return a
 
 

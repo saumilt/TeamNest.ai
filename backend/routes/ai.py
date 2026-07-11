@@ -45,30 +45,27 @@ from storage import get_object
 
 router = APIRouter()
 
+PREMIUM_MODEL_KEYS = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "perplexity", "grok"}
 
-@router.post("/ai/research")
-async def create_research(payload: AIResearchCreate, current=Depends(require_user)):
-    chat = await db.chats.find_one({"id": payload.chat_id, "member_ids": current["id"]})
-    if not chat:
-        raise HTTPException(404, "Chat not found")
 
-    # ===== Per-chat AI Billing & Permissions gate =====
+async def _gate_research_models(chat, current, payload):
+    """Apply per-chat AI permission + feature toggles and credit gating.
+
+    Returns (allowed_models, blocked); raises HTTPException when disallowed.
+    """
     gate = await check_ai_allowed(chat, current, estimated_credits=20)
     if not gate["allowed"]:
         raise HTTPException(403, gate["reason"])
 
-    # Apply per-chat feature toggles to the requested models.
     settings = gate["settings"]
-    premium_keys = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "perplexity", "grok"}
     requested = list(payload.selected_models or [])
     if not settings.get("premium_models_enabled", True):
-        requested = [m for m in requested if m not in premium_keys]
+        requested = [m for m in requested if m not in PREMIUM_MODEL_KEYS]
         if not requested:
             raise HTTPException(403, "Premium models are disabled for this group.")
     if not settings.get("multi_model_compare_enabled", True) and len(requested) > 1:
         requested = requested[:1]
 
-    # Credit gating — filter models that the workspace can't afford right now.
     allowed_models, blocked = await filter_models_by_credits(
         current["workspace_id"], requested
     )
@@ -78,8 +75,14 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
             "AI credits exhausted. Upgrade your plan from the Billing page "
             "or wait until your monthly allowance resets.",
         )
+    return allowed_models, blocked
 
-    # ===== Phase 4 — retrieve memory context based on selected mode =====
+
+async def _build_research_context(payload, chat, current):
+    """Retrieve memory context + image bytes and build the enriched prompt.
+
+    Returns (memory_mode, memory_items, image_bytes_list, enriched_question).
+    """
     memory_mode = payload.memory_mode or "chat"
     memory_items = await retrieve_memory(
         workspace_id=current["workspace_id"],
@@ -98,11 +101,10 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
             f"=== Current question ===\n{payload.question}"
         )
 
-    # ===== Vision — load image bytes from uploaded files (same workspace only) =====
+    # Vision — load image bytes from uploaded files (same workspace only).
     image_bytes_list = []
     if payload.image_file_ids:
-        # Cap at 4 images to avoid runaway token costs.
-        ids = payload.image_file_ids[:4]
+        ids = payload.image_file_ids[:4]  # cap to avoid runaway token costs
         cursor = db.files.find(
             {
                 "id": {"$in": ids},
@@ -123,7 +125,13 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
                 enriched_question
                 or "Describe and analyze the attached image(s) in detail."
             )
+    return memory_mode, memory_items, image_bytes_list, enriched_question
 
+
+async def _persist_research_question(
+    payload, current, allowed_models, blocked, memory_mode, memory_items, image_bytes_list
+):
+    """Insert the question message + research thread, broadcast, return (q_msg, thread)."""
     q_msg = {
         "id": new_id(),
         "chat_id": payload.chat_id,
@@ -167,6 +175,57 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
     )
     q_msg["metadata"]["thread_id"] = thread["id"]
     await _broadcast_message(payload.chat_id, q_msg)
+    return q_msg, thread
+
+
+async def _record_research_usage(payload, current, chat, responses):
+    """Per-chat usage ledger for AI Billing & Permissions reports."""
+    from services.billing import credit_cost_for_model as _cc
+    for r in responses:
+        if not r.get("real"):
+            continue
+        await record_ai_usage(
+            chat_id=payload.chat_id,
+            user_id=current["id"],
+            credits=_cc(r.get("model_key") or ""),
+            model=r.get("model_key"),
+            workflow="research",
+            project_folder_id=chat.get("project_folder_id"),
+        )
+
+
+async def _record_research_memory(payload, current, chat, thread):
+    """Auto-record the completed thread as retrievable memory."""
+    final_thread = await db.ai_threads.find_one({"id": thread["id"]}, {"_id": 0})
+    if final_thread and final_thread.get("final_answer"):
+        await record_memory(
+            workspace_id=current["workspace_id"],
+            source_type="ai_thread",
+            source_id=thread["id"],
+            raw_content=f"Q: {payload.question}\n\nA: {final_thread['final_answer']}",
+            chat_id=payload.chat_id,
+            project_folder_id=chat.get("project_folder_id"),
+            title=payload.question[:140],
+            memory_type="research",
+            visibility="chat",
+            created_by=current["id"],
+        )
+
+
+@router.post("/ai/research")
+async def create_research(payload: AIResearchCreate, current=Depends(require_user)):
+    chat = await db.chats.find_one({"id": payload.chat_id, "member_ids": current["id"]})
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+
+    allowed_models, blocked = await _gate_research_models(chat, current, payload)
+    memory_mode, memory_items, image_bytes_list, enriched_question = (
+        await _build_research_context(payload, chat, current)
+    )
+    q_msg, thread = await _persist_research_question(
+        payload, current, allowed_models, blocked,
+        memory_mode, memory_items, image_bytes_list,
+    )
 
     responses = await ask_models_parallel(
         enriched_question,
@@ -186,19 +245,7 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
         current["workspace_id"], current["id"], responses, source="ai_research"
     )
 
-    # ===== Per-chat usage ledger (for AI Billing & Permissions reports) =====
-    from services.billing import credit_cost_for_model as _cc
-    for r in responses:
-        if not r.get("real"):
-            continue
-        await record_ai_usage(
-            chat_id=payload.chat_id,
-            user_id=current["id"],
-            credits=_cc(r.get("model_key") or ""),
-            model=r.get("model_key"),
-            workflow="research",
-            project_folder_id=chat.get("project_folder_id"),
-        )
+    await _record_research_usage(payload, current, chat, responses)
 
     await _finalize_research(
         thread,
@@ -208,21 +255,7 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
         favorite_model=(current.get("preferences") or {}).get("favorite_ai_model"),
     )
 
-    # ===== Phase 4 — auto-record the completed thread as memory =====
-    final_thread = await db.ai_threads.find_one({"id": thread["id"]}, {"_id": 0})
-    if final_thread and final_thread.get("final_answer"):
-        await record_memory(
-            workspace_id=current["workspace_id"],
-            source_type="ai_thread",
-            source_id=thread["id"],
-            raw_content=f"Q: {payload.question}\n\nA: {final_thread['final_answer']}",
-            chat_id=payload.chat_id,
-            project_folder_id=chat.get("project_folder_id"),
-            title=payload.question[:140],
-            memory_type="research",
-            visibility="chat",
-            created_by=current["id"],
-        )
+    await _record_research_memory(payload, current, chat, thread)
 
     out = await get_research(thread["id"], current)
     out["usage"] = await get_usage(current["workspace_id"])

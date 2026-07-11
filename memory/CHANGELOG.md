@@ -2,6 +2,19 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 99 (Jul 2026) — Mobile parity: Notifications + Deployed directory; backend refactor
+### Mobile (parity complete)
+- Added reusable `mobile/src/components/NotificationBell.tsx` (unread badge, focus-refresh) and wired it into ALL FOUR tab headers (Chats/Research/Tasks/You) → routes `/notifications`.
+- Wired entry points to the Deployed AI Employees directory (`/builder/deployed`): "Deployed Employees" row in the You-tab AI Employees card + a rocket header icon on the builder dashboard.
+- Both mobile screens (`notifications.tsx`, `builder/deployed.tsx`) were already coded; endpoints matched. Tested via testing_agent (iteration_99): 6/6 backend, all mobile flows pass. Non-admin correctly sees "Admins only".
+- Hardened `mobile/src/api.ts` to attach HTTP `status` to thrown errors; deployed screen now checks `e.status === 403` instead of brittle string matching.
+
+### Backend refactor (P3 — cyclomatic complexity)
+- `routes/ai.py:create_research` split into helpers: `_gate_research_models`, `_build_research_context`, `_persist_research_question`, `_record_research_usage`, `_record_research_memory`. Behavior-preserving; verified research e2e (final answer + memory_mode + blocked).
+- `routes/admin.py:admin_update_user` → `_build_user_update`, `_audit_user_update` (verified 400 empty-update, 404 not-found).
+- `routes/approvals.py:decide_approval` → `_audit_approval_decision`, `_record_approval_memory`.
+
+
 ## Iteration 93 (Jul 2026) — Template marketplace seeding, hire-checkout errors, real-time polling fallback
 ### Fixes
 - **Templates empty on teamnest.ai (production)**: root cause — `mkt_templates` was never seeded into the production DB (0 templates), while preview had all 14. Added an idempotent startup seeder `seed.seed_market_templates()` (loads `backend/data/market_templates_seed.json` — 14 templates incl. demo files + screenshot filenames; screenshots ship in `backend/static/market_shots/`). Wired into `server.py` startup. Verified: preview stays at 14 (no dupes); production will populate on redeploy.

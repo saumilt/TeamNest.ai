@@ -31,7 +31,9 @@ async function req(path: string, method: string, body?: any): Promise<any> {
   if (!res.ok) {
     const detail = data && (data.detail || data.message);
     const msg = typeof detail === "string" ? detail : `Request failed (${res.status})`;
-    throw new Error(msg);
+    const err: any = new Error(msg);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

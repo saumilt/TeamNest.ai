@@ -125,19 +125,11 @@ async def admin_users(current=Depends(require_user)):
     return out
 
 
-@router.patch("/admin/users/{user_id}")
-async def admin_update_user(
-    user_id: str, payload: dict, current=Depends(require_user)
-):
-    if current["role"] not in ("owner", "admin"):
-        raise HTTPException(403, "Admin only")
-    if user_id == current["id"] and payload.get("status") == "disabled":
-        raise HTTPException(400, "Cannot disable yourself")
-    membership = await db.workspace_members.find_one(
-        {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"_id": 0}
-    )
-    if not membership:
-        raise HTTPException(404, "User not found in this workspace")
+async def _build_user_update(payload, membership, current):
+    """Validate role/status changes and return the update dict.
+
+    Raises HTTPException on invalid transitions or an empty update.
+    """
     update = {}
     if "role" in payload and payload["role"] in ("owner", "admin", "member", "viewer", "guest"):
         if membership.get("role") == "owner" and payload["role"] != "owner":
@@ -151,18 +143,11 @@ async def admin_update_user(
         update["status"] = payload["status"]
     if not update:
         raise HTTPException(400, "Nothing to update")
-    await db.workspace_members.update_one(
-        {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"$set": update}
-    )
-    # If the target user is currently active in this workspace, mirror the role
-    # on their user doc too so the next request reflects the change immediately.
-    target = await db.users.find_one({"id": user_id}, {"_id": 0, "workspace_id": 1})
-    if target and target.get("workspace_id") == current["workspace_id"]:
-        await db.users.update_one({"id": user_id}, {"$set": update})
-    u = await db.users.find_one({"id": user_id}, PROJ)
-    u["role"] = update.get("role", membership.get("role"))
-    u["status"] = update.get("status", membership.get("status"))
-    # Audit
+    return update
+
+
+async def _audit_user_update(current, user_id, update, membership, u):
+    """Emit audit rows for role and/or status changes."""
     from services.audit import record_audit
     if "role" in update:
         await record_audit(
@@ -176,6 +161,34 @@ async def admin_update_user(
             action=("user.disabled" if update["status"] == "disabled" else "user.activated"),
             target_type="user", target_id=user_id, meta={"target_name": u.get("name")},
         )
+
+
+@router.patch("/admin/users/{user_id}")
+async def admin_update_user(
+    user_id: str, payload: dict, current=Depends(require_user)
+):
+    if current["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Admin only")
+    if user_id == current["id"] and payload.get("status") == "disabled":
+        raise HTTPException(400, "Cannot disable yourself")
+    membership = await db.workspace_members.find_one(
+        {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"_id": 0}
+    )
+    if not membership:
+        raise HTTPException(404, "User not found in this workspace")
+    update = await _build_user_update(payload, membership, current)
+    await db.workspace_members.update_one(
+        {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"$set": update}
+    )
+    # If the target user is currently active in this workspace, mirror the role
+    # on their user doc too so the next request reflects the change immediately.
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "workspace_id": 1})
+    if target and target.get("workspace_id") == current["workspace_id"]:
+        await db.users.update_one({"id": user_id}, {"$set": update})
+    u = await db.users.find_one({"id": user_id}, PROJ)
+    u["role"] = update.get("role", membership.get("role"))
+    u["status"] = update.get("status", membership.get("status"))
+    await _audit_user_update(current, user_id, update, membership, u)
     return public_user(u)
 
 
