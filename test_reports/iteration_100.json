@@ -1,0 +1,48 @@
+{
+  "summary": "Phase 3 Workspace AI Licensing & Revenue Share tested end-to-end (backend + web). 16/16 pytest cases pass covering billing-rules defaults, RBAC (owner/admin, super-admin), consent preview, enable idempotency, patch, disable, workspace/creator/admin ledger math (base + per_user*active_users, 30% platform, 70% creator, TeamNest-owned keeps 100%), and PUT rules auto-adjust of creator_revenue_percent. Web UI: /workspace-ai renders correctly for super admin (all 3 tabs), nav link hidden for members, rules-save toast confirms PUT works. Two minor issues to flag; core module is solid.",
+  "platforms_tested": ["web"],
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/workspace-ai/billing-rules", "issue": "Any authenticated user (even a plain member) can read the global revenue-share rules. Fee schedule is not particularly sensitive but consider gating to owner/admin/super_admin for consistency with the rest of the module."}
+    ]
+  },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [
+        {"component": "WorkspaceAI page (route guard)", "issue": "Non-privileged members who type /workspace-ai directly still load the page; API 403s show TWO 'Failed to load workspace AI' error toasts (each API call fires its own). Sidebar link is correctly hidden, but the route itself has no client-side RBAC guard.", "selector": "[data-testid='workspace-ai-page']", "priority": "MEDIUM"},
+        {"component": "EnableModal availability scope", "issue": "Dropdown offers 'Selected departments/roles/users' but there is no follow-up picker in the modal to actually choose department/role/user IDs — enable posts with empty enabled_departments/enabled_roles/enabled_users arrays, making non-workspace scopes effectively no-ops.", "selector": "[data-testid='enable-scope']", "priority": "MEDIUM"}
+      ],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "/workspace-ai (Team AI tab)", "issues": ["Two identical error toasts stacked when a member hits /workspace-ai (Promise.all fires 3 requests, 2 fail → catch shows toast twice due to shared handler)"]}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_workspace_ai_iter100.py",
+    "/app/test_reports/pytest/iteration100.xml"
+  ],
+  "action_items": [
+    "Add client-side RBAC guard on /workspace-ai route (redirect non owner/admin/super_admin to /chats) OR at minimum render an inline 'You don't have access' state instead of double error toasts.",
+    "Fix the double 'Failed to load workspace AI' toast — the shared load() catches every failing request separately in Promise.all; dedupe or show a single toast.",
+    "Implement the department/role/user picker in EnableModal when availability_scope !== 'workspace', or hide the non-workspace options until the picker is built.",
+    "(Optional) Gate GET /api/workspace-ai/billing-rules behind owner/admin for consistency."
+  ],
+  "critical_code_review_comments": [
+    "services/ai_employee_billing.py compute_deployment_billing: uses `dep.get('base_monthly_fee') or rules['min_builder_fee']` — a legitimate 0 override would fall back to the min fee. Consider `dep['base_monthly_fee'] if dep.get('base_monthly_fee') is not None else rules['min_builder_fee']` (same for per_user_monthly_fee/platform_fee_percent). The enable endpoint already uses this correct pattern; the compute path is inconsistent.",
+    "routes/workspace_ai.py PATCH /workspace-ai/employees/{eid}: writes None into base_monthly_fee/per_user_monthly_fee/platform_fee_percent if the caller omits them (because DeployConfig defaults them to None). This can silently zero out or reset custom pricing on a PATCH intended to change scope only. Use exclude_unset in the request model or drop None-valued fields before $set.",
+    "routes/workspace_ai.py `_owner_only` grants access based on the caller's role in ANY workspace they own — e.g. buildertest@ is `owner` of their own tiny workspace and therefore passes owner-only checks against a shared endpoint. Role check should be re-derived from current['workspace_id'] context rather than the JWT's cached role."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workspace_ai_iter100.py"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "90% (core flow works; 2 UX polish gaps)"},
+  "test_credentials": "amit@demo.team / Demo@2026 (super admin owner), sam@funasia.net / Perfect$2008 (super admin), raj@demo.team / Demo@2026 (member for negative RBAC), buildertest@example.com / Demo@2026 (own-workspace owner, used for super-admin-only negative tests)",
+  "seed_data_creation": "None — used existing 'AI Sales Assistant (billing test)' deployment on amit's workspace. PUT billing-rules test restores defaults (min=10, per_user=3, platform=30%, trial=14) at teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend module is stable; regression suite at /app/backend/tests/test_workspace_ai_iter100.py covers RBAC, ledger math, PUT rules auto-adjust. If touching the UI, add a route guard for /workspace-ai and implement the department/role/user picker inside EnableModal. Note: buildertest@ is OWNER of their own workspace — use raj@demo.team for negative role tests against owner/admin endpoints.",
+  "rca of the issue": "N/A — no reproduction blockers found; only UX and code-quality items above."
+}

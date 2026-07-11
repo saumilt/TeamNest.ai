@@ -29,6 +29,7 @@ import ProjectMemoryTimeline from "@/pages/ProjectMemoryTimeline";
 import NotificationsPrefs from "@/pages/NotificationsPrefs";
 import AIEmployees from "@/pages/AIEmployees";
 import AIEmployeeBuilder from "@/pages/ai_builder/AIEmployeeBuilder";
+import WorkspaceAI from "@/pages/WorkspaceAI";
 import AIEmployeeMarketplace from "@/pages/ai_builder/AIEmployeeMarketplace";
 import BuilderProgram from "@/pages/ai_builder/BuilderProgram";
 import DeployedDirectory from "@/pages/ai_builder/DeployedDirectory";
@@ -177,6 +178,7 @@ export default function App() {
             <Route path="/ai-builder/deployed" element={<DeployedDirectory />} />
             <Route path="/ai-builder/marketplace" element={<AIEmployeeMarketplace />} />
             <Route path="/ai-builder/:id" element={<EmployeeProfile />} />
+            <Route path="/workspace-ai" element={<WorkspaceAI />} />
             <Route path="/bookkeeper" element={<Bookkeeper />} />
             <Route path="/sms" element={<SmsContacts />} />
             <Route path="/dev-os" element={<DevOsHub />} />

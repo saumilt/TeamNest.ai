@@ -102,6 +102,15 @@ async def _respond(chat: dict, sender: dict, message: dict, deployment: dict) ->
     if escalated:
         await _notify_escalation(emp, chat, sender, question, answer)
 
+    # Corporate billing — count the triggering user as a monthly-active user
+    # of this deployed employee (best-effort; only bills workspace-enabled ones).
+    if status == "complete":
+        try:
+            from services.ai_employee_billing import record_ai_employee_usage
+            await record_ai_employee_usage(ws, eid, sender.get("id"))
+        except Exception:
+            pass
+
 
 async def _notify_escalation(emp, chat, sender, question, answer):
     """Alert the employee's creator + workspace owners when an escalation fires."""

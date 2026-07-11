@@ -72,6 +72,7 @@ from routes import (
     uploads,
     voice_notes,
     workspace,
+    workspace_ai,
 )
 from seed import seed_demo, seed_market_templates
 from services.workspace_membership import migrate_legacy_users
@@ -137,6 +138,7 @@ api.include_router(dev_os_preview.router)
 api.include_router(dev_publish.router)
 api.include_router(template_market.router)
 api.include_router(dev_gates.router)
+api.include_router(workspace_ai.router)
 
 app.include_router(api)
 

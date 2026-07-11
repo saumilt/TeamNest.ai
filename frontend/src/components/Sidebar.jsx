@@ -273,6 +273,21 @@ export default function Sidebar() {
             </span>
           )}
         </NavLink>
+        {(user?.role === "owner" || user?.role === "admin" || user?.is_super_admin) && (
+          <NavLink
+            to="/workspace-ai"
+            data-testid="nav-workspace-ai"
+            title="Workspace AI (deploy & billing)"
+            className={({ isActive }) =>
+              `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
+                isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+              }`
+            }
+          >
+            <Building2 className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+            {!collapsed && <span className="truncate">Workspace AI</span>}
+          </NavLink>
+        )}
         {user?.is_super_admin && (
           <NavLink
             to="/superadmin"
