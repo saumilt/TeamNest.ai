@@ -1397,6 +1397,11 @@ async def send_message(
     from services.ai_employee_dispatcher import schedule_employee_if_addressed
     schedule_employee_if_addressed(chat, current, msg)
 
+    # Deployed custom AI employees (from the Builder) — auto-respond when their
+    # @handle is mentioned in a chat they're deployed to.
+    from services.ai_employee_deploy_dispatcher import schedule_deployed_employee_if_mentioned
+    schedule_deployed_employee_if_mentioned(chat, current, msg)
+
     # Dev OS slash commands: `/dev-os scan`, `/dev-os new <name>`, `/dev-os task`, `/dev-os bug`, `/dev-os plan`, `/dev-os help`
     from services.dev_os_slash import schedule_devos_if_addressed
     is_devos_slash = schedule_devos_if_addressed(chat, current, msg)

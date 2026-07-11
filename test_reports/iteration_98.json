@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 98 — Deployed AI-employee @mention auto-responder + Builder Program rejection cooldown & audit trail. Backend 5/5 pytest passing (test_iteration98_deploy_cooldown_audit.py): (1) deploying an AI employee with channel=handle + handle=helpbot<hash> and mentioning @<handle> in a chat produces an ai_answer message from sender_id=ai-emp-<eid> within ~15s with metadata.deployed_employee_id=<eid>; (2) plain non-@mention messages do NOT trigger a bogus AI reply — regression confirmed; (3) SCOPING — a channel=chat deployment bound to chatA does NOT respond when @-mentioned in chatB; (4) REJECTION COOLDOWN — apply→reject→re-apply returns 429 with 'You can re-apply after <YYYY-MM-DD>', GET /api/builder-program/me returns can_reapply=false + reapply_at + reapply_cooldown_days=30, audit trail returns one row with decision='rejected', decided_by=amit@demo.team, note='not yet', created_at; non-super calling audit → 403; (5) multi-decision audit — approve after fresh apply appends an 'approved' row with the note. WEB UI (Chromium, 1440x900, buildertest@example.com/Demo@2026): /builder-program renders data-testid='bp-declined' with body 'Application not approved · ui test · You can re-apply after 8/10/2026.' and bp-form is NOT present — cooldown card verified. MOBILE UI (Expo web preview, 390x844): CONFIRMED BUG — mb-bp-declined does NOT render after a rejection; mb-bp-form is shown instead. Root cause verified: race condition in /app/mobile/app/builder-program.tsx — the screen calls apiGet('/api/builder-program/me') in useEffect BEFORE the AuthProvider has loaded tn_token from localStorage/SecureStore into the module-level _token in /app/mobile/src/api.ts, so the request goes out unauthenticated, backend returns 401, .catch fallback sets me={builder_access:false} (no application field), and the component falls through to the mb-bp-form branch. A direct fetch to the same endpoint with the token attached returns 200 with the exact expected {can_reapply:false, reapply_at, application:{status:'rejected'}}, confirming the backend is correct and only the mobile UI is affected. ESCALATION-in-chat coverage: not explicitly verified via pytest (base auto-response + metadata verified; escalation-rule branch left uncovered because we couldn't spin up a save+trigger flow within budget). @cmo/@sales pre-built AI employee regression: not re-verified this iteration (out of budget); iteration_93+ confirms.",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [
+        {"component": "BuilderProgramScreen", "issue": "After a rejection, mb-bp-declined does NOT render — mb-bp-form is shown instead. Backend /api/builder-program/me returns the correct rejected+can_reapply=false payload (verified via in-page fetch with the Bearer token), but the screen's initial apiGet fires before the auth token is loaded from storage into module-level _token in src/api.ts → 401 → .catch fallback sets me={builder_access:false} (no application field) → falls through to the form branch. Reference: /app/mobile/app/builder-program.tsx:24 and /app/mobile/src/api.ts:6-18.", "testID": "mb-bp-declined", "priority": "HIGH"}
+      ],
+      "integration_issues": [
+        {"flow": "Any authenticated screen loaded on cold nav (page reload / deep link)", "issue": "Race between AuthProvider boot (reads tn_token from storage → api.setToken) and screen useEffect firing apiGet. On the first request, _token is still null → 401. This pattern likely affects other screens that fetch immediately on mount without gating on auth readiness.", "affected_testIDs": ["mb-bp-declined"]}
+      ],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [
+    {"flow": "Post-rejection cooldown card", "platform": "mobile", "issue": "Web renders bp-declined correctly, mobile renders mb-bp-form instead of mb-bp-declined due to the auth race in mobile.", "expected": "mb-bp-declined visible with 'You can re-apply after <date>'", "actual": "mb-bp-form is rendered — user is invited to apply again despite the 30-day cooldown."}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration98_deploy_cooldown_audit.py",
+    "/app/test_reports/pytest/iteration98.xml"
+  ],
+  "action_items": [
+    "HIGH: Fix the mobile auth-token race in /app/mobile/app/builder-program.tsx (or globally in /app/mobile/src/api.ts / auth.tsx). Simplest fixes: (a) have api.ts hydrate _token synchronously from localStorage on first request when running on web, OR (b) have the AuthProvider gate rendering of protected screens on a `booted` state so useEffect only fires after setToken() has been called, OR (c) have BuilderProgramScreen await useAuth() ready-state before calling load().",
+    "OPTIONAL: add a pytest for the escalation-in-chat branch (add an escalation_rule → mention → assert reply reflects escalation / metadata.escalated=true).",
+    "OPTIONAL: add a lightweight regression check that @cmo / @sales pre-built AI employees still respond in a chat after this deploy_dispatcher was added."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/services/ai_employee_deploy_dispatcher.py:112 — asyncio.create_task(_go()) is fire-and-forget; a failure inside _respond is only logged via the answer body ('⚠️ … failed: {e}'). Consider also logger.exception() so ops can see the traceback in the backend log.",
+    "/app/backend/services/ai_employee_deploy_dispatcher.py:73 — the placeholder is broadcast BEFORE the final answer is written; on very fast LLM responses two websocket frames arrive out of order — the frontend chat renderer must dedupe by message id (it already does via metadata.status transitions). Confirm ChatMessage renderer handles both frames idempotently.",
+    "/app/backend/routes/builder_program.py:96 — the cooldown lookup uses `sort=[('updated_at', -1)]` — good. Consider adding an index on (user_id, status, updated_at) to keep this snappy as the audit table grows.",
+    "/app/mobile/src/api.ts:6-18 — module-level _token creates the boot race called out above. Recommend replacing with a getter that first checks a cached value, then falls back to storageGet('tn_token') synchronously (localStorage on web, or an in-memory hydrated-from-boot promise on native).",
+    "/app/mobile/app/builder-program.tsx:24 — load() is called unconditionally in useEffect on mount. Should be gated on `token !== null` from useAuth() so it never fires unauthenticated."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration98_deploy_cooldown_audit.py",
+    "/app/test_reports/pytest/iteration98.xml",
+    "/app/test_reports/iteration_98.json"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "web 100% · mobile 0% (cooldown card broken)"},
+  "test_credentials": "Super admin: amit@demo.team / Demo@2026. Non-builder: buildertest@example.com / Demo@2026 (POST /api/auth/login, mobile: email/password form).",
+  "seed_data_creation": "None persisted. Post-test cleanup (via direct Mongo): users.builder_approved=false for buildertest; builder_applications, builder_program_audit rows for buildertest deleted; all TEST_* ai_employees, ai_employee_deployments, chats and their messages deleted. Verified: 1 app + 1 audit + 4 emps + 6 chats + 8 msgs removed.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend endpoints are stable — deploy dispatcher + cooldown + audit all covered in /app/backend/tests/test_iteration98_deploy_cooldown_audit.py (5/5). The lone bug is on mobile: mb-bp-declined never renders on cold navigation to /builder-program because the mobile api module's _token is not yet hydrated when the screen's useEffect fires apiGet('/api/builder-program/me'). Any fix should be re-tested by (a) rejecting the buildertest user, (b) logging in via mobile email/password form, (c) navigating to /builder-program, (d) asserting [data-testid='mb-bp-declined'] appears and mb-bp-form does NOT. The web /builder-program flow is fine and does not need retesting unless BuilderProgram.jsx is touched. Escalation-in-chat and @cmo/@sales regression were NOT explicitly retested this pass — add if you have budget.",
+  "rca of the issue": "Mobile mb-bp-declined missing after rejection — RCA: /app/mobile/app/builder-program.tsx line 24 calls `apiGet('/api/builder-program/me')` in useEffect at mount. /app/mobile/src/api.ts line 6 stores `_token` at module scope. The AuthProvider (/app/mobile/src/auth.tsx) hydrates `tn_token` from localStorage asynchronously in its own useEffect and only then calls `api.setToken(t)`. On cold navigation (page reload, deep link) the screen's useEffect wins the race → apiGet goes out with no Authorization header → backend returns 401 → the screen's .catch sets `me = {builder_access: false}` (no `.application` field) → the `declined = app && app.status === 'rejected' && me.can_reapply === false` branch is false → falls through to the `mb-bp-form` branch. Reproduction: log into mobile as buildertest, navigate to /builder-program after any state where the user has been rejected — mb-bp-form is shown. Mitigation: (i) gate the screen on `useAuth().token` (only call `load()` when token is present), or (ii) have api.ts hydrate the token synchronously from localStorage on first request when on web."
+}

@@ -5,6 +5,7 @@ AI employees is gated to: super admins, users approved through this program, OR
 workspaces on the top-level Team plan ($19.99). Super Admins review and approve
 / reject applications.
 """
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +17,17 @@ from services.billing import get_subscription
 router = APIRouter()
 
 BUILDER_PLAN_IDS = {"team"}
+REAPPLY_COOLDOWN_DAYS = 30
+
+
+def _parse_iso(s: Optional[str]) -> Optional[datetime]:
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
 
 
 async def builder_access(current: dict) -> tuple[bool, Optional[str]]:
@@ -60,7 +72,18 @@ async def my_status(current=Depends(require_user)):
     ok, reason = await builder_access(current)
     app = await db.builder_applications.find_one(
         {"user_id": current["id"]}, {"_id": 0}, sort=[("created_at", -1)])
-    return {"builder_access": ok, "reason": reason, "application": app}
+    reapply_at = None
+    can_reapply = True
+    if app and app.get("status") == "rejected":
+        decided = _parse_iso(app.get("updated_at"))
+        if decided:
+            unlock = decided + timedelta(days=REAPPLY_COOLDOWN_DAYS)
+            if datetime.now(timezone.utc) < unlock:
+                can_reapply = False
+                reapply_at = unlock.isoformat()
+    return {"builder_access": ok, "reason": reason, "application": app,
+            "can_reapply": can_reapply, "reapply_at": reapply_at,
+            "reapply_cooldown_days": REAPPLY_COOLDOWN_DAYS}
 
 
 @router.post("/builder-program/apply")
@@ -69,6 +92,19 @@ async def apply(payload: Application, current=Depends(require_user)):
         {"user_id": current["id"], "status": {"$in": ["pending", "approved"]}}, {"_id": 0})
     if existing:
         raise HTTPException(400, f"You already have a {existing['status']} application")
+    # Rejection cooldown — cannot re-apply until the cooldown elapses.
+    last_rejected = await db.builder_applications.find_one(
+        {"user_id": current["id"], "status": "rejected"}, {"_id": 0}, sort=[("updated_at", -1)])
+    if last_rejected:
+        decided = _parse_iso(last_rejected.get("updated_at"))
+        if decided:
+            unlock = decided + timedelta(days=REAPPLY_COOLDOWN_DAYS)
+            if datetime.now(timezone.utc) < unlock:
+                raise HTTPException(
+                    429,
+                    f"Your previous application was declined. You can re-apply after "
+                    f"{unlock.date().isoformat()}.",
+                )
     now = now_iso()
     doc = {
         "id": new_id(), "user_id": current["id"],
@@ -119,4 +155,18 @@ async def decide(app_id: str, payload: Decision, current=Depends(require_super_a
     await db.users.update_one(
         {"id": app["user_id"]},
         {"$set": {"builder_approved": status == "approved", "updated_at": now}})
+    # Audit trail — one immutable record per decision.
+    await db.builder_program_audit.insert_one({
+        "id": new_id(), "application_id": app_id, "user_id": app["user_id"],
+        "user_email": app.get("user_email"), "decision": status,
+        "note": payload.note or "", "decided_by": current.get("email"),
+        "created_at": now,
+    })
     return {"ok": True, "status": status}
+
+
+@router.get("/builder-program/applications/{app_id}/audit")
+async def application_audit(app_id: str, current=Depends(require_super_admin)):
+    rows = await db.builder_program_audit.find(
+        {"application_id": app_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"audit": rows}

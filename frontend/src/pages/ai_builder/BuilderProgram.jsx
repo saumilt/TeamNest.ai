@@ -33,6 +33,8 @@ export default function BuilderProgram() {
 
   const app = me.application;
   const submitted = app && (app.status === "pending" || app.status === "approved");
+  const declined = app && app.status === "rejected" && me.can_reapply === false;
+  const reapplyDate = me.reapply_at ? new Date(me.reapply_at).toLocaleDateString() : null;
 
   return (
     <div className="min-h-screen bg-bg text-ink px-5 py-8 md:px-10">
@@ -68,6 +70,12 @@ export default function BuilderProgram() {
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6" data-testid="bp-pending">
             <div className="flex items-center gap-2 text-amber-300 font-bold mb-1"><Loader2 className="w-4 h-4 animate-spin" /> Application under review</div>
             <p className="text-sm text-ink-dim">Thanks for applying! We'll review your application and grant access once approved.</p>
+          </div>
+        ) : declined ? (
+          <div className="rounded-2xl border border-white/10 bg-surface-2 p-6" data-testid="bp-declined">
+            <div className="font-bold mb-1">Application not approved</div>
+            <p className="text-sm text-ink-dim">{app?.decision_note || "Your application wasn't approved this time."}{reapplyDate ? ` You can re-apply after ${reapplyDate}.` : ""}</p>
+            <p className="text-xs text-ink-faint mt-3">Want access sooner? <button type="button" onClick={() => nav("/billing")} className="text-ai font-semibold">Upgrade to the Team plan ($19.99)</button> for instant builder access.</p>
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-surface-2 p-6 space-y-4" data-testid="bp-form">

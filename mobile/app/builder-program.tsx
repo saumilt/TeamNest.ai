@@ -35,6 +35,8 @@ export default function BuilderProgramScreen() {
   if (!me) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
   const app = me.application;
   const submitted = app && (app.status === "pending" || app.status === "approved");
+  const declined = app && app.status === "rejected" && me.can_reapply === false;
+  const reapplyDate = me.reapply_at ? new Date(me.reapply_at).toLocaleDateString() : null;
   const valid = f.full_name.trim().length >= 2 && f.motivation.trim().length >= 10 && f.value_prop.trim().length >= 10 && f.agent_ideas.trim().length >= 10;
 
   return (
@@ -68,6 +70,11 @@ export default function BuilderProgramScreen() {
           <View style={[styles.card, { borderColor: colors.accentBorder, marginTop: spacing.lg }]} testID="mb-bp-pending">
             <Text style={{ color: colors.accent, fontWeight: "800" }}>Application under review</Text>
             <Text style={styles.cardBody}>Thanks for applying! We'll grant access here once approved.</Text>
+          </View>
+        ) : declined ? (
+          <View style={[styles.card, { marginTop: spacing.lg }]} testID="mb-bp-declined">
+            <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>Application not approved</Text>
+            <Text style={styles.cardBody}>{app?.decision_note || "Your application wasn't approved this time."}{reapplyDate ? ` You can re-apply after ${reapplyDate}.` : ""}</Text>
           </View>
         ) : (
           <View style={[styles.card, { marginTop: spacing.lg, gap: spacing.md }]} testID="mb-bp-form">
