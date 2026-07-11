@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import {
   Sparkles, ArrowRight, Megaphone, Calculator, Briefcase, Scale,
   TrendingUp, UtensilsCrossed, Receipt, CheckCircle2, Quote, ShieldCheck,
-  TerminalSquare,
+  TerminalSquare, Bot, Store, Rocket,
 } from "lucide-react";
 import SeoHelmet from "@/components/web/SeoHelmet";
 import { Eyebrow, Pill, PrimaryButton, GhostButton, SectionTitle, SectionSub } from "@/components/web/atoms";
@@ -260,6 +260,73 @@ function EmployeeHero({ emp }) {
   );
 }
 
+const BUILDER_VALUES = [
+  {
+    icon: Bot,
+    title: "Design unique AI employees",
+    body: "Give an AI a role, train it on your SOPs and examples, teach it your voice, and set its permissions and escalation rules — no code required.",
+  },
+  {
+    icon: Store,
+    title: "Publish to the marketplace",
+    body: "List your best AI employees for other teams to hire. Offer them free or price them — you stay in control of exactly what knowledge is shared.",
+  },
+  {
+    icon: Rocket,
+    title: "Earn on every install",
+    body: "When a team licenses your AI employee, you earn. Track installs and revenue from your creator dashboard, with a weekly performance digest.",
+  },
+];
+
+function BuildYourOwnSection() {
+  return (
+    <section
+      className="py-16 md:py-20 bg-[var(--w-surface)] border-y border-[var(--w-hairline)]"
+      data-testid="employees-build-own-section"
+    >
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="text-center max-w-3xl mx-auto">
+          <Pill tone="ai" className="mb-5 mx-auto">
+            <Sparkles className="w-3.5 h-3.5" /> AI Employee Builder · Beta
+          </Pill>
+          <SectionTitle>Build AI employees. And earn from them.</SectionTitle>
+          <SectionSub>
+            Don&apos;t just hire ours — create, train and sell your own custom AI employees on the
+            TeamNest marketplace. Apply for the Beta, or unlock it instantly on the Team plan
+            ($19.99/mo).
+          </SectionSub>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
+          {BUILDER_VALUES.map((c) => {
+            const Icon = c.icon;
+            return (
+              <div
+                key={c.title}
+                data-testid={`employees-build-own-${c.title.split(" ")[0].toLowerCase()}`}
+                className="border border-[var(--w-hairline)] rounded-2xl bg-[var(--w-bg)] p-6 hover:border-amber-500/40 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/20 flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h3 className="text-[18px] font-bold tracking-tight text-[var(--w-text)] mb-1.5">{c.title}</h3>
+                <p className="text-[14px] leading-[21px] text-[var(--w-text-dim)]">{c.body}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-10">
+          <PrimaryButton as={Link} to="/ai-builder" data-testid="employees-build-own-cta">
+            Start building &amp; earning <ArrowRight className="w-4 h-4" />
+          </PrimaryButton>
+          <GhostButton as={Link} to="/pricing">See plans</GhostButton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function EmployeesMarketing() {
   const active = EMPLOYEES.filter((e) => e.status === "active");
   const comingSoon = EMPLOYEES.filter((e) => e.status === "coming_soon");
@@ -380,6 +447,9 @@ export default function EmployeesMarketing() {
           </div>
         </div>
       </section>
+
+      {/* Build your own (AI Employee Builder + Marketplace) */}
+      <BuildYourOwnSection />
 
       {/* Final CTA */}
       <section className="py-20 md:py-24 text-center">
