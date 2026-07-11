@@ -259,7 +259,7 @@ export default function Sidebar() {
         <NavLink
           to="/ai-builder"
           data-testid="nav-ai-builder"
-          title="AI Employee Builder (Beta)"
+          title="AI Agent (Beta)"
           className={({ isActive }) =>
             `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
               isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
@@ -269,7 +269,7 @@ export default function Sidebar() {
           <Bot className="w-5 h-5 shrink-0" strokeWidth={1.8} />
           {!collapsed && (
             <span className="truncate">
-              AI Employee Builder <sup className="text-[9px] font-bold text-ai">* Beta</sup>
+              AI Agent <sup className="text-[9px] font-bold text-ai">* Beta</sup>
             </span>
           )}
         </NavLink>

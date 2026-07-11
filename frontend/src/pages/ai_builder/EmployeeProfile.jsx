@@ -53,7 +53,7 @@ export default function EmployeeProfile() {
   ];
 
   return (
-    <div className="min-h-screen bg-bg text-ink px-5 py-8 md:px-10">
+    <div className="min-h-screen bg-bg text-ink px-5 pt-16 pb-8 md:px-10">
       <div className="max-w-4xl mx-auto">
         <button type="button" onClick={() => nav("/ai-builder")} data-testid="ep-back"
           className="inline-flex items-center gap-1.5 text-sm text-ink-dim hover:text-ink mb-4">

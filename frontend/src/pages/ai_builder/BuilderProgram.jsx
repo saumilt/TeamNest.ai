@@ -37,7 +37,7 @@ export default function BuilderProgram() {
   const reapplyDate = me.reapply_at ? new Date(me.reapply_at).toLocaleDateString() : null;
 
   return (
-    <div className="min-h-screen bg-bg text-ink px-5 py-8 md:px-10">
+    <div className="min-h-screen bg-bg text-ink px-5 pt-16 pb-8 md:px-10">
       <div className="max-w-2xl mx-auto">
         <button type="button" onClick={() => nav("/ai-builder")} data-testid="bp-back" className="inline-flex items-center gap-1.5 text-sm text-ink-dim hover:text-ink mb-4">
           <ArrowLeft className="w-4 h-4" /> Builder
