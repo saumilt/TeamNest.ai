@@ -58,7 +58,10 @@ export default function CreditSplash() {
         const shownThisSession = safeGet("session", "tn-credit-splash-shown") === "1";
         const low = typeof usage.credits_remaining === "number" && usage.credits_remaining < 100;
         const eligible = !usage.unlimited && (usage.plan_id === "free" || low);
-        if (eligible && !hidden && !shownThisSession) {
+        // Don't auto-surface over the AI Employee Builder flows — the promo
+        // modal was intercepting the builder gate / create actions.
+        const onBuilderRoute = /^\/(ai-builder|builder-program)/.test(window.location.pathname);
+        if (eligible && !hidden && !shownThisSession && !onBuilderRoute) {
           setReason(low ? "low" : "buy");
           // 4s delay so it doesn't stack on top of the changelog modal.
           setTimeout(() => {

@@ -13,7 +13,19 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
-### Iteration 95 (Jul 2026) — AI Employee Builder Phase 3 (Sandbox/Permissions/Deploy) + Phase 4 (Marketplace)
+### Iteration 97 (Jul 2026) — AI Employee Builder Developer Program (Beta) + credit fix
+- **Builder access gating** (`routes/builder_program.py`): creating AI employees now requires builder access = super admin OR `builder_approved` user OR workspace on the top-level **Team plan ($19.99)**. `POST /api/ai-builder/employees` uses `require_builder` (403 otherwise).
+- **Application + approval flow**: `POST /api/builder-program/apply` (signup sheet: name, company, website, motivation, value_prop, agent_ideas → `builder_applications`, pending). `GET /api/builder-program/me` → {builder_access, reason, application}. Super Admin: `GET /api/builder-program/applications?status=`, `POST .../applications/{id}/decide` (approve sets `users.builder_approved`).
+- **Credit fix**: super admins now get **unlimited credits in every workspace they belong to** (not just owned) — `_unlimited_workspace_ids()` now includes all super-admin memberships. Team plan perks list "AI Employee Builder access (Beta)".
+- **Web UI**: left sidebar link "AI Employee Builder * Beta" (all logged-in users); `/ai-builder` shows a gate (apply / upgrade) for non-builders; `/builder-program` application page; Super Admin panel gained a **Builders** tab (approve/reject queue); marketing Home page gained a "Build AI employees and earn" section. Suppressed the Credit-specials promo auto-open on builder routes (was intercepting clicks).
+- **Mobile parity**: You tab link "AI Employee Builder ✦ Beta", `/builder` gate for non-builders, `/builder-program` apply screen.
+- Tested: 12/12 backend pytest (`tests/test_iteration97_builder_program.py`) + web + mobile UI verified. Report: `/app/test_reports/iteration_97.json`. No blockers.
+
+### Iteration 96 (Jul 2026) — Mobile parity for AI Employee Builder + multi-turn sandbox memory
+- Ported the full AI Employee Builder to Expo/React Native (`mobile/app/builder/*`, `mobile/app/marketplace/*`): dashboard, 7-section employee editor, sandbox chat, permissions, deploy, marketplace browse/install. Added `apiPut` to mobile `src/api.ts`.
+- Sandbox now has **multi-turn memory** via `session_id` (web + mobile): each conversation's prior turns are replayed to the model. Verified 96 iteration report.
+
+
 **Phase 3 — Sandbox, Permissions & Deployment** (`routes/ai_employee_builder.py`, `services/ai_employee_runtime.py`)
 - **Sandbox testing chat**: `POST /api/ai-builder/employees/{eid}/sandbox` generates a reply via Claude Fable 5 (fallback claude-sonnet-4-6) using a system prompt assembled from the employee's profile + saved style + knowledge docs + good/bad examples + permission level + escalation rules. Messages that hit an escalation rule return `escalated=true` with a reply starting `ESCALATE:`. Runs stored in `ai_employee_test_runs`; `POST .../test-runs/{id}/rate` (good/bad + optional correction, can save as a training example); `GET`/`DELETE .../test-runs`.
 - **Permissions**: 5 levels (Answer only → Autonomous). `GET /ai-builder/permission-options`, `PUT/GET .../permissions`. Tool access rows (`POST/DELETE .../tools`, dup → 400) in `ai_employee_tool_access`. Escalation rules (`POST/DELETE .../escalation-rules`) in `ai_employee_escalation_rules`.
