@@ -220,6 +220,169 @@ async def purchase_seats(payload: SeatPurchase, current=Depends(require_user)):
     return {"ok": True, "seats_purchased": new_total}
 
 
+# ── Successor assignment + knowledge transfer ────────────────────────────────
+async def _role_bundle(role_id: str):
+    """Return (role, profile, approved_memories) for a role."""
+    role = await db.enterprise_roles.find_one({"id": role_id}, {"_id": 0})
+    profile = await db.enterprise_role_profiles.find_one({"role_id": role_id}, {"_id": 0})
+    memories = await db.enterprise_role_memories.find(
+        {"role_id": role_id, "approval_status": "approved"}, {"_id": 0}).to_list(50)
+    return role, profile, memories
+
+
+@router.get("/enterprise/people/{eid}/candidates")
+async def successor_candidates(eid: str, current=Depends(require_user)):
+    """Other enterprise employees who could be the successor/backup."""
+    _owner_only(current)
+    ws = current["workspace_id"]
+    emp = await db.enterprise_users.find_one({"id": eid, "workspace_id": ws}, {"_id": 0})
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+    roles = await _role_map(ws)
+    others = await db.enterprise_users.find(
+        {"workspace_id": ws, "id": {"$ne": eid}}, {"_id": 0}).to_list(1000)
+    return {"candidates": [
+        {"id": o["id"], "employee_name": o["employee_name"], "employee_email": o["employee_email"],
+         "role_name": roles.get(o.get("role_id"), {}).get("role_name"), "department": o.get("department")}
+        for o in others
+    ]}
+
+
+class SuccessorIn(BaseModel):
+    successor_user_id: str
+
+
+@router.post("/enterprise/people/{eid}/successor")
+async def assign_successor(eid: str, payload: SuccessorIn, current=Depends(require_user)):
+    """Assign a successor and generate a fresh handoff package (checklist + brief)."""
+    _owner_only(current)
+    ws = current["workspace_id"]
+    emp = await db.enterprise_users.find_one({"id": eid, "workspace_id": ws}, {"_id": 0})
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+    succ = await db.enterprise_users.find_one({"id": payload.successor_user_id, "workspace_id": ws}, {"_id": 0})
+    if not succ:
+        raise HTTPException(404, "Successor not found")
+
+    await db.enterprise_users.update_one(
+        {"id": eid, "workspace_id": ws},
+        {"$set": {"successor_user_id": payload.successor_user_id,
+                  "knowledge_transfer_status": "in_progress", "updated_at": now_iso()}},
+    )
+
+    from services.enterprise_intelligence import build_checklist, generate_handoff_brief
+    role, profile, memories = await _role_bundle(emp.get("role_id"))
+    checklist = build_checklist(role or {}, profile)
+    brief = await generate_handoff_brief(role or {}, profile, memories)
+
+    doc = {
+        "workspace_id": ws, "employee_id": eid, "role_id": emp.get("role_id"),
+        "successor_user_id": payload.successor_user_id, "successor_name": succ["employee_name"],
+        "brief": brief, "checklist": checklist, "updated_at": now_iso(),
+    }
+    await db.enterprise_handoffs.update_one(
+        {"employee_id": eid, "workspace_id": ws},
+        {"$set": doc, "$setOnInsert": {"id": new_id(), "created_at": now_iso()}}, upsert=True,
+    )
+    await _audit(ws, current, "successor_assigned", "employee", eid,
+                 {"successor": succ["employee_name"]})
+    return {"ok": True, "handoff": {**doc, "successor_name": succ["employee_name"]}}
+
+
+@router.get("/enterprise/people/{eid}/handoff")
+async def get_handoff(eid: str, current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    emp = await db.enterprise_users.find_one({"id": eid, "workspace_id": ws}, {"_id": 0})
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+    handoff = await db.enterprise_handoffs.find_one({"employee_id": eid, "workspace_id": ws}, {"_id": 0})
+    total = len(handoff["checklist"]) if handoff else 0
+    done = sum(1 for c in handoff["checklist"] if c["done"]) if handoff else 0
+    return {"handoff": handoff, "progress": {"done": done, "total": total,
+            "pct": round(done / total * 100) if total else 0},
+            "transfer_status": emp.get("knowledge_transfer_status", "not_started")}
+
+
+class ChecklistToggle(BaseModel):
+    item_id: str
+    done: bool
+
+
+@router.post("/enterprise/people/{eid}/handoff/checklist")
+async def toggle_checklist(eid: str, payload: ChecklistToggle, current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    handoff = await db.enterprise_handoffs.find_one({"employee_id": eid, "workspace_id": ws}, {"_id": 0})
+    if not handoff:
+        raise HTTPException(404, "No handoff package — assign a successor first")
+    found = False
+    for c in handoff["checklist"]:
+        if c["id"] == payload.item_id:
+            c["done"] = payload.done
+            c["done_at"] = now_iso() if payload.done else None
+            found = True
+            break
+    if not found:
+        raise HTTPException(404, "Checklist item not found")
+    await db.enterprise_handoffs.update_one(
+        {"employee_id": eid, "workspace_id": ws},
+        {"$set": {"checklist": handoff["checklist"], "updated_at": now_iso()}})
+    total = len(handoff["checklist"])
+    done = sum(1 for c in handoff["checklist"] if c["done"])
+    # Auto-complete transfer when every item is checked.
+    new_status = "complete" if done == total and total else "in_progress"
+    await db.enterprise_users.update_one(
+        {"id": eid, "workspace_id": ws},
+        {"$set": {"knowledge_transfer_status": new_status, "updated_at": now_iso()}})
+    return {"ok": True, "progress": {"done": done, "total": total,
+            "pct": round(done / total * 100) if total else 0}, "transfer_status": new_status}
+
+
+# ── Ask Previous Role (grounded, anonymized chat) ────────────────────────────
+class AskIn(BaseModel):
+    question: str
+    session_id: Optional[str] = None
+
+
+@router.get("/enterprise/roles/{role_id}/ask/history")
+async def ask_history(role_id: str, session_id: str, current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    rows = await db.enterprise_role_qa.find(
+        {"workspace_id": ws, "role_id": role_id, "session_id": session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+    return {"turns": rows}
+
+
+@router.post("/enterprise/roles/{role_id}/ask")
+async def ask_role(role_id: str, payload: AskIn, current=Depends(require_user)):
+    """Answer a successor's question grounded ONLY in the role's approved knowledge."""
+    _owner_only(current)
+    ws = current["workspace_id"]
+    role = await db.enterprise_roles.find_one({"id": role_id, "workspace_id": ws}, {"_id": 0})
+    if not role:
+        raise HTTPException(404, "Role not found")
+    if not payload.question.strip():
+        raise HTTPException(400, "Question is required")
+
+    session_id = payload.session_id or new_id()
+    _, profile, memories = await _role_bundle(role_id)
+    history = await db.enterprise_role_qa.find(
+        {"workspace_id": ws, "role_id": role_id, "session_id": session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(20)
+
+    from services.enterprise_intelligence import ask_previous_role
+    result = await ask_previous_role(role, profile, memories, payload.question, history)
+
+    turn = {"id": new_id(), "workspace_id": ws, "role_id": role_id, "session_id": session_id,
+            "question": payload.question, "answer": result["answer"],
+            "citations": result["citations"], "created_at": now_iso()}
+    await db.enterprise_role_qa.insert_one(turn.copy())
+    return {"session_id": session_id, "answer": result["answer"],
+            "citations": result["citations"], "grounded": result["grounded"], "model": result["model"]}
+
+
 # ── Audit log ────────────────────────────────────────────────────────────────
 @router.get("/enterprise/audit")
 async def audit_log(current=Depends(require_user)):

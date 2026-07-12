@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ChevronLeft, Loader2, ShieldCheck, FileText, GitBranch, Users, AlertTriangle } from "lucide-react";
+import {
+  ChevronLeft, Loader2, ShieldCheck, FileText, GitBranch, Users, AlertTriangle,
+  UserCheck, CheckCircle2, Circle, MessageSquare, Send, Sparkles, Quote,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { RiskBadge, ContinuityBar } from "@/pages/EnterprisePage";
 
-const TABS = ["Overview", "Role", "Responsibilities", "Knowledge", "Decisions", "Relationships", "Successor"];
+const TABS = ["Overview", "Role", "Responsibilities", "Knowledge", "Decisions", "Relationships", "Successor", "Ask Role"];
+const PHASE_LABEL = { "30": "First 30 days", "60": "First 60 days", "90": "First 90 days" };
 
 function List({ items, empty = "None recorded." }) {
   if (!items || items.length === 0) return <p className="text-sm text-ink-mute">{empty}</p>;
@@ -20,6 +24,202 @@ function Card({ title, icon: Icon, children }) {
       <h3 className="text-sm font-bold text-ink mb-3 flex items-center gap-2">{Icon && <Icon className="w-4 h-4 text-ai" />} {title}</h3>
       {children}
     </section>
+  );
+}
+
+function SuccessorTab({ employee, roleId, onChanged }) {
+  const eid = employee.id;
+  const [candidates, setCandidates] = useState([]);
+  const [handoff, setHandoff] = useState(null);
+  const [progress, setProgress] = useState({ done: 0, total: 0, pct: 0 });
+  const [transferStatus, setTransferStatus] = useState(employee.knowledge_transfer_status || "not_started");
+  const [pick, setPick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [c, h] = await Promise.all([
+        api.get(`/enterprise/people/${eid}/candidates`),
+        api.get(`/enterprise/people/${eid}/handoff`),
+      ]);
+      setCandidates(c.data.candidates || []);
+      setHandoff(h.data.handoff);
+      setProgress(h.data.progress);
+      setTransferStatus(h.data.transfer_status);
+      setPick(h.data.handoff?.successor_user_id || c.data.candidates?.[0]?.id || "");
+    } finally { setLoading(false); }
+  }, [eid]);
+  useEffect(() => { load(); }, [load]);
+
+  const assign = async () => {
+    if (!pick) return;
+    setBusy(true);
+    try {
+      const r = await api.post(`/enterprise/people/${eid}/successor`, { successor_user_id: pick });
+      setHandoff(r.data.handoff);
+      toast.success("Successor assigned · handoff package generated");
+      await load(); onChanged?.();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); } finally { setBusy(false); }
+  };
+
+  const toggle = async (item) => {
+    try {
+      const r = await api.post(`/enterprise/people/${eid}/handoff/checklist`, { item_id: item.id, done: !item.done });
+      setHandoff({ ...handoff, checklist: handoff.checklist.map((c) => c.id === item.id ? { ...c, done: !c.done } : c) });
+      setProgress(r.data.progress); setTransferStatus(r.data.transfer_status);
+      if (r.data.transfer_status === "complete") toast.success("Knowledge transfer complete");
+    } catch { toast.error("Failed to update"); }
+  };
+
+  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-ai" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <Card title="Assign successor" icon={UserCheck}>
+        <p className="text-sm text-ink-dim mb-3">Transfer the role knowledge to a successor. A 30/60/90 handoff package is generated from the approved role knowledge — no personal identity is shared.</p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={pick} onChange={(e) => setPick(e.target.value)} data-testid="successor-select"
+            className="flex-1 h-11 rounded-xl bg-bg border border-line px-3 text-ink text-sm">
+            {candidates.length === 0 && <option value="">No candidates</option>}
+            {candidates.map((c) => <option key={c.id} value={c.id}>{c.employee_name} — {c.role_name || c.department || "—"}</option>)}
+          </select>
+          <button onClick={assign} disabled={busy || !pick} data-testid="assign-successor-btn"
+            className="h-11 px-4 rounded-xl bg-ai text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+            {handoff ? "Reassign" : "Assign"}
+          </button>
+        </div>
+        {handoff && (
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-ai-tint text-ai font-semibold">Successor: {handoff.successor_name}</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-ink-mute capitalize">{transferStatus.replace("_", " ")}</span>
+          </div>
+        )}
+      </Card>
+
+      {handoff && (
+        <>
+          <Card title="Handoff brief (anonymized)" icon={FileText}>
+            <p className="text-sm text-ink whitespace-pre-wrap leading-relaxed" data-testid="handoff-brief">{handoff.brief}</p>
+          </Card>
+          <Card title="Knowledge transfer checklist" icon={CheckCircle2}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1"><ContinuityBar score={progress.pct} /></div>
+              <span className="text-xs text-ink-dim tabular-nums">{progress.done}/{progress.total} done</span>
+            </div>
+            {["30", "60", "90"].map((phase) => {
+              const items = handoff.checklist.filter((c) => c.phase === phase);
+              if (!items.length) return null;
+              return (
+                <div key={phase} className="mb-4">
+                  <p className="text-[11px] uppercase tracking-widest text-ink-mute mb-2">{PHASE_LABEL[phase]}</p>
+                  <div className="space-y-1.5">
+                    {items.map((c) => (
+                      <button key={c.id} onClick={() => toggle(c)} data-testid={`checklist-${c.id}`}
+                        className="w-full text-left flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5">
+                        {c.done ? <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" /> : <Circle className="w-4 h-4 text-ink-mute mt-0.5 shrink-0" />}
+                        <span className={`text-sm ${c.done ? "text-ink-mute line-through" : "text-ink"}`}>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AskRoleTab({ roleId, roleName }) {
+  const [sessionId, setSessionId] = useState(null);
+  const [turns, setTurns] = useState([]);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [turns, busy]);
+
+  const send = async () => {
+    const question = q.trim();
+    if (!question || busy) return;
+    setQ(""); setBusy(true);
+    setTurns((t) => [...t, { question, answer: null, citations: [] }]);
+    try {
+      const r = await api.post(`/enterprise/roles/${roleId}/ask`, { question, session_id: sessionId });
+      setSessionId(r.data.session_id);
+      setTurns((t) => t.map((x, i) => i === t.length - 1 ? { ...x, answer: r.data.answer, citations: r.data.citations || [] } : x));
+    } catch (e) {
+      setTurns((t) => t.map((x, i) => i === t.length - 1 ? { ...x, answer: e?.response?.data?.detail || "Failed to answer." } : x));
+    } finally { setBusy(false); }
+  };
+
+  const SUGGESTIONS = [
+    "What are the most important recurring tasks in this role?",
+    "How were pricing/approval exceptions handled?",
+    "What are the top risks I should watch out for?",
+  ];
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface flex flex-col" style={{ height: "60vh" }} data-testid="ask-role-panel">
+      <div className="p-4 border-b border-line flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-ai" />
+        <div>
+          <div className="text-sm font-bold text-ink">Ask the {roleName} role</div>
+          <div className="text-[11px] text-ink-mute">Grounded in approved role knowledge only · no personal identity shared</div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {turns.length === 0 && (
+          <div className="text-center pt-8">
+            <MessageSquare className="w-8 h-8 text-ink-mute mx-auto mb-3" />
+            <p className="text-sm text-ink-dim mb-4">Ask anything about how this role&apos;s work gets done.</p>
+            <div className="flex flex-col gap-2 max-w-sm mx-auto">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} onClick={() => setQ(s)} data-testid="ask-suggestion"
+                  className="text-left text-xs px-3 py-2 rounded-xl border border-line text-ink-dim hover:border-ai/40 hover:text-ink">{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {turns.map((t, i) => (
+          <div key={i} className="space-y-2">
+            <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-sm bg-ai text-black px-3 py-2 text-sm" data-testid="ask-question">{t.question}</div></div>
+            <div className="flex justify-start">
+              <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-bg border border-line px-3 py-2">
+                {t.answer === null ? <Loader2 className="w-4 h-4 animate-spin text-ai" /> : (
+                  <>
+                    <p className="text-sm text-ink whitespace-pre-wrap leading-relaxed" data-testid="ask-answer">{t.answer}</p>
+                    {t.citations?.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-line flex flex-wrap gap-1">
+                        {t.citations.map((c) => (
+                          <span key={c.n} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-mute flex items-center gap-1">
+                            <Quote className="w-2.5 h-2.5" />[S{c.n}] {c.title}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+      <div className="p-3 border-t border-line flex gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Ask about this role…" data-testid="ask-input"
+          className="flex-1 h-11 rounded-xl bg-bg border border-line px-3 text-ink text-sm" />
+        <button onClick={send} disabled={busy || !q.trim()} data-testid="ask-send-btn"
+          className="h-11 w-11 rounded-xl bg-ai text-black flex items-center justify-center disabled:opacity-50">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -130,12 +330,11 @@ export default function EnterpriseProfile() {
           )}
           {tab === "Decisions" && <Card title="Decision history" icon={GitBranch}><List items={(profile?.decision_history || []).map((d) => `${d.date}: ${d.decision} — ${d.reason} (approver: ${d.approver})`)} empty="No decisions recorded." /></Card>}
           {tab === "Relationships" && <Card title="Business relationships" icon={Users}><List items={(profile?.relationships || []).map((r) => `${r.org} (${r.type}) — ${r.notes}`)} empty="No relationships recorded." /></Card>}
-          {tab === "Successor" && (
-            <Card title="Successor & continuity" icon={Users}>
-              <p className="text-sm text-ink-dim mb-2">Successor assignment, handoff package and 30/60/90 onboarding are built in the Continuity phase.</p>
-              <div className="text-sm text-ink">Current successor: <span className="text-ink-dim">{e.successor_user_id ? "Assigned" : "Not assigned"}</span></div>
-              <div className="text-sm text-ink mt-1">Transfer status: <span className="text-ink-dim">{e.knowledge_transfer_status}</span></div>
-            </Card>
+          {tab === "Successor" && role && (
+            <SuccessorTab employee={e} roleId={role.id} onChanged={load} />
+          )}
+          {tab === "Ask Role" && role && (
+            <AskRoleTab roleId={role.id} roleName={role.role_name} />
           )}
         </div>
       </div>
