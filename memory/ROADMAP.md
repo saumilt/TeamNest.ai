@@ -22,6 +22,13 @@
 - (DONE iter 80) Split dev_os.py into dev_os_tasks/dev_os_files/dev_os_preview (1244 lines remain; optional further split of projects/talk/templates).
 - (DONE iter 82) Split `services/dev_chat_agents.py` (1039 → 848 lines): heuristics + idea chips moved to `dev_chat_ideas.py`.
 
+## Role Intelligence (enterprise module)
+- (DONE iter 103) Phase A — Foundation: seed, overview/people/roles, profile shell.
+- (DONE iter 104) Phase B — Successor Assignment & Knowledge Transfer (30/60/90 handoff + checklist) + "Ask Previous Role" grounded/anonymized chat.
+- P1 Phase C — Expertise Map + Knowledge Risk dashboard (visual per-role continuity, single-person dependency flags, at-risk ranking with drill-down).
+- P1 Phase D — Storage metering + packs + billing dashboard (Cloudflare R2 base + 40% markup; displayed, not charged).
+- P2 — Knowledge capture from chats/tasks/meetings → Proposed Memory Review queue (approve before it enters role knowledge).
+
 ## Marketplace backlog (post iter 84)
 - (DONE iter 89) Stripe Connect payouts: Express onboarding + dual-mode transfers (real key → live; emergent key → simulated, flagged).
 - Real Stripe subscription objects for monthly template renewals (currently internal period_end +31d; first month charged via real checkout).

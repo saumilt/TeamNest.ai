@@ -210,7 +210,7 @@ function AskRoleTab({ roleId, roleName }) {
         ))}
         <div ref={endRef} />
       </div>
-      <div className="p-3 border-t border-line flex gap-2">
+      <div className="p-3 border-t border-line flex gap-2 relative z-[60]">
         <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Ask about this role…" data-testid="ask-input"
           className="flex-1 h-11 rounded-xl bg-bg border border-line px-3 text-ink text-sm" />
@@ -268,7 +268,7 @@ export default function EnterpriseProfile() {
 
         <div className="flex gap-1 mb-6 border-b border-line overflow-x-auto">
           {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} data-testid={`ptab-${t.toLowerCase()}`}
+            <button key={t} onClick={() => setTab(t)} data-testid={`ptab-${t.toLowerCase().replace(/\s+/g, "-")}`}
               className={`px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t ? "border-ai text-ai" : "border-transparent text-ink-dim hover:text-ink"}`}>{t}</button>
           ))}
         </div>

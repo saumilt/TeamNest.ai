@@ -2,6 +2,24 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 104 (Jul 2026) — Role Intelligence Phase B: Successor/Transfer workflow + Ask Previous Role
+### Enterprise module (web + backend) — grounded, anonymized knowledge transfer
+- New `services/enterprise_intelligence.py` (Claude Fable 5 via Emergent LLM Key, Sonnet 4.6 fallback, deterministic fallbacks):
+  - `build_checklist` — deterministic 30/60/90 onboarding checklist derived from the role profile (SOPs, relationships, daily/weekly tasks, workflows, decisions, known risks) → ~15 items.
+  - `generate_handoff_brief` — anonymized markdown handoff brief grounded in profile + approved memories (never names a person).
+  - `ask_previous_role` — answers ONLY from a role's APPROVED source-grounded knowledge, anonymized ("the previous role holder"), with inline [S#] citations parsed into a citations list; returns grounded flag.
+- New endpoints in `routes/enterprise.py`:
+  - GET /api/enterprise/people/{eid}/candidates — other enterprise employees as successor candidates.
+  - POST /api/enterprise/people/{eid}/successor {successor_user_id} — assigns successor, transfer_status→in_progress, generates + stores handoff package (enterprise_handoffs).
+  - GET /api/enterprise/people/{eid}/handoff — handoff + progress {done,total,pct} + transfer_status.
+  - POST /api/enterprise/people/{eid}/handoff/checklist {item_id,done} — toggles item; all-done auto-flips transfer_status→complete.
+  - POST /api/enterprise/roles/{role_id}/ask {question,session_id?} + GET .../ask/history?session_id= — multi-turn grounded chat (enterprise_role_qa).
+- Web `pages/EnterpriseProfile.jsx`: rebuilt **Successor** tab (candidate dropdown, assign/reassign, anonymized handoff brief, 30/60/90 checklist with toggle + progress bar) and new **Ask Role** tab (suggestions, chat, answer bubbles with [S#] citation pills). Kebab-case ptab testIDs; send row z-[60] so global promo toast can't block it.
+- New collections: enterprise_handoffs, enterprise_role_qa.
+- Tested: 9/9 backend pytest (`tests/test_enterprise_phase_b.py`) + web UI (Successor assign→100% complete toast, Ask Role grounded answer with citations, no personal-name leak). Report: `/app/test_reports/iteration_101.json`. No blockers.
+- REMAINING: Phase C (Expertise Map + Knowledge Risk dashboard), Phase D (storage metering + R2×1.4 billing dashboard).
+
+
 ## Iteration 103 (Jul 2026) — TeamNest Role Intelligence, Phase A (Foundation)
 ### Enterprise module (web + backend) — "transfer the role knowledge, not the person"
 - Backend `routes/enterprise.py` + `services/enterprise_seed.py`: Enterprise People, Roles, Role-Intelligence profiles, licenses ($29.99/seat), continuity scores + risk, audit log. Auto-seeds "Perfect Restaurant Group" sample (Priya Shah/Finance 42% High-Departing, Raj Mehta/Ops 81% Medium, Amit Patel/Sales 28% Critical) with role profiles + source-grounded sample memories.

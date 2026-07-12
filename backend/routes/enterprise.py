@@ -55,7 +55,6 @@ async def overview(current=Depends(require_user)):
     roles = await _role_map(ws)
     lic = await db.enterprise_licenses.find_one({"workspace_id": ws}, {"_id": 0}) or {}
     critical = [p for p in people if (scores.get(p["role_id"], {}).get("risk_level") in ("High", "Critical"))]
-    roles_no_successor = [r for r in roles.values() if not r.get("active_employee_user_id") or True]
     return {
         "licenses": {
             "seats_purchased": lic.get("seats_purchased", 0),
