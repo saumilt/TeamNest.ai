@@ -14,6 +14,7 @@ import {
         Phone,
         User as UserIcon,
         Building2,
+        Plug,
         ChevronsUpDown,
         Check,
         LogOut,
@@ -272,6 +273,19 @@ export default function Sidebar() {
               AI Agent <sup className="text-[9px] font-bold text-ai">* Beta</sup>
             </span>
           )}
+        </NavLink>
+        <NavLink
+          to="/connectors"
+          data-testid="nav-connectors"
+          title="Connectors (connect email / CRM for AI style training)"
+          className={({ isActive }) =>
+            `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
+              isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+            }`
+          }
+        >
+          <Plug className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+          {!collapsed && <span className="truncate">Connectors</span>}
         </NavLink>
         {(user?.role === "owner" || user?.role === "admin" || user?.is_super_admin) && (
           <NavLink

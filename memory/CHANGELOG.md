@@ -2,6 +2,16 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 102 (Jul 2026) — TeamNest Connectors (Phase 1) + live Gmail read-only style training
+### Connectors framework (web + backend)
+- New `/connectors` page (all users) + `nav-connectors` sidebar link. Provider registry grouped by category (Email/CRM/Chat/Files); live providers show **Connect**, others show "Needs setup / Coming soon".
+- Backend `routes/connectors.py` + services: `connectors_registry.py`, `connector_crypto.py` (Fernet, key from JWT_SECRET — tokens encrypted at rest, never returned to client), `gmail_connector.py`.
+- Per-user OAuth (authorization-code), CSRF `state`, `connector_accounts` + `connector_oauth_tokens` (encrypted) + `connector_logs`. Endpoints: GET /api/connectors, GET /api/oauth/gmail/login, GET /api/oauth/gmail/callback, POST /api/connectors/accounts/{id}/disconnect, GET .../logs, POST /api/connectors/gmail/train-employee.
+- **Gmail is LIVE** (read-only, scopes gmail.readonly + userinfo): reads the user's own SENT mail, **redacts** emails/phones/amounts/long-numbers/secrets/greeting-names ("we learn style, not secrets"), and attaches redacted samples as a real (non-mock) style source on a chosen AI employee → user generates & reviews the profile in the existing AI-builder style flow before saving.
+- Google OAuth creds in backend/.env (`GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`); redirect URI `…/api/oauth/gmail/callback`. Verified: registry live=true, valid Google authorize URL, page renders, negative paths (404/401) correct. Live round-trip needs the user to complete Google consent as an added Test user.
+- Microsoft 365/Outlook, HubSpot, Salesforce, Slack, Teams, Google Drive are registered placeholders — each goes live when its OAuth credentials are added (same pattern).
+
+
 ## Iteration 101 (Jul 2026) — Content-aware "hire an AI employee" banner + Phase 3 licensing/billing
 ### Content-aware chat recommendation (web)
 - Fixed hardcoded "Turn this chat into a full AI engineering team / Hire @devmanager" banner that showed regardless of chat topic.
