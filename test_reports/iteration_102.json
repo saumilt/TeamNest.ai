@@ -1,0 +1,33 @@
+{
+  "summary": "Enterprise Role Intelligence Phase C (Expertise Map + Knowledge Risk dashboard) and Phase D (Storage metering + packs + billing) tested end-to-end on backend + web. Backend: 10/10 pytest pass — /api/enterprise/risk-dashboard returns correct summary {roles=3,at_risk=2,critical=1,single_person_deps=1,avg_continuity=50}, distribution {Critical=1,High=1,Medium=1,Low=0}, and 3 roles sorted asc by continuity (Sales=28 Critical, Finance=42 High, Ops=81 Medium) each with a 10-key breakdown + person link; /api/enterprise/storage returns correct pricing math (base=0.015, markup=40, effective=0.021), included=5+packs GB, 7 breakdown sources, 3 available packs (pack-10/50/100); POST /storage/packs/purchase adds pack and increases included_gb (verified pack-10 delta=+10); unknown pack_id -> 404; /api/enterprise/billing correctly combines seats+storage and total_monthly_estimate math is correct. All 3 endpoints reject unauthenticated (401/403). Web UI: /enterprise Risk tab shows 5 summary tiles, coloured Risk distribution bar with legend, expandable expertise-map role cards. Clicking Sales Director expands to reveal all 10 score bars (Role clarity 28%, SOPs 23%, Workflows 28%, Recurring tasks 28%, Relationships 18%, Decisions 28%, Communication 20%, Expertise 28%, Successor 0%, Review freshness 28%), flag chips (Single-person dependency, No successor, No backup, High unique knowledge), and 'View Amit Patel' drill-down. Billing tab shows Seat licenses/mo $89.97 (3×$29.99), Storage/mo $0.00 (correct — 26.2 KB well below 5 GB free), Total $89.97, seat card with Purchased/Assigned/Price/Total, storage metering with 26.2 KB used, Included 25 GB (base 5 + 2×10 from prior tests), Rate $0.021/GB·mo (R2 $0.015 + 40%), 7 breakdown bars, transparency note, and 3 storage-pack cards with working Add pack buttons — clicking buy-pack-100 successfully hits POST /storage/packs/purchase and refreshes to show Included=125 GB (delta +100 GB) and 'Active packs: … +120 GB allowance' line. No parity issues (web-only). All wiring correct.",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {"ui_bugs": [], "integration_issues": [], "design_issues": []}
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_enterprise_phase_c_d.py",
+    "/app/test_reports/pytest/iteration102.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/enterprise.py `_measure_bytes()` streams every document via `async for` and json.dumps each — O(N) per collection per call. For workspaces with many role memories/QA turns this will get slow (billing/storage endpoints both call it). Consider caching per-workspace or using MongoDB's $bsonSize aggregation stage for byte totals.",
+    "routes/enterprise.py `billing_summary()` calls `storage_meter(current)` (another route handler) which re-runs `_ensure_seed(current)` and re-measures all bytes. Works, but the double seed check and double byte-scan are wasteful. Extract a `_storage_summary(ws)` helper and have both endpoints call it.",
+    "routes/enterprise.py `purchase_storage_pack` has no per-workspace idempotency or dedupe — a user can click Add pack repeatedly and each click stacks another entry. In my test the same pack-10 got recorded twice from separate test runs on the same workspace. If cumulative stacking is intentional (each purchase = separate one-time credit), fine; otherwise add a monthly-cap or a dedupe-by-transaction-id column.",
+    "routes/enterprise.py `INCLUDED_GB_BASE = 5.0` is a module-level constant. If the enterprise plan later needs configurable free allowance per plan, move this into `services.enterprise_seed` alongside `PRICE_PER_SEAT` and derive from the license doc.",
+    "EnterprisePage.jsx RiskDashboard L108: `roleToPerson = Object.fromEntries((people || []).map((p) => [p.role_id, p.id]))` picks an arbitrary person per role when multiple employees share a role (order-dependent). The backend's risk-dashboard already returns `person_id` per role — use `r.person_id` from the dashboard payload directly so web+backend agree on which person the 'View' button links to.",
+    "EnterprisePage.jsx BillingDashboard L192: `maxBytes = Math.max(1, ...st.usage.breakdown.map(...))` — using the max as the scale means one dominant source (e.g. Ask Role history) always fills the bar and the smaller ones look tiny. Prefer scaling to `sum(bytes)` for a stacked-share visualization, or show absolute bytes on the right AND a percentage.",
+    "EnterprisePage.jsx BillingDashboard L215: `${data.seats.price_per_seat}` renders as `$29.99` but if the value is an integer like $30, no cents are shown. Use `.toFixed(2)` for consistency with the other prices."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_enterprise_phase_c_d.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (Risk + Billing tabs fully functional)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super-admin owner; workspace auto-seeds 'Perfect Restaurant Group' with 3 roles).",
+  "seed_data_creation": "None manual. The /enterprise/* endpoints auto-seed. NOTE: the pack purchase test permanently records a pack-10 (and my UI test added a pack-100) into enterprise_storage_packs for sam@funasia.net's workspace. Next test run will start with included_gb ≥ 125 GB and packs_purchased ≥ 3 rows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase C+D regression suite at /app/backend/tests/test_enterprise_phase_c_d.py (10 tests, ~1.5s runtime, no LLM calls). Run: `cd /app/backend && REACT_APP_BACKEND_URL=<url> python -m pytest tests/test_enterprise_phase_c_d.py -v`. Web selectors verified: ent-tab-risk, ent-tab-billing (tab buttons); risk-dashboard, rd-roles/rd-atrisk/rd-critical/rd-deps/rd-avg (summary tiles), rd-role-<id> (click to expand), rd-breakdown-<id> (expanded panel), rd-view-<id> (drill-down button); billing-dashboard, bl-seats/bl-storage/bl-total/bl-usage, pack-pack-{10,50,100} (cards), buy-pack-{10,50,100} (Add-pack buttons). Storage cost of $0.00 is CORRECT/expected (26KB usage << 5 GB free). Phase B iter_101 regression is still fine — Phase C+D did not touch Phase B code paths.",
+  "rca of the issue": ""
+}

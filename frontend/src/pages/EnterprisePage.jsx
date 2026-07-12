@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Building2, Users, Briefcase, ShieldAlert, Loader2, Plus, X, ArrowRight, TrendingUp,
+  HardDrive, CreditCard, Package, ChevronDown, Activity, Loader,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -12,6 +13,20 @@ const RISK_COLOR = {
   Medium: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   Low: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
 };
+
+const BREAKDOWN_LABELS = {
+  role_description_score: "Role clarity", sop_score: "SOPs", workflow_score: "Workflows",
+  recurring_task_score: "Recurring tasks", relationship_score: "Relationships",
+  decision_score: "Decisions", communication_score: "Communication", expertise_score: "Expertise",
+  successor_score: "Successor", review_score: "Review freshness",
+};
+
+function fmtBytes(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(2)} MB`;
+  return `${(b / 1024 ** 3).toFixed(3)} GB`;
+}
 
 export function RiskBadge({ level }) {
   return <span className={`text-[10px] px-2 py-0.5 rounded-full border ${RISK_COLOR[level] || "bg-white/10 text-ink-mute border-line"}`} data-testid="risk-badge">{level || "—"}</span>;
@@ -75,6 +90,176 @@ function AddEmployeeModal({ roles, onClose, onAdded }) {
   );
 }
 
+const FLAG_COLOR = {
+  "Departing": "bg-orange-500/15 text-orange-400",
+  "Single-person dependency": "bg-red-500/15 text-red-400",
+  "No successor": "bg-amber-500/15 text-amber-300",
+  "No backup": "bg-white/10 text-ink-mute",
+  "High unique knowledge": "bg-ai-tint text-ai",
+};
+
+function RiskDashboard({ people }) {
+  const nav = useNavigate();
+  const [data, setData] = useState(null);
+  const [open, setOpen] = useState(null);
+  useEffect(() => { api.get("/enterprise/risk-dashboard").then((r) => setData(r.data)).catch(() => toast.error("Failed to load risk dashboard")); }, []);
+  if (!data) return <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-ai" /></div>;
+
+  const roleToPerson = Object.fromEntries((people || []).map((p) => [p.role_id, p.id]));
+  const distTotal = Object.values(data.distribution).reduce((a, b) => a + b, 0) || 1;
+  const DIST_BAR = { Critical: "bg-red-500", High: "bg-orange-500", Medium: "bg-amber-400", Low: "bg-emerald-500" };
+
+  return (
+    <div className="space-y-6" data-testid="risk-dashboard">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Roles mapped" value={data.summary.roles} testid="rd-roles" />
+        <Stat label="At risk" value={data.summary.at_risk} testid="rd-atrisk" />
+        <Stat label="Critical" value={data.summary.critical} testid="rd-critical" />
+        <Stat label="Single-person deps" value={data.summary.single_person_deps} testid="rd-deps" />
+        <Stat label="Avg continuity" value={`${data.summary.avg_continuity}%`} testid="rd-avg" />
+      </div>
+
+      <section>
+        <h2 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><Activity className="w-4 h-4 text-ai" /> Risk distribution</h2>
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <div className="flex h-3 rounded-full overflow-hidden mb-3">
+            {["Critical", "High", "Medium", "Low"].map((k) => (
+              <div key={k} className={DIST_BAR[k]} style={{ width: `${(data.distribution[k] / distTotal) * 100}%` }} title={`${k}: ${data.distribution[k]}`} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs">
+            {["Critical", "High", "Medium", "Low"].map((k) => (
+              <span key={k} className="flex items-center gap-1.5 text-ink-dim"><span className={`w-2.5 h-2.5 rounded-full ${DIST_BAR[k]}`} /> {k} · {data.distribution[k]}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-ai" /> Expertise map</h2>
+        <div className="space-y-2">
+          {data.roles.map((r) => (
+            <div key={r.role_id} className="rounded-2xl border border-line bg-surface" data-testid={`rd-role-${r.role_id}`}>
+              <button onClick={() => setOpen(open === r.role_id ? null : r.role_id)} className="w-full text-left p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-ink text-sm flex items-center gap-2"><Briefcase className="w-4 h-4 text-ai shrink-0" /> {r.role_name}</div>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {r.flags.length === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">No dependency flags</span>}
+                    {r.flags.map((f) => <span key={f} className={`text-[10px] px-2 py-0.5 rounded-full ${FLAG_COLOR[f] || "bg-white/10 text-ink-mute"}`}>{f}</span>)}
+                  </div>
+                </div>
+                <ContinuityBar score={r.continuity_score} />
+                <RiskBadge level={r.risk_level} />
+                <ChevronDown className={`w-4 h-4 text-ink-mute transition-transform ${open === r.role_id ? "rotate-180" : ""}`} />
+              </button>
+              {open === r.role_id && (
+                <div className="px-4 pb-4 border-t border-line pt-3" data-testid={`rd-breakdown-${r.role_id}`}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                    {Object.entries(r.breakdown).map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-xs text-ink-dim w-28 shrink-0">{BREAKDOWN_LABELS[k] || k}</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                          <div className={`h-full ${v >= 60 ? "bg-emerald-500" : v >= 40 ? "bg-amber-400" : "bg-red-500"}`} style={{ width: `${v}%` }} />
+                        </div>
+                        <span className="text-[10px] text-ink-mute tabular-nums w-8 text-right">{v}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  {roleToPerson[r.role_id] && (
+                    <button onClick={() => nav(`/enterprise/people/${roleToPerson[r.role_id]}`)} data-testid={`rd-view-${r.role_id}`}
+                      className="mt-4 text-xs px-3 py-1.5 rounded-lg bg-ai text-black font-semibold flex items-center gap-1">
+                      View {r.person_name || "profile"} <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BillingDashboard() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState("");
+  const load = useCallback(() => { api.get("/enterprise/billing").then((r) => setData(r.data)).catch(() => toast.error("Failed to load billing")); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!data) return <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-ai" /></div>;
+
+  const st = data.storage;
+  const maxBytes = Math.max(1, ...st.usage.breakdown.map((b) => b.bytes));
+  const buyPack = async (pack) => {
+    setBusy(pack.id);
+    try { await api.post("/enterprise/storage/packs/purchase", { pack_id: pack.id }); toast.success(`${pack.name} added`); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); } finally { setBusy(""); }
+  };
+
+  return (
+    <div className="space-y-6" data-testid="billing-dashboard">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Stat label="Seat licenses / mo" value={`$${data.seats.monthly_seat_cost.toFixed(2)}`} testid="bl-seats" />
+        <Stat label="Storage / mo" value={`$${st.pricing.monthly_storage_cost.toFixed(2)}`} testid="bl-storage" />
+        <div className="rounded-2xl border border-ai/40 bg-ai-tint p-4" data-testid="bl-total">
+          <div className="text-[11px] uppercase tracking-widest text-ai mb-1">Total monthly estimate</div>
+          <div className="text-2xl font-bold text-ink">${data.total_monthly_estimate.toFixed(2)}</div>
+        </div>
+      </div>
+
+      <section>
+        <h2 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><CreditCard className="w-4 h-4 text-ai" /> Seat licenses</h2>
+        <div className="rounded-2xl border border-line bg-surface p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div><div className="text-ink-mute text-xs">Purchased</div><div className="text-ink font-semibold">{data.seats.seats_purchased}</div></div>
+          <div><div className="text-ink-mute text-xs">Assigned</div><div className="text-ink font-semibold">{data.seats.seats_assigned}</div></div>
+          <div><div className="text-ink-mute text-xs">Price / seat</div><div className="text-ink font-semibold">${data.seats.price_per_seat}/mo</div></div>
+          <div><div className="text-ink-mute text-xs">Seat total</div><div className="text-ink font-semibold">${data.seats.monthly_seat_cost.toFixed(2)}/mo</div></div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><HardDrive className="w-4 h-4 text-ai" /> Storage metering</h2>
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-4">
+            <div><span className="text-2xl font-bold text-ink" data-testid="bl-usage">{fmtBytes(st.usage.total_bytes)}</span> <span className="text-xs text-ink-mute">used</span></div>
+            <div className="text-xs text-ink-dim">Included: <span className="text-ink">{st.pricing.included_gb} GB</span></div>
+            <div className="text-xs text-ink-dim">Rate: <span className="text-ink">${st.pricing.effective_rate_per_gb}/GB·mo</span> <span className="text-ink-mute">(R2 ${st.pricing.base_rate_per_gb} + {st.pricing.markup_pct}%)</span></div>
+          </div>
+          <div className="space-y-2 mb-4">
+            {st.usage.breakdown.map((b) => (
+              <div key={b.label} className="flex items-center gap-2">
+                <span className="text-xs text-ink-dim w-40 shrink-0">{b.label} <span className="text-ink-mute">({b.count})</span></span>
+                <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-ai" style={{ width: `${(b.bytes / maxBytes) * 100}%` }} /></div>
+                <span className="text-[10px] text-ink-mute tabular-nums w-20 text-right">{fmtBytes(b.bytes)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-ink-mute">{st.note}</p>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><Package className="w-4 h-4 text-ai" /> Storage packs</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {st.packs_available.map((p) => (
+            <div key={p.id} className="rounded-2xl border border-line bg-surface p-4 flex flex-col" data-testid={`pack-${p.id}`}>
+              <div className="text-lg font-bold text-ink">{p.gb} GB</div>
+              <div className="text-xs text-ink-dim mb-3">${p.price_usd}/mo add-on allowance</div>
+              <button onClick={() => buyPack(p)} disabled={busy === p.id} data-testid={`buy-${p.id}`}
+                className="mt-auto h-9 rounded-lg bg-ai text-black text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60">
+                {busy === p.id ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add pack
+              </button>
+            </div>
+          ))}
+        </div>
+        {st.packs_purchased.length > 0 && (
+          <p className="text-xs text-ink-dim mt-3">Active packs: {st.packs_purchased.map((p) => p.name).join(", ")} · +{st.packs_purchased.reduce((a, b) => a + b.gb, 0)} GB allowance</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export default function EnterprisePage() {
   const nav = useNavigate();
   const [tab, setTab] = useState("overview");
@@ -97,7 +282,7 @@ export default function EnterprisePage() {
 
   if (loading) return <div className="min-h-screen bg-bg flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-ai" /></div>;
 
-  const tabs = [["overview", "Overview"], ["people", "People"], ["roles", "Roles"]];
+  const tabs = [["overview", "Overview"], ["people", "People"], ["roles", "Roles"], ["risk", "Risk"], ["billing", "Billing"]];
 
   return (
     <div className="min-h-screen bg-bg text-ink px-5 pt-16 pb-8 md:px-10" data-testid="enterprise-page">
@@ -187,6 +372,8 @@ export default function EnterprisePage() {
             ))}
           </div>
         )}
+        {tab === "risk" && <RiskDashboard people={people} />}
+        {tab === "billing" && <BillingDashboard />}
       </div>
 
       {adding && <AddEmployeeModal roles={roles} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />}

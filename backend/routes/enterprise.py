@@ -7,6 +7,8 @@ actions. Specific routes are declared before parameterized ones.
 """
 from typing import List, Optional
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -380,6 +382,187 @@ async def ask_role(role_id: str, payload: AskIn, current=Depends(require_user)):
     await db.enterprise_role_qa.insert_one(turn.copy())
     return {"session_id": session_id, "answer": result["answer"],
             "citations": result["citations"], "grounded": result["grounded"], "model": result["model"]}
+
+
+# ── Phase C: Expertise Map + Knowledge Risk dashboard ────────────────────────
+_BREAKDOWN_KEYS = [
+    "role_description_score", "sop_score", "workflow_score", "recurring_task_score",
+    "relationship_score", "decision_score", "communication_score", "expertise_score",
+    "successor_score", "review_score",
+]
+
+
+@router.get("/enterprise/risk-dashboard")
+async def risk_dashboard(current=Depends(require_user)):
+    _owner_only(current)
+    await _ensure_seed(current)
+    ws = current["workspace_id"]
+    roles = await db.enterprise_roles.find({"workspace_id": ws}, {"_id": 0}).to_list(500)
+    people = await db.enterprise_users.find({"workspace_id": ws}, {"_id": 0}).to_list(1000)
+    scores = await _score_map(ws)
+
+    by_role: dict = {}
+    for p in people:
+        by_role.setdefault(p.get("role_id"), []).append(p)
+
+    items = []
+    for r in roles:
+        sc = scores.get(r["id"], {})
+        rp = by_role.get(r["id"], [])
+        departing = any(p["employment_status"] == "Departing" for p in rp)
+        no_backup = not r.get("backup_employee_user_id")
+        no_successor = not any(p.get("successor_user_id") for p in rp)
+        high_unique = any(p.get("unique_knowledge_level") in ("High", "Critical") for p in rp)
+        single_person = len(rp) <= 1 and no_backup and no_successor
+        flags = []
+        if departing:
+            flags.append("Departing")
+        if single_person:
+            flags.append("Single-person dependency")
+        if no_successor:
+            flags.append("No successor")
+        if no_backup:
+            flags.append("No backup")
+        if high_unique:
+            flags.append("High unique knowledge")
+        items.append({
+            "role_id": r["id"], "role_name": r["role_name"], "department": r["department"],
+            "continuity_score": sc.get("overall_score", 0), "risk_level": sc.get("risk_level", "Unknown"),
+            "flags": flags, "headcount": len(rp),
+            "person_id": rp[0]["id"] if rp else None,
+            "person_name": rp[0]["employee_name"] if rp else None,
+            "breakdown": {k: sc.get(k, 0) for k in _BREAKDOWN_KEYS},
+        })
+    items.sort(key=lambda x: x["continuity_score"])
+
+    dist = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+    for it in items:
+        dist[it["risk_level"]] = dist.get(it["risk_level"], 0) + 1
+    avg = round(sum(i["continuity_score"] for i in items) / len(items)) if items else 0
+    return {
+        "summary": {
+            "roles": len(items),
+            "at_risk": sum(1 for i in items if i["risk_level"] in ("High", "Critical")),
+            "critical": dist["Critical"],
+            "single_person_deps": sum(1 for i in items if "Single-person dependency" in i["flags"]),
+            "avg_continuity": avg,
+        },
+        "distribution": dist,
+        "roles": items,
+    }
+
+
+# ── Phase D: Storage metering + packs + billing ──────────────────────────────
+R2_BASE_RATE_PER_GB = 0.015          # Cloudflare R2 base ($/GB-month)
+STORAGE_MARKUP_PCT = 40              # TeamNest markup
+INCLUDED_GB_BASE = 5.0              # free allowance included with the enterprise plan
+_STORAGE_SOURCES = [
+    ("Approved knowledge", "enterprise_role_memories"),
+    ("Role profiles", "enterprise_role_profiles"),
+    ("Handoff packages", "enterprise_handoffs"),
+    ("Ask Role history", "enterprise_role_qa"),
+    ("People records", "enterprise_users"),
+    ("Role definitions", "enterprise_roles"),
+    ("Audit logs", "enterprise_audit_logs"),
+]
+STORAGE_PACKS = [
+    {"id": "pack-10", "name": "10 GB pack", "gb": 10, "price_usd": 2.99},
+    {"id": "pack-50", "name": "50 GB pack", "gb": 50, "price_usd": 12.99},
+    {"id": "pack-100", "name": "100 GB pack", "gb": 100, "price_usd": 19.99},
+]
+
+
+async def _measure_bytes(ws: str, collection: str) -> int:
+    total = 0
+    async for doc in db[collection].find({"workspace_id": ws}, {"_id": 0}):
+        total += len(json.dumps(doc, default=str).encode("utf-8"))
+    return total
+
+
+@router.get("/enterprise/storage")
+async def storage_meter(current=Depends(require_user)):
+    _owner_only(current)
+    await _ensure_seed(current)
+    ws = current["workspace_id"]
+    breakdown = []
+    total_bytes = 0
+    for label, coll in _STORAGE_SOURCES:
+        b = await _measure_bytes(ws, coll)
+        cnt = await db[coll].count_documents({"workspace_id": ws})
+        breakdown.append({"label": label, "bytes": b, "count": cnt})
+        total_bytes += b
+
+    total_gb = total_bytes / (1024 ** 3)
+    effective_rate = round(R2_BASE_RATE_PER_GB * (1 + STORAGE_MARKUP_PCT / 100), 5)
+
+    packs = await db.enterprise_storage_packs.find({"workspace_id": ws}, {"_id": 0}).to_list(100)
+    included_gb = INCLUDED_GB_BASE + sum(p.get("gb", 0) for p in packs)
+    billable_gb = max(0.0, total_gb - included_gb)
+    monthly_cost = round(billable_gb * effective_rate, 2)
+
+    return {
+        "usage": {
+            "total_bytes": total_bytes,
+            "total_mb": round(total_bytes / (1024 ** 2), 3),
+            "total_gb": round(total_gb, 6),
+            "breakdown": breakdown,
+        },
+        "pricing": {
+            "base_rate_per_gb": R2_BASE_RATE_PER_GB,
+            "markup_pct": STORAGE_MARKUP_PCT,
+            "effective_rate_per_gb": effective_rate,
+            "included_gb": round(included_gb, 2),
+            "billable_gb": round(billable_gb, 6),
+            "monthly_storage_cost": monthly_cost,
+        },
+        "packs_available": STORAGE_PACKS,
+        "packs_purchased": packs,
+        "note": "Displayed for transparency — not charged. Base Cloudflare R2 rate + 40% platform markup.",
+    }
+
+
+class StoragePackIn(BaseModel):
+    pack_id: str
+
+
+@router.post("/enterprise/storage/packs/purchase")
+async def purchase_storage_pack(payload: StoragePackIn, current=Depends(require_user)):
+    _owner_only(current)
+    pack = next((p for p in STORAGE_PACKS if p["id"] == payload.pack_id), None)
+    if not pack:
+        raise HTTPException(404, "Unknown storage pack")
+    ws = current["workspace_id"]
+    doc = {"id": new_id(), "workspace_id": ws, "pack_id": pack["id"], "name": pack["name"],
+           "gb": pack["gb"], "price_usd": pack["price_usd"], "purchased_at": now_iso()}
+    await db.enterprise_storage_packs.insert_one(doc.copy())
+    await _audit(ws, current, "storage_pack_purchased", "storage", pack["id"],
+                 {"gb": pack["gb"], "price_usd": pack["price_usd"]})
+    return {"ok": True, "pack": doc}
+
+
+@router.get("/enterprise/billing")
+async def billing_summary(current=Depends(require_user)):
+    """Combined enterprise billing: seat licenses + storage (displayed, not charged)."""
+    _owner_only(current)
+    await _ensure_seed(current)
+    ws = current["workspace_id"]
+    lic = await db.enterprise_licenses.find_one({"workspace_id": ws}, {"_id": 0}) or {}
+    assigned = await db.enterprise_users.count_documents({"workspace_id": ws, "enterprise_license_status": "active"})
+    seat_price = lic.get("price_per_seat", PRICE_PER_SEAT)
+    seat_cost = round(assigned * seat_price, 2)
+
+    storage = await storage_meter(current)
+    storage_cost = storage["pricing"]["monthly_storage_cost"]
+    return {
+        "seats": {
+            "seats_purchased": lic.get("seats_purchased", 0),
+            "seats_assigned": assigned,
+            "price_per_seat": seat_price,
+            "monthly_seat_cost": seat_cost,
+        },
+        "storage": storage,
+        "total_monthly_estimate": round(seat_cost + storage_cost, 2),
+    }
 
 
 # ── Audit log ────────────────────────────────────────────────────────────────
