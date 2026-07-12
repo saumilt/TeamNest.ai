@@ -479,11 +479,8 @@ async def _measure_bytes(ws: str, collection: str) -> int:
     return total
 
 
-@router.get("/enterprise/storage")
-async def storage_meter(current=Depends(require_user)):
-    _owner_only(current)
-    await _ensure_seed(current)
-    ws = current["workspace_id"]
+async def _compute_storage(ws: str) -> dict:
+    """Shared storage-meter computation (used by /storage and /billing)."""
     breakdown = []
     total_bytes = 0
     for label, coll in _STORAGE_SOURCES:
@@ -521,6 +518,13 @@ async def storage_meter(current=Depends(require_user)):
     }
 
 
+@router.get("/enterprise/storage")
+async def storage_meter(current=Depends(require_user)):
+    _owner_only(current)
+    await _ensure_seed(current)
+    return await _compute_storage(current["workspace_id"])
+
+
 class StoragePackIn(BaseModel):
     pack_id: str
 
@@ -551,7 +555,7 @@ async def billing_summary(current=Depends(require_user)):
     seat_price = lic.get("price_per_seat", PRICE_PER_SEAT)
     seat_cost = round(assigned * seat_price, 2)
 
-    storage = await storage_meter(current)
+    storage = await _compute_storage(ws)
     storage_cost = storage["pricing"]["monthly_storage_cost"]
     return {
         "seats": {

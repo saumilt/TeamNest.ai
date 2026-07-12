@@ -2,6 +2,15 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 105 (Jul 2026) — Role Intelligence Phase C + D: Expertise Map/Risk dashboard + Storage billing
+### Enterprise module (web + backend)
+- **Phase C — Expertise Map + Knowledge Risk dashboard**: `GET /api/enterprise/risk-dashboard` → summary {roles, at_risk, critical, single_person_deps, avg_continuity}, risk distribution {Critical/High/Medium/Low}, and roles[] (sorted by continuity asc) each with continuity_score, risk_level, dependency flags (Departing / Single-person dependency / No successor / No backup / High unique knowledge), 10-component score breakdown, and person_id/person_name for drill-down.
+- **Phase D — Storage metering + packs + billing**: `GET /api/enterprise/storage` meters real per-workspace bytes across 7 enterprise collections; prices on Cloudflare R2 base ($0.015/GB) + 40% markup = $0.021/GB, 5 GB free allowance (+ purchased packs), displayed NOT charged. `POST /api/enterprise/storage/packs/purchase {pack_id}` (10/50/100 GB packs) bumps included allowance. `GET /api/enterprise/billing` combines seat licenses ($29.99/seat) + storage into total_monthly_estimate. Shared `_compute_storage(ws)` helper (billing no longer re-runs the storage route).
+- Web `pages/EnterprisePage.jsx`: two new tabs — **Risk** (summary tiles, coloured distribution bar, expandable expertise-map role cards with 10 breakdown score bars + flag chips + View-profile drill-down) and **Billing** (seat licenses card, storage metering with per-source bars + rate math, storage packs with Add buttons, total monthly estimate).
+- New collection: enterprise_storage_packs.
+- Tested: 10/10 backend pytest (`tests/test_enterprise_phase_c_d.py`) + web UI (both tabs fully functional, pack purchase round-trip). Report: `/app/test_reports/iteration_102.json`. No bugs.
+
+
 ## Iteration 104 (Jul 2026) — Role Intelligence Phase B: Successor/Transfer workflow + Ask Previous Role
 ### Enterprise module (web + backend) — grounded, anonymized knowledge transfer
 - New `services/enterprise_intelligence.py` (Claude Fable 5 via Emergent LLM Key, Sonnet 4.6 fallback, deterministic fallbacks):

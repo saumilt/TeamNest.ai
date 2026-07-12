@@ -25,8 +25,8 @@
 ## Role Intelligence (enterprise module)
 - (DONE iter 103) Phase A — Foundation: seed, overview/people/roles, profile shell.
 - (DONE iter 104) Phase B — Successor Assignment & Knowledge Transfer (30/60/90 handoff + checklist) + "Ask Previous Role" grounded/anonymized chat.
-- P1 Phase C — Expertise Map + Knowledge Risk dashboard (visual per-role continuity, single-person dependency flags, at-risk ranking with drill-down).
-- P1 Phase D — Storage metering + packs + billing dashboard (Cloudflare R2 base + 40% markup; displayed, not charged).
+- (DONE iter 105) Phase C — Expertise Map + Knowledge Risk dashboard (visual per-role continuity, dependency flags, at-risk ranking + drill-down).
+- (DONE iter 105) Phase D — Storage metering + packs + billing dashboard (Cloudflare R2 base + 40% markup; displayed, not charged).
 - P2 — Knowledge capture from chats/tasks/meetings → Proposed Memory Review queue (approve before it enters role knowledge).
 
 ## Marketplace backlog (post iter 84)

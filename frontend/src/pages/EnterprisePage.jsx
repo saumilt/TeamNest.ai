@@ -98,14 +98,13 @@ const FLAG_COLOR = {
   "High unique knowledge": "bg-ai-tint text-ai",
 };
 
-function RiskDashboard({ people }) {
+function RiskDashboard() {
   const nav = useNavigate();
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
   useEffect(() => { api.get("/enterprise/risk-dashboard").then((r) => setData(r.data)).catch(() => toast.error("Failed to load risk dashboard")); }, []);
   if (!data) return <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-ai" /></div>;
 
-  const roleToPerson = Object.fromEntries((people || []).map((p) => [p.role_id, p.id]));
   const distTotal = Object.values(data.distribution).reduce((a, b) => a + b, 0) || 1;
   const DIST_BAR = { Critical: "bg-red-500", High: "bg-orange-500", Medium: "bg-amber-400", Low: "bg-emerald-500" };
 
@@ -165,8 +164,8 @@ function RiskDashboard({ people }) {
                       </div>
                     ))}
                   </div>
-                  {roleToPerson[r.role_id] && (
-                    <button onClick={() => nav(`/enterprise/people/${roleToPerson[r.role_id]}`)} data-testid={`rd-view-${r.role_id}`}
+                  {r.person_id && (
+                    <button onClick={() => nav(`/enterprise/people/${r.person_id}`)} data-testid={`rd-view-${r.role_id}`}
                       className="mt-4 text-xs px-3 py-1.5 rounded-lg bg-ai text-black font-semibold flex items-center gap-1">
                       View {r.person_name || "profile"} <ArrowRight className="w-3.5 h-3.5" />
                     </button>
@@ -212,7 +211,7 @@ function BillingDashboard() {
         <div className="rounded-2xl border border-line bg-surface p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div><div className="text-ink-mute text-xs">Purchased</div><div className="text-ink font-semibold">{data.seats.seats_purchased}</div></div>
           <div><div className="text-ink-mute text-xs">Assigned</div><div className="text-ink font-semibold">{data.seats.seats_assigned}</div></div>
-          <div><div className="text-ink-mute text-xs">Price / seat</div><div className="text-ink font-semibold">${data.seats.price_per_seat}/mo</div></div>
+          <div><div className="text-ink-mute text-xs">Price / seat</div><div className="text-ink font-semibold">${data.seats.price_per_seat.toFixed(2)}/mo</div></div>
           <div><div className="text-ink-mute text-xs">Seat total</div><div className="text-ink font-semibold">${data.seats.monthly_seat_cost.toFixed(2)}/mo</div></div>
         </div>
       </section>
@@ -372,7 +371,7 @@ export default function EnterprisePage() {
             ))}
           </div>
         )}
-        {tab === "risk" && <RiskDashboard people={people} />}
+        {tab === "risk" && <RiskDashboard />}
         {tab === "billing" && <BillingDashboard />}
       </div>
 
