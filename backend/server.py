@@ -33,6 +33,7 @@ from routes import (
     auth,
     billing,
     connectors,
+    enterprise,
     bookkeeper,
     calls,
     changelog,
@@ -141,6 +142,7 @@ api.include_router(template_market.router)
 api.include_router(dev_gates.router)
 api.include_router(workspace_ai.router)
 api.include_router(connectors.router)
+api.include_router(enterprise.router)
 
 app.include_router(api)
 

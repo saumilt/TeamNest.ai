@@ -2,6 +2,15 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 103 (Jul 2026) — TeamNest Role Intelligence, Phase A (Foundation)
+### Enterprise module (web + backend) — "transfer the role knowledge, not the person"
+- Backend `routes/enterprise.py` + `services/enterprise_seed.py`: Enterprise People, Roles, Role-Intelligence profiles, licenses ($29.99/seat), continuity scores + risk, audit log. Auto-seeds "Perfect Restaurant Group" sample (Priya Shah/Finance 42% High-Departing, Raj Mehta/Ops 81% Medium, Amit Patel/Sales 28% Critical) with role profiles + source-grounded sample memories.
+- Endpoints: GET /api/enterprise/overview, /people (+POST/PATCH/{id}), /roles, /roles/{id}/profile, /licenses (+/purchase), /audit. Owner/admin/super-admin only.
+- Web: sidebar "Role Intelligence" → `/enterprise` (Overview with risk table + continuity bars, People list, Roles) and `/enterprise/people/:id` profile with tabs (Overview/Role/Responsibilities/Knowledge/Decisions/Relationships/Successor), "Mark as departing". Reusable RiskBadge + ContinuityBar.
+- Verified via curl (overview/roles/people math) + screenshots (overview risk table, profile tabs). Collections: enterprise_users, enterprise_roles, enterprise_role_profiles, enterprise_role_memories, enterprise_knowledge_scores, enterprise_licenses, enterprise_audit_logs.
+- REMAINING (per spec): Phase B (capture + Proposed Memory Review + Ask Previous Role + Knowledge Twin), Phase C (Expertise Map, Risk dashboard, Successor/Transfer workflow + 30/60/90 onboarding, departure/role-change), Phase D (storage metering + R2×1.4 billing + processing charges + enterprise invoice).
+
+
 ## Iteration 102 (Jul 2026) — TeamNest Connectors (Phase 1) + live Gmail read-only style training
 ### Connectors framework (web + backend)
 - New `/connectors` page (all users) + `nav-connectors` sidebar link. Provider registry grouped by category (Email/CRM/Chat/Files); live providers show **Connect**, others show "Needs setup / Coming soon".
