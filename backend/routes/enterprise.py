@@ -569,6 +569,120 @@ async def billing_summary(current=Depends(require_user)):
     }
 
 
+# ── Knowledge capture → Proposed Memory Review (P2) ──────────────────────────
+class CaptureIn(BaseModel):
+    text: Optional[str] = None
+    chat_id: Optional[str] = None
+    source_type: str = "Manual"
+    source_id: Optional[str] = None
+
+
+@router.post("/enterprise/roles/{role_id}/capture")
+async def capture_knowledge(role_id: str, payload: CaptureIn, current=Depends(require_user)):
+    """Capture knowledge for a role from pasted text or a workspace chat, then
+    stage it as PROPOSED memories for admin review (grounded, anonymized by the
+    extractor). Approved items feed Ask Role + handoff packages."""
+    _owner_only(current)
+    ws = current["workspace_id"]
+    role = await db.enterprise_roles.find_one({"id": role_id, "workspace_id": ws}, {"_id": 0})
+    if not role:
+        raise HTTPException(404, "Role not found")
+
+    text = (payload.text or "").strip()
+    source_type = payload.source_type
+    source_id = payload.source_id
+    if payload.chat_id:
+        chat = await db.chats.find_one({"id": payload.chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
+        if not chat:
+            raise HTTPException(404, "Chat not found or not accessible")
+        from services.ai_runtime import build_chat_context
+        text = await build_chat_context(payload.chat_id, limit=30)
+        source_type = "TeamNest chat"
+        source_id = payload.chat_id
+    if not text:
+        raise HTTPException(400, "Provide text or a chat_id with messages to capture from")
+
+    from services.enterprise_intelligence import propose_memories_from_text
+    proposed = await propose_memories_from_text(role, text)
+    if not proposed:
+        return {"proposed": 0, "memories": [], "note": "Nothing worth preserving was found in that source."}
+
+    now = now_iso()
+    docs = []
+    for p in proposed:
+        docs.append({
+            "id": new_id(), "workspace_id": ws, "role_id": role_id,
+            "source_user_id": current["id"], "source_type": source_type, "source_id": source_id,
+            "memory_type": p["memory_type"], "title": p["title"], "content": p["content"],
+            "sensitivity_level": p["sensitivity_level"], "visibility": "role",
+            "transferable": p["transferable"], "approved_by_user_id": None,
+            "approval_status": "proposed", "retention_policy": "keep_indefinitely",
+            "confidence": p["confidence"], "source_date": now[:10],
+            "last_reviewed_at": None, "created_at": now, "updated_at": now,
+        })
+    await db.enterprise_role_memories.insert_many([d.copy() for d in docs])
+    await _audit(ws, current, "knowledge_captured", "role", role_id,
+                 {"count": len(docs), "source_type": source_type})
+    return {"proposed": len(docs), "memories": docs}
+
+
+@router.get("/enterprise/memories/review")
+async def review_queue(status: str = "proposed", current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    roles = await _role_map(ws)
+    rows = await db.enterprise_role_memories.find(
+        {"workspace_id": ws, "approval_status": status}, {"_id": 0}
+    ).sort("created_at", -1).to_list(300)
+    pending = await db.enterprise_role_memories.count_documents(
+        {"workspace_id": ws, "approval_status": "proposed"})
+    return {"memories": [{**m, "role_name": roles.get(m["role_id"], {}).get("role_name")} for m in rows],
+            "pending_count": pending}
+
+
+class MemoryDecision(BaseModel):
+    decision: str  # approve | reject
+    title: Optional[str] = None
+    content: Optional[str] = None
+    transferable: Optional[bool] = None
+    sensitivity_level: Optional[str] = None
+
+
+@router.post("/enterprise/memories/{mid}/decide")
+async def decide_memory(mid: str, payload: MemoryDecision, current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    mem = await db.enterprise_role_memories.find_one({"id": mid, "workspace_id": ws}, {"_id": 0, "id": 1})
+    if not mem:
+        raise HTTPException(404, "Memory not found")
+    if payload.decision not in ("approve", "reject"):
+        raise HTTPException(400, "decision must be 'approve' or 'reject'")
+
+    update = {"last_reviewed_at": now_iso(), "updated_at": now_iso()}
+    for k in ("title", "content", "transferable", "sensitivity_level"):
+        v = getattr(payload, k)
+        if v is not None:
+            update[k] = v
+    if payload.decision == "approve":
+        update["approval_status"] = "approved"
+        update["approved_by_user_id"] = current["id"]
+    else:
+        update["approval_status"] = "rejected"
+    await db.enterprise_role_memories.update_one({"id": mid, "workspace_id": ws}, {"$set": update})
+    await _audit(ws, current, f"memory_{payload.decision}d", "memory", mid, {})
+    return {"ok": True, "approval_status": update["approval_status"]}
+
+
+@router.get("/enterprise/roles/{role_id}/memories")
+async def role_memories(role_id: str, current=Depends(require_user)):
+    _owner_only(current)
+    ws = current["workspace_id"]
+    rows = await db.enterprise_role_memories.find(
+        {"workspace_id": ws, "role_id": role_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(300)
+    return {"memories": rows}
+
+
 # ── Audit log ────────────────────────────────────────────────────────────────
 @router.get("/enterprise/audit")
 async def audit_log(current=Depends(require_user)):

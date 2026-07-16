@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Building2, Users, Briefcase, ShieldAlert, Loader2, Plus, X, ArrowRight, TrendingUp,
   HardDrive, CreditCard, Package, ChevronDown, Activity, Loader,
+  CheckCircle2, XCircle, Inbox, Pencil,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -97,6 +98,71 @@ const FLAG_COLOR = {
   "No backup": "bg-white/10 text-ink-mute",
   "High unique knowledge": "bg-ai-tint text-ai",
 };
+
+function ReviewQueue() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [edit, setEdit] = useState({});
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const r = await api.get("/enterprise/memories/review"); setItems(r.data.memories || []); }
+    catch { toast.error("Failed to load review queue"); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const decide = async (m, decision) => {
+    const e = edit[m.id] || {};
+    try {
+      await api.post(`/enterprise/memories/${m.id}/decide`, {
+        decision, title: e.title, content: e.content,
+      });
+      toast.success(decision === "approve" ? "Approved — now in role knowledge" : "Rejected");
+      setItems((xs) => xs.filter((x) => x.id !== m.id));
+    } catch { toast.error("Failed"); }
+  };
+
+  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-ai" /></div>;
+  if (items.length === 0) return (
+    <div className="text-center py-16" data-testid="review-empty">
+      <Inbox className="w-10 h-10 text-ink-mute mx-auto mb-3" />
+      <p className="text-sm text-ink-dim">No proposed knowledge to review.</p>
+      <p className="text-xs text-ink-mute mt-1">Capture knowledge from a chat or paste notes on a person&apos;s Knowledge tab.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3" data-testid="review-queue">
+      <p className="text-xs text-ink-mute mb-2">Approve to add to the role&apos;s grounded knowledge (feeds Ask Role + handoffs). Content is anonymized on capture.</p>
+      {items.map((m) => {
+        const e = edit[m.id] || { title: m.title, content: m.content };
+        return (
+          <div key={m.id} className="rounded-2xl border border-line bg-surface p-4" data-testid={`review-${m.id}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-ai-tint text-ai font-semibold">{m.role_name}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-dim">{m.memory_type}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-mute">{m.source_type}</span>
+              <span className="text-[10px] text-ink-mute ml-auto">confidence {Math.round((m.confidence || 0) * 100)}%</span>
+            </div>
+            <input value={e.title} onChange={(ev) => setEdit({ ...edit, [m.id]: { ...e, title: ev.target.value } })}
+              data-testid={`review-title-${m.id}`}
+              className="w-full mb-2 h-9 rounded-lg bg-bg border border-line px-3 text-ink text-sm font-semibold" />
+            <textarea value={e.content} onChange={(ev) => setEdit({ ...edit, [m.id]: { ...e, content: ev.target.value } })}
+              data-testid={`review-content-${m.id}`} rows={3}
+              className="w-full mb-3 rounded-lg bg-bg border border-line px-3 py-2 text-ink text-sm" />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => decide(m, "reject")} data-testid={`review-reject-${m.id}`}
+                className="text-xs px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1">
+                <XCircle className="w-3.5 h-3.5" /> Reject</button>
+              <button onClick={() => decide(m, "approve")} data-testid={`review-approve-${m.id}`}
+                className="text-xs px-3 py-1.5 rounded-lg bg-ai text-black font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function RiskDashboard() {
   const nav = useNavigate();
@@ -267,21 +333,24 @@ export default function EnterprisePage() {
   const [roles, setRoles] = useState([]);
   const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pendingReview, setPendingReview] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [o, p, r] = await Promise.all([
+      const [o, p, r, rev] = await Promise.all([
         api.get("/enterprise/overview"), api.get("/enterprise/people"), api.get("/enterprise/roles"),
+        api.get("/enterprise/memories/review"),
       ]);
       setOverview(o.data); setPeople(p.data.people || []); setRoles(r.data.roles || []);
+      setPendingReview(rev.data.pending_count || 0);
     } catch { toast.error("Failed to load Enterprise"); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="min-h-screen bg-bg flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-ai" /></div>;
 
-  const tabs = [["overview", "Overview"], ["people", "People"], ["roles", "Roles"], ["risk", "Risk"], ["billing", "Billing"]];
+  const tabs = [["overview", "Overview"], ["people", "People"], ["roles", "Roles"], ["risk", "Risk"], ["review", "Review"], ["billing", "Billing"]];
 
   return (
     <div className="min-h-screen bg-bg text-ink px-5 pt-16 pb-8 md:px-10" data-testid="enterprise-page">
@@ -296,7 +365,11 @@ export default function EnterprisePage() {
         <div className="flex gap-2 mb-6 border-b border-line">
           {tabs.map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} data-testid={`ent-tab-${id}`}
-              className={`px-4 py-2.5 text-sm border-b-2 -mb-px ${tab === id ? "border-ai text-ai" : "border-transparent text-ink-dim hover:text-ink"}`}>{label}</button>
+              className={`px-4 py-2.5 text-sm border-b-2 -mb-px flex items-center gap-1.5 ${tab === id ? "border-ai text-ai" : "border-transparent text-ink-dim hover:text-ink"}`}>{label}
+              {id === "review" && pendingReview > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ai text-black font-bold" data-testid="review-badge">{pendingReview}</span>
+              )}
+            </button>
           ))}
         </div>
 
@@ -372,6 +445,7 @@ export default function EnterprisePage() {
           </div>
         )}
         {tab === "risk" && <RiskDashboard />}
+        {tab === "review" && <ReviewQueue />}
         {tab === "billing" && <BillingDashboard />}
       </div>
 

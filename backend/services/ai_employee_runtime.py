@@ -106,6 +106,24 @@ def build_system_prompt(
     return "\n".join(parts)
 
 
+async def workspace_memory_block(workspace_id: str, query: str,
+                                 chat_id: Optional[str] = None) -> str:
+    """Best-effort workspace-memory (RAG) context for an AI employee reply, so
+    employees draw on the team's prior decisions/research/knowledge, not just
+    the current chat. Returns '' on any failure — never blocks a reply."""
+    if not workspace_id or not (query or "").strip():
+        return ""
+    try:
+        from services.memory_rag import build_rag_context, retrieve_memory
+        items = await retrieve_memory(
+            workspace_id=workspace_id, query=query, chat_id=chat_id,
+            mode="workspace", limit=6,
+        )
+        return build_rag_context(items)
+    except Exception:
+        return ""
+
+
 async def generate_reply(system_prompt: str, user_message: str,
                          history: Optional[List[Dict]] = None) -> Dict:
     """Returns {reply, model, escalated}. `history` is a list of prior turns

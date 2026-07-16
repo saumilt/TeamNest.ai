@@ -77,6 +77,10 @@ async def _respond(chat: dict, sender: dict, message: dict, deployment: dict) ->
     if history:
         system += ("\n\nRecent conversation in this chat (oldest first) — use it "
                    "for context:\n" + "\n".join(history))
+    from services.ai_employee_runtime import workspace_memory_block
+    mem = await workspace_memory_block(ws, question, chat_id=chat["id"])
+    if mem:
+        system += "\n\n" + mem
     try:
         result = await asyncio.wait_for(generate_reply(system, question), timeout=60.0)
         answer = result["reply"] or "_(empty response)_"

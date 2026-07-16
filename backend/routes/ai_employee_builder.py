@@ -624,6 +624,10 @@ async def sandbox_reply(eid: str, payload: SandboxMessage, current=Depends(requi
     history = [{"user": r["user_message"], "ai": r["ai_response"]} for r in prior]
 
     system = build_system_prompt(emp, style, docs, examples, perm, esc)
+    from services.ai_employee_runtime import workspace_memory_block
+    mem = await workspace_memory_block(current["workspace_id"], payload.message)
+    if mem:
+        system += "\n\n" + mem
     result = await generate_reply(system, payload.message, history=history)
 
     now = now_iso()

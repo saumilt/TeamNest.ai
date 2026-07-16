@@ -173,6 +173,42 @@ async def deduct_credits_for_responses(
     return total
 
 
+async def build_chat_context(chat_id: str, before_iso: Optional[str] = None, limit: int = 16) -> str:
+    """Recent conversation transcript for a chat, so inline `@ai` answers are
+    context-aware (follow on from what was already discussed). Includes prior
+    human messages AND prior AI answers, oldest→newest, PII kept as-is (internal
+    team context). Excludes the running placeholder + build-progress noise."""
+    q: dict = {
+        "chat_id": chat_id,
+        "deleted_at": None,
+        "message_type": {"$nin": ["ai_question", "build_progress"]},
+    }
+    if before_iso:
+        q["created_at"] = {"$lt": before_iso}
+    rows = await db.messages.find(
+        q, {"_id": 0, "sender_id": 1, "body": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(limit)
+    rows.reverse()
+    if not rows:
+        return ""
+
+    human_ids = {r["sender_id"] for r in rows if not str(r["sender_id"]).startswith("ai")}
+    names: dict = {}
+    if human_ids:
+        async for u in db.users.find({"id": {"$in": list(human_ids)}}, {"_id": 0, "id": 1, "name": 1}):
+            names[u["id"]] = u.get("name") or "Teammate"
+
+    lines: List[str] = []
+    for r in rows:
+        body = (r.get("body") or "").strip()
+        if not body:
+            continue
+        who = "AI" if str(r["sender_id"]).startswith("ai") else names.get(r["sender_id"], "Teammate")
+        lines.append(f"{who}: {body[:600]}")
+    return "\n".join(lines)
+
+
+
 async def handle_ai_command(
     chat_id: str, user_id: str, question: str, models: List[str],
     compare: bool = False, attachments: Optional[List[dict]] = None,
@@ -280,6 +316,15 @@ async def handle_ai_command(
     # Documents are inlined into the model prompt; images go to vision-capable
     # models. The stored thread/placeholder question stays clean for display.
     prompt_question = question
+    # Conversation memory — always ground inline @ai answers in the prior chat.
+    history_ctx = await build_chat_context(chat_id, placeholder["created_at"])
+    if history_ctx:
+        prompt_question = (
+            "[Conversation so far in this chat — use it as context to give a coherent, "
+            "context-aware answer that follows on from what was already discussed. "
+            "Resolve references like 'it', 'that', 'the previous one' against this history.]\n"
+            f"{history_ctx}\n\n[Current question]\n{question}"
+        )
     image_bytes: Optional[list] = None
     if attachments:
         try:
@@ -287,7 +332,7 @@ async def handle_ai_command(
             extracted = await extract_attachments(attachments, workspace_id)
             if extracted.get("text"):
                 prompt_question = (
-                    f"{question}\n\n"
+                    f"{prompt_question}\n\n"
                     "[Attached file contents — use these to answer the question]\n"
                     f"{extracted['text']}"
                 )

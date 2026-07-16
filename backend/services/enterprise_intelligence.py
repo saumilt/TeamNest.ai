@@ -226,3 +226,85 @@ async def ask_previous_role(
     cited_ns = {int(n) for n in re.findall(r"\[S(\d+)\]", raw)}
     citations = [{"n": s["n"], "title": s["title"]} for s in sources if s["n"] in cited_ns]
     return {"answer": raw, "citations": citations, "model": model, "grounded": True}
+
+
+# ── Knowledge capture → proposed memories (P2) ───────────────────────────────
+_VALID_TYPES = {"process", "decision", "issue_resolution", "relationship", "risk", "knowledge"}
+_VALID_SENS = {"public", "internal", "confidential"}
+
+
+def _parse_json_array(raw: str) -> list:
+    import json
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = text[3:]
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip().rstrip("`").strip()
+    start, end = text.find("["), text.rfind("]")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+    parsed = json.loads(text)
+    return parsed if isinstance(parsed, list) else []
+
+
+async def propose_memories_from_text(role: Dict, raw_text: str) -> List[Dict]:
+    """Extract 1-3 anonymized, role-transferable knowledge items from workplace
+    text (a chat excerpt, task notes, meeting summary…). Returns normalized
+    proposed-memory dicts for admin review before they enter role knowledge."""
+    raw_text = (raw_text or "").strip()
+    if not raw_text:
+        return []
+
+    system = (
+        "You extract reusable institutional knowledge from workplace text (chats, tasks, notes) "
+        "so it can be preserved for a role's successor. CRITICAL: never include any individual's "
+        "personal name or identity — describe the work, process, decision or relationship, not the "
+        "person. Return ONLY JSON."
+    )
+    prompt = (
+        f"Role: {role.get('role_name')} ({role.get('department')}).\n"
+        "From the text below, extract 1-3 discrete pieces of knowledge worth preserving for a "
+        "successor (processes, decisions, issue resolutions, relationships, risks). For EACH return "
+        "a JSON object with keys:\n"
+        "- title (short phrase)\n"
+        "- memory_type (one of: process, decision, issue_resolution, relationship, risk, knowledge)\n"
+        "- content (2-4 sentences, anonymized, NO personal names)\n"
+        "- transferable (boolean)\n"
+        "- sensitivity_level (one of: public, internal, confidential)\n"
+        "- confidence (number 0-1)\n\n"
+        "Return ONLY a JSON array. If nothing is worth keeping, return [].\n\n"
+        f"--- TEXT ---\n{raw_text[:6000]}"
+    )
+    try:
+        raw = await _run_llm(system, prompt, f"capture-{secrets.randbelow(1_000_000) + 1}")
+        arr = _parse_json_array(raw)
+    except Exception:
+        arr = [{
+            "title": "Captured note",
+            "memory_type": "knowledge",
+            "content": raw_text[:500],
+            "transferable": True,
+            "sensitivity_level": "internal",
+            "confidence": 0.4,
+        }]
+
+    out: List[Dict] = []
+    for m in arr[:3]:
+        if not isinstance(m, dict) or not m.get("content"):
+            continue
+        mt = str(m.get("memory_type", "knowledge")).lower()
+        sl = str(m.get("sensitivity_level", "internal")).lower()
+        try:
+            conf = float(m.get("confidence", 0.6))
+        except (TypeError, ValueError):
+            conf = 0.6
+        out.append({
+            "title": str(m.get("title") or "Captured knowledge")[:160],
+            "memory_type": mt if mt in _VALID_TYPES else "knowledge",
+            "content": str(m["content"])[:2000],
+            "transferable": bool(m.get("transferable", True)),
+            "sensitivity_level": sl if sl in _VALID_SENS else "internal",
+            "confidence": max(0.0, min(1.0, conf)),
+        })
+    return out

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ChevronLeft, Loader2, ShieldCheck, FileText, GitBranch, Users, AlertTriangle,
-  UserCheck, CheckCircle2, Circle, MessageSquare, Send, Sparkles, Quote,
+  UserCheck, CheckCircle2, Circle, MessageSquare, Send, Sparkles, Quote, Plus, X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { RiskBadge, ContinuityBar } from "@/pages/EnterprisePage";
@@ -223,11 +223,61 @@ function AskRoleTab({ roleId, roleName }) {
   );
 }
 
+function CaptureModal({ roleId, roleName, onClose, onDone }) {
+  const [text, setText] = useState("");
+  const [chatId, setChatId] = useState("");
+  const [chats, setChats] = useState([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get("/chats").then((r) => setChats(r.data.chats || r.data || [])).catch(() => {}); }, []);
+
+  const submit = async () => {
+    if (!text.trim() && !chatId) { toast.error("Paste text or pick a chat"); return; }
+    setBusy(true);
+    try {
+      const r = await api.post(`/enterprise/roles/${roleId}/capture`, chatId ? { chat_id: chatId } : { text });
+      if (r.data.proposed > 0) toast.success(`${r.data.proposed} item(s) proposed — review in the Review queue`);
+      else toast.info(r.data.note || "Nothing worth preserving found");
+      onDone?.();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Capture failed"); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" data-testid="capture-modal">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-bg p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-bold text-ink flex items-center gap-2"><Sparkles className="w-4 h-4 text-ai" /> Capture knowledge</h3>
+          <button onClick={onClose} className="text-ink-mute hover:text-ink"><X className="w-5 h-5" /></button>
+        </div>
+        <p className="text-xs text-ink-mute mb-4">For the <span className="text-ai">{roleName}</span> role. We extract anonymized, transferable knowledge for admin review — the person&apos;s identity is never stored.</p>
+        <label className="text-[11px] uppercase tracking-widest text-ink-mute">Capture from a chat (optional)</label>
+        <select value={chatId} onChange={(e) => setChatId(e.target.value)} data-testid="capture-chat"
+          className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
+          <option value="">— Paste text instead —</option>
+          {chats.map((c) => <option key={c.id} value={c.id}>{c.name || c.title || "Chat"}</option>)}
+        </select>
+        {!chatId && (
+          <>
+            <label className="text-[11px] uppercase tracking-widest text-ink-mute">Paste notes / chat excerpt / meeting summary</label>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} data-testid="capture-text" rows={6}
+              className="w-full mt-1 mb-4 rounded-xl bg-surface border border-line px-3 py-2 text-ink text-sm"
+              placeholder="e.g. How we handle disputed vendor invoices, the monthly close steps, a key client decision…" />
+          </>
+        )}
+        <button onClick={submit} disabled={busy} data-testid="capture-submit"
+          className="w-full h-11 rounded-xl bg-ai text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Propose knowledge
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function EnterpriseProfile() {
   const { id } = useParams();
   const nav = useNavigate();
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("Overview");
+  const [capturing, setCapturing] = useState(false);
 
   const load = useCallback(() => {
     api.get(`/enterprise/people/${id}`).then((r) => setData(r.data)).catch(() => toast.error("Failed to load profile"));
@@ -304,8 +354,13 @@ export default function EnterpriseProfile() {
             </div>
           )}
           {tab === "Knowledge" && (
-            <Card title="Approved role knowledge (source-grounded)" icon={ShieldCheck}>
-              {(!memories || memories.length === 0) ? <p className="text-sm text-ink-mute">No approved knowledge yet. Capture from chats/tasks in the next phase.</p> : (
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <button onClick={() => setCapturing(true)} data-testid="capture-knowledge-btn"
+                  className="text-xs px-3 py-2 rounded-lg bg-ai text-black font-semibold flex items-center gap-1"><Plus className="w-4 h-4" /> Capture knowledge</button>
+              </div>
+              <Card title="Approved role knowledge (source-grounded)" icon={ShieldCheck}>
+              {(!memories || memories.length === 0) ? <p className="text-sm text-ink-mute">No approved knowledge yet. Use &ldquo;Capture knowledge&rdquo; to propose items from a chat or notes, then approve them in the Review queue.</p> : (
                 <div className="space-y-2">
                   {memories.map((m) => (
                     <div key={m.id} className="rounded-xl border border-line p-3" data-testid={`memory-${m.id}`}>
@@ -326,7 +381,8 @@ export default function EnterpriseProfile() {
                   ))}
                 </div>
               )}
-            </Card>
+              </Card>
+            </div>
           )}
           {tab === "Decisions" && <Card title="Decision history" icon={GitBranch}><List items={(profile?.decision_history || []).map((d) => `${d.date}: ${d.decision} — ${d.reason} (approver: ${d.approver})`)} empty="No decisions recorded." /></Card>}
           {tab === "Relationships" && <Card title="Business relationships" icon={Users}><List items={(profile?.relationships || []).map((r) => `${r.org} (${r.type}) — ${r.notes}`)} empty="No relationships recorded." /></Card>}
@@ -338,6 +394,10 @@ export default function EnterpriseProfile() {
           )}
         </div>
       </div>
+      {capturing && role && (
+        <CaptureModal roleId={role.id} roleName={role.role_name}
+          onClose={() => setCapturing(false)} onDone={() => { setCapturing(false); load(); }} />
+      )}
     </div>
   );
 }
