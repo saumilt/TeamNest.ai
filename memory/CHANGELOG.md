@@ -3107,3 +3107,17 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   (postal addresses kept). Verified no "Emergent" remains on home or /terms.
 - NOTE: internal code comments and functional backend refs (Stripe test-proxy `sk_test_emergent`,
   Emergent LLM key integration) are NOT user-facing and were intentionally left unchanged.
+
+## 2026-06 — Fix: connector "Connect" buttons did nothing (double /api)
+- Root cause: connectors registry exposes `oauth_start` as an ABSOLUTE path
+  ("/api/oauth/m365/login"), but the axios client baseURL is already `${BASE}/api`.
+  connect() called api.get(oauth_start) → requested "/api/api/oauth/..." → 404 →
+  "Could not start connection" toast. Affected Gmail, Google Workspace, Outlook, M365.
+- Fix (frontend/src/pages/ConnectorsPage.jsx): strip the leading "/api" before the
+  axios call: `p.oauth_start.replace(/^\/api(?=\/)/, "")`.
+- Verified in preview: clicking "Connect" on Microsoft 365 now navigates to the real
+  login.microsoftonline.com consent page (redirect_uri .../api/oauth/m365/callback).
+- PRODUCTION note (env/config, not code): (1) Gmail shows disabled ("Coming soon") in prod
+  only if GOOGLE_CLIENT_ID/SECRET are unset in the prod environment; (2) OAuth completion in
+  prod requires PUBLIC_BACKEND_URL=https://teamnest.ai and the prod redirect URIs
+  (https://teamnest.ai/api/oauth/{gmail,m365}/callback) registered in Google Cloud & Azure AD.

@@ -186,7 +186,11 @@ export default function ConnectorsPage() {
   const connect = async (p) => {
     if (!p.oauth_start) return;
     try {
-      const { data: d } = await api.get(p.oauth_start);
+      // `oauth_start` is an absolute backend path (e.g. "/api/oauth/m365/login").
+      // The axios client already prefixes baseURL with "/api", so strip the
+      // leading "/api" here to avoid requesting "/api/api/...".
+      const startPath = p.oauth_start.replace(/^\/api(?=\/)/, "");
+      const { data: d } = await api.get(startPath);
       window.location.href = d.url;
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start connection");
