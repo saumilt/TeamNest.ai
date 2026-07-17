@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Sparkles, ArrowRight, MessageSquare, ListChecks, Phone, Folder,
   Megaphone, Briefcase, Scale, Calculator, CheckCircle2, Rocket, Bot, Terminal,
+  Brain, ShieldCheck, Plug, Mail,
 } from "lucide-react";
 import SeoHelmet from "@/components/web/SeoHelmet";
 import { Eyebrow, Pill, PrimaryButton, GhostButton, SectionTitle, SectionSub } from "@/components/web/atoms";
@@ -130,6 +131,9 @@ function FeatureGlance() {
     { icon: Phone,     title: "AI-assisted calls",         body: "Live transcription, action items, summaries — built into every call." },
     { icon: ListChecks,title: "Tasks + Kanban + Bugs",     body: "Promote any chat line to a task. Tickets ship to GitHub PRs automatically." },
     { icon: Megaphone, title: "AI Employees",              body: "Dedicated personas: Bookkeeper, Marketing, Legal, Recruiter — they remember." },
+    { icon: ShieldCheck, title: "Role Intelligence",       body: "Capture a role's approved work as institutional memory and hand it to a successor — identity-safe." },
+    { icon: Brain,     title: "AI Memory",                 body: "Personal + workspace memory that learns your preferences and personalizes every answer." },
+    { icon: Plug,      title: "Live Connectors",           body: "Gmail + Microsoft 365 / Teams (read-only) train AI employees in your real voice — redacted." },
     { icon: CheckCircle2, title: "Browser-tested builds",  body: "Every build runs a real headless-browser QA pass: loads, logs in, zero JS errors." },
     { icon: Briefcase, title: "Custom domains",            body: "Publish to /p/your-app, then serve it on your own domain with one CNAME." },
     { icon: Rocket,    title: "Templates + live demos",    body: "Start from working apps like AP Ledger — try the live demo before you build." },
@@ -139,7 +143,7 @@ function FeatureGlance() {
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
         <Eyebrow className="mb-2">Everything in TeamNest</Eyebrow>
         <SectionTitle className="!text-[28px] md:!text-[36px] mb-8">
-          One workspace. Twelve superpowers.
+          One workspace. Fifteen superpowers.
         </SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {features.map((f) => (
@@ -661,6 +665,73 @@ function FinalCTA() {
   );
 }
 
+const WHATS_NEW = [
+  {
+    icon: ShieldCheck,
+    tag: "Enterprise",
+    title: "Role Intelligence",
+    body: "Capture a departing employee's approved work as institutional memory, then hand it to their successor — without sharing anyone's personal identity. Successor handoffs, an \"Ask the Role\" grounded chat, expertise & risk maps, and storage billing.",
+    to: "/product",
+  },
+  {
+    icon: Brain,
+    tag: "New",
+    title: "AI Memory",
+    body: "Like ChatGPT/Claude memory, but for your team. The AI learns durable personal and workspace preferences from your chats and gets more tailored over time — say \"@ai remember …\" or manage everything from the AI Memory screen. You're always in control.",
+    to: "/product",
+  },
+  {
+    icon: Plug,
+    tag: "New",
+    title: "Live Connectors",
+    body: "Connect Gmail and Microsoft 365 / Outlook / Teams (read-only) to train an AI employee in your real writing voice. Every sample is redacted before analysis — we learn style, not secrets — and you review before anything is saved.",
+    to: "/product",
+  },
+  {
+    icon: Bot,
+    tag: "AI Employees",
+    title: "AI Employee Builder + Marketplace",
+    body: "Build, train and deploy AI teammates into your chats, then publish them to the marketplace with revenue share. Content-aware hiring suggests the right AI employee based on what a chat is actually about.",
+    to: "/employees-info",
+  },
+];
+
+function WhatsNewSection() {
+  return (
+    <section className="py-16 md:py-24 bg-[var(--w-bg-2)] border-b border-[var(--w-border)]" data-testid="home-whats-new">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+        <Eyebrow className="mb-2">Just shipped</Eyebrow>
+        <SectionTitle className="!text-[28px] md:!text-[36px] mb-3">New in TeamNest</SectionTitle>
+        <SectionSub className="mb-10 max-w-[640px]">
+          The latest capabilities that turn TeamNest from a chat app into an AI-native operating system for your team&apos;s knowledge and work.
+        </SectionSub>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {WHATS_NEW.map((f) => (
+            <Link
+              key={f.title}
+              to={f.to}
+              data-testid={`whats-new-${f.title.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+              className="group flex flex-col p-6 rounded-2xl bg-[var(--w-card-bg)]/60 border border-[var(--w-border)] hover:border-amber-500/40 transition-colors"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                  <f.icon className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-1">{f.tag}</span>
+              </div>
+              <h3 className="text-[19px] font-bold text-[var(--w-text)] mb-2">{f.title}</h3>
+              <p className="text-[14px] leading-[22px] text-[var(--w-text-dim)] flex-1">{f.body}</p>
+              <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-amber-500">
+                Learn more <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function WebHome() {
   return (
     <>
@@ -670,6 +741,7 @@ export default function WebHome() {
         path="/"
       />
       <Hero />
+      <WhatsNewSection />
       <FeatureGlance />
       <ConnectedStory />
       <TrustLine />
