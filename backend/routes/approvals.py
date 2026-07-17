@@ -259,9 +259,9 @@ async def decide_approval(
         # Auto-capture the approved work into the creator's Role Intelligence
         # queue (best-effort; only fires for enterprise employees).
         if a.get("final_answer"):
-            import asyncio
+            from services.bg import fire_and_forget
             from services.enterprise_intelligence import autocapture_from_approval
-            asyncio.create_task(autocapture_from_approval(
+            fire_and_forget(autocapture_from_approval(
                 current["workspace_id"], a.get("created_by"), approval_id,
                 a.get("title", ""), a["final_answer"]))
     return a

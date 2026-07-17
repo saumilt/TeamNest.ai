@@ -2,6 +2,21 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 108 (Jul 2026) — ChatGPT-style learned memory + M365 Teams + role knowledge freshness
+### Learned memory (personal + workspace) — backend + web + mobile
+- New `services/learned_memory.py`: durable **personal** (per-user) and **workspace** (shared) facts/preferences. `extract_and_store` (LLM, gpt-4o-mini) auto-pulls durable items from every `@ai` exchange; `remember` (manual, deduped by normalized text, soft-capped 60/scope); `build_memory_profile_block` injects the profile into prompts (`workspace_only` for shared chats); list/update/forget for the settings screen.
+- Routes `routes/learned_memory.py` (`GET/POST/PATCH/DELETE /api/memory/learned`).
+- Wired into `ai_runtime.handle_ai_command`: `@ai remember …` stores a personal memory + confirms (no model call); every `@ai` answer is grounded with the memory profile + chat history; post-answer fire-and-forget auto-extraction. AI employees inject workspace memory (deployed, shared) / full profile (sandbox).
+- Web `pages/MemoryPage.jsx` at `/ai-memory` + sidebar `nav-ai-memory`; Mobile `app/memory/index.tsx` via You→`you-memory`. Both: add / toggle-active / forget, personal + workspace sections.
+### Microsoft 365 Teams
+- Added `Chat.Read` to M365 scopes; new `m365.fetch_teams_messages` (user's own Teams chat, redacted). `/api/connectors/m365/train-employee` gains `source` = mail|teams; web TrainModal shows a source selector for M365 only.
+### Role knowledge freshness — backend + web + mobile
+- `_freshness_map(ws)` aggregates per-role {last_captured_at, last_approved_at, approved_count}; added to `/enterprise/roles` + risk-dashboard role items. `Freshness` pill on web Roles/Risk cards and mobile Roles list + Risk cards ("Updated Nd ago" / "Stale · …" >90d / "No knowledge yet").
+### Reliability
+- New `services/bg.py` `fire_and_forget()` keeps task refs (prevents GC of background auto-extract + auto-capture tasks).
+- Tested (iteration105): backend 13/13, web 100%, mobile 100%. `@ai remember` deterministic; auto-extract best-effort. Only env-limit: M365 `train-source` needs a live connected account for e2e.
+
+
 ## Iteration 107 (Jul 2026) — Mobile parity for Role Intelligence + auto-capture + Microsoft 365 connector
 ### Mobile parity — Role Intelligence enterprise module (Expo/React Native)
 - New expo-router routes: `mobile/app/enterprise/index.tsx` (dashboard — 6 chip tabs: Overview/People/Roles/Risk/Review/Billing, owner-gated with a friendly 403 screen), `mobile/app/enterprise/[id].tsx` (person profile — 7 section chips + Capture-knowledge modal + Successor assign/handoff/30-60-90 checklist), `mobile/app/enterprise/ask/[roleId].tsx` (grounded Ask-Role chat with [S#] citation chips, multi-turn, KeyboardAvoidingView). Shared primitives in `mobile/src/components/enterprise/ui.tsx` (ContinuityBar/RiskBadge/FlagChip/Stat) mirroring web. Entry point added to the You tab (`you-enterprise`). Tested end-to-end (iteration_104): all tabs/sections/flows pass, anonymized answers with citations, no personal-name leaks.

@@ -398,8 +398,8 @@ async def handle_ai_command(
 
     # Auto-learn durable facts/preferences from this exchange (fire-and-forget).
     if workspace_id:
-        import asyncio
-        asyncio.create_task(_lm.extract_and_store(workspace_id, user_id, question, history_ctx or ""))
+        from services.bg import fire_and_forget
+        fire_and_forget(_lm.extract_and_store(workspace_id, user_id, question, history_ctx or ""))
 
 
 async def handle_inline_task(chat_id: str, creator: dict, source_msg_id: str, cmd: dict):
