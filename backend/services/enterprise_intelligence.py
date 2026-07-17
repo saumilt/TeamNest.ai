@@ -308,3 +308,45 @@ async def propose_memories_from_text(role: Dict, raw_text: str) -> List[Dict]:
             "confidence": max(0.0, min(1.0, conf)),
         })
     return out
+
+
+async def autocapture_from_approval(workspace_id: str, creator_user_id: Optional[str],
+                                    approval_id: str, title: str, content: str) -> int:
+    """Fire-and-forget: when an approval is approved, if its creator is an
+    enterprise employee, silently stage anonymized proposed memories for their
+    role (admin still approves them in the Review queue). Returns count staged.
+    No-op for non-enterprise workspaces or already-captured approvals."""
+    from deps import db, new_id, now_iso
+    if not creator_user_id:
+        return 0
+    try:
+        emp = await db.enterprise_users.find_one(
+            {"workspace_id": workspace_id, "user_id": creator_user_id, "role_id": {"$ne": None}},
+            {"_id": 0, "role_id": 1})
+        if not emp or not emp.get("role_id"):
+            return 0
+        # Dedupe: skip if we already captured this approval.
+        if await db.enterprise_role_memories.count_documents(
+                {"workspace_id": workspace_id, "source_id": approval_id}):
+            return 0
+        role = await db.enterprise_roles.find_one({"id": emp["role_id"]}, {"_id": 0})
+        if not role:
+            return 0
+        proposed = await propose_memories_from_text(role, f"{title}\n\n{content}")
+        if not proposed:
+            return 0
+        now = now_iso()
+        docs = [{
+            "id": new_id(), "workspace_id": workspace_id, "role_id": emp["role_id"],
+            "source_user_id": creator_user_id, "source_type": "Approved decision",
+            "source_id": approval_id, "memory_type": p["memory_type"], "title": p["title"],
+            "content": p["content"], "sensitivity_level": p["sensitivity_level"],
+            "visibility": "role", "transferable": p["transferable"], "approved_by_user_id": None,
+            "approval_status": "proposed", "retention_policy": "keep_indefinitely",
+            "confidence": p["confidence"], "source_date": now[:10],
+            "last_reviewed_at": None, "created_at": now, "updated_at": now,
+        } for p in proposed]
+        await db.enterprise_role_memories.insert_many(docs)
+        return len(docs)
+    except Exception:
+        return 0

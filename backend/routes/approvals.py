@@ -256,6 +256,14 @@ async def decide_approval(
     await _audit_approval_decision(current, approval_id, payload, a)
     if payload.status == "approved":
         await _record_approval_memory(current, approval_id, a)
+        # Auto-capture the approved work into the creator's Role Intelligence
+        # queue (best-effort; only fires for enterprise employees).
+        if a.get("final_answer"):
+            import asyncio
+            from services.enterprise_intelligence import autocapture_from_approval
+            asyncio.create_task(autocapture_from_approval(
+                current["workspace_id"], a.get("created_by"), approval_id,
+                a.get("title", ""), a["final_answer"]))
     return a
 
 

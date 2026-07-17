@@ -129,6 +129,12 @@ export default function YouScreen() {
           <Text style={styles.linkLabel}>AI Employee Marketplace</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity testID="you-enterprise" style={styles.linkRow} onPress={() => router.push("/enterprise")}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>Role Intelligence</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* Legal & support */}
