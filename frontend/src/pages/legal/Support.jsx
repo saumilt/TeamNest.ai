@@ -137,7 +137,7 @@ export default function Support() {
       <h2>Other ways to reach us</h2>
       <p>For postal correspondence:</p>
       <p className="not-prose font-mono text-sm text-zinc-300 leading-relaxed">
-        Emergent Labs<br />
+        TeamNest<br />
         1111B S Governors Ave, Suite 6433<br />
         Dover, DE 19904<br />
         United States

@@ -10,8 +10,8 @@ export default function EULA() {
       <p>
         This End User License Agreement (<strong>"EULA"</strong>,
         <strong> "Agreement"</strong>) is a binding contract between you
-        (<strong>"you"</strong>, <strong>"User"</strong>) and TeamNest, operated
-        by Emergent Labs (<strong>"TeamNest"</strong>, <strong>"we"</strong>,
+        (<strong>"you"</strong>, <strong>"User"</strong>) and TeamNest
+        (<strong>"TeamNest"</strong>, <strong>"we"</strong>,
         <strong> "our"</strong>). It governs your access to and use of the
         TeamNest software, mobile applications, websites, APIs, AI features,
         and any related services (collectively, the <strong>"Software"</strong>).
@@ -229,7 +229,7 @@ export default function EULA() {
       <p>
         Questions about this EULA? Email{" "}
         <a href="mailto:legal@teamnest.ai">legal@teamnest.ai</a>. For postal
-        mail: Emergent Labs, 1111B S Governors Ave Ste 6433, Dover DE 19904,
+        mail: TeamNest, 1111B S Governors Ave Ste 6433, Dover DE 19904,
         USA.
       </p>
     </LegalLayout>

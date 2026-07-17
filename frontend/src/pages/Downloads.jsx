@@ -143,7 +143,7 @@ export default function Downloads() {
           </div>
           <p className="text-sm text-zinc-300 leading-relaxed">
             For long-term version control, use the <strong>Save to GitHub</strong>{" "}
-            button in the Emergent chat input. Your repo will include the entire{" "}
+            button in the chat input. Your repo will include the entire{" "}
             <code className="text-yellow-400 bg-white/5 px-1.5 py-0.5 rounded text-xs">
               frontend/store-assets/
             </code>{" "}

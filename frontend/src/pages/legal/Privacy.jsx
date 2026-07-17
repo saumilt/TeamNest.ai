@@ -9,7 +9,7 @@ export default function Privacy() {
     >
       <p>
         TeamNest (<strong>"we"</strong>, <strong>"our"</strong>, the
-        <strong> "Service"</strong>) is operated by Emergent Labs. This Privacy
+        <strong> "Service"</strong>) is operated by TeamNest. This Privacy
         Policy explains what information we collect, how we use it, and the
         rights you have over your data. By using TeamNest you agree to the
         practices described below.
@@ -139,7 +139,7 @@ export default function Privacy() {
       <p>
         Questions or requests? Reach us at{" "}
         <a href="mailto:privacy@teamnest.ai">privacy@teamnest.ai</a>. For postal
-        mail: Emergent Labs, 1111B S Governors Ave Ste 6433, Dover DE 19904,
+        mail: TeamNest, 1111B S Governors Ave Ste 6433, Dover DE 19904,
         USA.
       </p>
     </LegalLayout>

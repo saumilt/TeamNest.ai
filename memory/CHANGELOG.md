@@ -3096,3 +3096,14 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   listener (markNewSeen) sets the flag + clears the dot when the user opens the You tab.
   Unified with the Chats "What's New" nudge (same storage key).
 - Verified via screenshots. Lint clean. UI-only, no backend.
+
+## 2026-06 — Removed "Emergent" branding + legal entity name
+- Home.jsx: deleted the "Built by Emergent" section (function + render) and the "Built by
+  Emergent ·" prefix in the TrustLine caption.
+- Footer.jsx: "AI-native team comms. Built by Emergent." -> product tagline; copyright
+  "TeamNest, built by Emergent." -> "TeamNest. All rights reserved."
+- Downloads.jsx: "the Emergent chat input" -> "the chat input".
+- Legal (Terms/Privacy/EULA/Support): operating-entity name "Emergent Labs" -> "TeamNest"
+  (postal addresses kept). Verified no "Emergent" remains on home or /terms.
+- NOTE: internal code comments and functional backend refs (Stripe test-proxy `sk_test_emergent`,
+  Emergent LLM key integration) are NOT user-facing and were intentionally left unchanged.

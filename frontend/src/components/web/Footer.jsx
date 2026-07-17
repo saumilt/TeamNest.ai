@@ -47,7 +47,7 @@ export default function Footer() {
               <Wordmark size="md" />
             </Link>
             <p className="text-[14px] leading-6 text-[var(--w-text-dim)] max-w-[24ch]">
-              AI-native team comms. Built by Emergent.
+              AI-native team communication, research and building.
             </p>
           </div>
           {COLS.map((col) => (
@@ -73,7 +73,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-6 border-t border-[var(--w-hairline)] flex flex-wrap items-center justify-between gap-4">
           <p className="text-[13px] text-[var(--w-text-mute)]">
-            © {new Date().getFullYear()} TeamNest, built by Emergent.
+            © {new Date().getFullYear()} TeamNest. All rights reserved.
           </p>
           <a
             href="https://status.teamnest.ai"

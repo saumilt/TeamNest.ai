@@ -364,7 +364,7 @@ function TrustLine() {
     <section className="border-y border-[var(--w-hairline)] bg-[var(--w-bg)]/60">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10 text-center">
         <p className="text-[12px] uppercase tracking-[0.16em] font-semibold text-[var(--w-text-mute)]">
-          Built by Emergent · Trusted by teams shipping fast
+          Trusted by teams shipping fast
         </p>
       </div>
     </section>
@@ -604,44 +604,6 @@ function PricingTeaser() {
   );
 }
 
-function BuiltByEmergent() {
-  return (
-    <section className="py-20">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-        <div>
-          <Eyebrow className="mb-3">Built by Emergent</Eyebrow>
-          <SectionTitle className="!text-[28px] sm:!text-[32px] mb-4">
-            A new pattern for how teams actually work.
-          </SectionTitle>
-          <p className="text-[16px] leading-7 text-[var(--w-text-dim)] max-w-[52ch]">
-            TeamNest is the chat layer Emergent uses internally to ship faster. The
-            best ideas show up in conversation — so we built the workspace around
-            that, with AI quietly available everywhere it&apos;s useful.
-          </p>
-        </div>
-        <div className="relative">
-          <div className="rounded-[20px] border border-[var(--w-hairline)] bg-[var(--w-surface)] p-7">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--w-brand)] to-[var(--w-ai)] flex items-center justify-center text-black font-bold text-[15px]">
-                E
-              </div>
-              <div>
-                <div className="text-[14px] font-bold text-[var(--w-text)]">Emergent</div>
-                <div className="text-[12px] text-[var(--w-text-mute)]">emergent.sh — AI-native dev tools</div>
-              </div>
-            </div>
-            <p className="text-[13px] leading-5 text-[var(--w-text-dim)]">
-              We ship one tool every month. TeamNest is what we built when we
-              realised the bottleneck for AI teams wasn&apos;t models — it was getting
-              everyone on the same page about which answer to ship.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function FinalCTA() {
   return (
     <section className="bg-[var(--w-bg-2)] py-20 md:py-[120px]">
@@ -754,7 +716,6 @@ export default function WebHome() {
       <HowItWorks />
       <AICompareDeepDive />
       <PricingTeaser />
-      <BuiltByEmergent />
       <FinalCTA />
     </>
   );

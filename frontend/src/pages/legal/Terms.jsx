@@ -11,7 +11,7 @@ export default function Terms() {
         Welcome to TeamNest. These Terms of Service (<strong>"Terms"</strong>)
         govern your access to and use of the TeamNest web app, iOS app,
         Android app and related services (collectively, the
-        <strong> "Service"</strong>) operated by Emergent Labs
+        <strong> "Service"</strong>) operated by TeamNest
         (<strong>"we"</strong>, <strong>"us"</strong>). By creating an
         account, you agree to these Terms.
       </p>
@@ -77,8 +77,8 @@ export default function Terms() {
       <h2>7. Intellectual property</h2>
       <p>
         TeamNest, the "TN" logo, the teamnest.ai name, and all software,
-        designs and content we create remain the exclusive property of Emergent
-        Labs. Nothing in these Terms grants you a license to use our trademarks
+        designs and content we create remain the exclusive property of
+        TeamNest. Nothing in these Terms grants you a license to use our trademarks
         without our prior written permission.
       </p>
 
@@ -107,7 +107,7 @@ export default function Terms() {
 
       <h2>11. Limitation of liability</h2>
       <p>
-        TO THE FULLEST EXTENT PERMITTED BY LAW, EMERGENT LABS AND ITS
+        TO THE FULLEST EXTENT PERMITTED BY LAW, TEAMNEST AND ITS
         AFFILIATES SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
         CONSEQUENTIAL OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUE,
         WHETHER INCURRED DIRECTLY OR INDIRECTLY. OUR TOTAL LIABILITY FOR ANY
@@ -118,7 +118,7 @@ export default function Terms() {
 
       <h2>12. Indemnity</h2>
       <p>
-        You agree to indemnify and hold Emergent Labs harmless from any claim,
+        You agree to indemnify and hold TeamNest harmless from any claim,
         damage or expense (including reasonable attorneys' fees) arising from
         your content, your violation of these Terms, or your violation of any
         third-party right.
@@ -146,7 +146,7 @@ export default function Terms() {
       <p>
         Questions about these Terms? Email{" "}
         <a href="mailto:legal@teamnest.ai">legal@teamnest.ai</a>. Postal mail:
-        Emergent Labs, 1111B S Governors Ave Ste 6433, Dover DE 19904, USA.
+        TeamNest, 1111B S Governors Ave Ste 6433, Dover DE 19904, USA.
       </p>
     </LegalLayout>
   );
