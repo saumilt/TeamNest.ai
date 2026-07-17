@@ -99,15 +99,15 @@ const FLAG_COLOR = {
   "High unique knowledge": "bg-ai-tint text-ai",
 };
 
-function ReviewQueue() {
+function ReviewQueue({ onDecided }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [edit, setEdit] = useState({});
   const load = useCallback(async () => {
     setLoading(true);
-    try { const r = await api.get("/enterprise/memories/review"); setItems(r.data.memories || []); }
+    try { const r = await api.get("/enterprise/memories/review"); setItems(r.data.memories || []); onDecided?.(r.data.pending_count || 0); }
     catch { toast.error("Failed to load review queue"); } finally { setLoading(false); }
-  }, []);
+  }, [onDecided]);
   useEffect(() => { load(); }, [load]);
 
   const decide = async (m, decision) => {
@@ -117,7 +117,11 @@ function ReviewQueue() {
         decision, title: e.title, content: e.content,
       });
       toast.success(decision === "approve" ? "Approved — now in role knowledge" : "Rejected");
-      setItems((xs) => xs.filter((x) => x.id !== m.id));
+      setItems((xs) => {
+        const next = xs.filter((x) => x.id !== m.id);
+        onDecided?.(next.length);
+        return next;
+      });
     } catch { toast.error("Failed"); }
   };
 
@@ -445,7 +449,7 @@ export default function EnterprisePage() {
           </div>
         )}
         {tab === "risk" && <RiskDashboard />}
-        {tab === "review" && <ReviewQueue />}
+        {tab === "review" && <ReviewQueue onDecided={setPendingReview} />}
         {tab === "billing" && <BillingDashboard />}
       </div>
 

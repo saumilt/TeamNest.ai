@@ -173,13 +173,25 @@ class TrainReq(BaseModel):
     employee_id: str
     days: int = 90
     max_messages: int = 40
+    preview_only: bool = False
+
+
+async def _save_gmail_style_source(employee_id: str, workspace_id: str, account: dict, samples: list):
+    """Attach redacted Gmail samples as a (non-mock) style source, replacing any prior Gmail source."""
+    await db.ai_employee_style_sources.delete_many({"employee_id": employee_id, "source": "gmail"})
+    await db.ai_employee_style_sources.insert_one({
+        "id": new_id(), "employee_id": employee_id, "workspace_id": workspace_id,
+        "source": "gmail", "label": f"Gmail · {account.get('provider_account_email') or 'connected'}",
+        "is_mock": False, "redacted": True, "samples": samples, "created_at": now_iso(),
+    })
 
 
 @router.post("/connectors/gmail/train-employee")
 async def train_employee(payload: TrainReq, current=Depends(require_user)):
-    """Read-only: pull recent SENT Gmail, redact, and attach as a style source
-    for the chosen AI employee. The user then generates + reviews the profile
-    in the AI builder before it is saved."""
+    """Read-only Gmail → style training. With `preview_only` (recommended), we
+    pull + redact recent SENT mail and return it for REVIEW without saving —
+    the user confirms via `/connectors/gmail/save-training`. Without it, samples
+    are attached directly (legacy behavior)."""
     acc = await db.connector_accounts.find_one(
         {"id": payload.account_id, "user_id": current["id"], "provider": "gmail",
          "connection_status": "connected"}, {"_id": 0})
@@ -213,25 +225,71 @@ async def train_employee(payload: TrainReq, current=Depends(require_user)):
     if not samples:
         raise HTTPException(400, "No suitable sent emails found in the selected range.")
 
-    # Attach as a real (non-mock, already-redacted) style source for the employee.
-    await db.ai_employee_style_sources.delete_many(
-        {"employee_id": payload.employee_id, "source": "gmail"})
-    await db.ai_employee_style_sources.insert_one({
-        "id": new_id(), "employee_id": payload.employee_id, "workspace_id": current["workspace_id"],
-        "source": "gmail", "label": f"Gmail · {acc.get('provider_account_email') or 'connected'}",
-        "is_mock": False, "redacted": True, "samples": [s["text"] for s in samples],
-        "created_at": now_iso(),
-    })
+    sample_texts = [s["text"] for s in samples]
+
+    if payload.preview_only:
+        # Stage for review — do NOT save as a style source yet.
+        preview_id = new_id()
+        await db.connector_style_previews.update_one(
+            {"account_id": payload.account_id, "employee_id": payload.employee_id, "user_id": current["id"]},
+            {"$set": {"preview_id": preview_id, "account_id": payload.account_id,
+                      "employee_id": payload.employee_id, "user_id": current["id"],
+                      "workspace_id": current["workspace_id"], "samples": sample_texts,
+                      "days": payload.days, "created_at": now_iso()},
+             "$setOnInsert": {"id": new_id()}},
+            upsert=True,
+        )
+        await _log(payload.account_id, current["id"], current["workspace_id"], "gmail",
+                   "training_preview_generated", records_analyzed=len(samples))
+        return {
+            "ok": True, "preview_only": True, "preview_id": preview_id,
+            "samples_found": len(samples),
+            "preview": [t[:400] for t in sample_texts],
+            "note": "Review these redacted samples, then save to attach them to the employee. "
+                    "We learn style, not secrets — emails were redacted before analysis.",
+        }
+
+    await _save_gmail_style_source(payload.employee_id, current["workspace_id"], acc, sample_texts)
     await db.connector_accounts.update_one(
         {"id": payload.account_id}, {"$set": {"last_sync_at": now_iso()}})
     await _log(payload.account_id, current["id"], current["workspace_id"], "gmail",
                "training_analysis_completed", records_analyzed=len(samples), redactions=len(samples))
-
     return {
         "ok": True,
         "samples_added": len(samples),
-        "preview": [s["text"][:280] for s in samples[:3]],
+        "preview": [t[:280] for t in sample_texts[:3]],
         "next": f"/ai-builder/{payload.employee_id}",
         "note": "We learn style, not secrets — emails were redacted before analysis. "
                 "Generate & review the style profile in the AI builder before saving.",
+    }
+
+
+class SaveTrainingReq(BaseModel):
+    preview_id: str
+
+
+@router.post("/connectors/gmail/save-training")
+async def save_training(payload: SaveTrainingReq, current=Depends(require_user)):
+    """Confirm a reviewed preview → attach its samples to the employee."""
+    prev = await db.connector_style_previews.find_one(
+        {"preview_id": payload.preview_id, "user_id": current["id"]}, {"_id": 0})
+    if not prev:
+        raise HTTPException(404, "Preview not found or expired — re-run the preview")
+    acc = await db.connector_accounts.find_one(
+        {"id": prev["account_id"], "user_id": current["id"]}, {"_id": 0})
+    if not acc:
+        raise HTTPException(404, "Gmail connection not found")
+
+    await _save_gmail_style_source(prev["employee_id"], current["workspace_id"], acc, prev["samples"])
+    await db.connector_accounts.update_one(
+        {"id": prev["account_id"]}, {"$set": {"last_sync_at": now_iso()}})
+    await db.connector_style_previews.delete_many(
+        {"preview_id": payload.preview_id, "user_id": current["id"]})
+    await _log(prev["account_id"], current["id"], current["workspace_id"], "gmail",
+               "training_analysis_completed", records_analyzed=len(prev["samples"]),
+               redactions=len(prev["samples"]))
+    return {
+        "ok": True, "samples_added": len(prev["samples"]),
+        "next": f"/ai-builder/{prev['employee_id']}",
+        "note": "Samples attached. Generate & review the style profile in the AI builder before saving.",
     }

@@ -31,11 +31,24 @@ function TrainModal({ account, onClose }) {
     try {
       const { data } = await api.post("/connectors/gmail/train-employee", {
         account_id: account.id, employee_id: eid, days: Number(days), max_messages: 40,
+        preview_only: true,
       });
       setResult(data);
-      toast.success(`Added ${data.samples_added} redacted samples`);
+      toast.success(`Found ${data.samples_found} redacted samples — review before saving`);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Training failed");
+      toast.error(e?.response?.data?.detail || "Preview failed");
+    } finally { setBusy(false); }
+  };
+
+  const save = async () => {
+    if (!result?.preview_id) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/connectors/gmail/save-training", { preview_id: result.preview_id });
+      toast.success(`Attached ${data.samples_added} samples to the employee`);
+      nav(data.next);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
     } finally { setBusy(false); }
   };
 
@@ -52,23 +65,30 @@ function TrainModal({ account, onClose }) {
 
         {result ? (
           <div data-testid="train-result">
-            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-ink mb-3">
+            <div className="rounded-xl bg-ai-tint border border-ai/20 p-3 text-sm text-ink mb-3">
               {result.note}
             </div>
-            <p className="text-xs uppercase tracking-widest text-ink-mute mb-1">Redacted preview</p>
-            <div className="space-y-2 max-h-48 overflow-auto mb-4">
+            <p className="text-xs uppercase tracking-widest text-ink-mute mb-1">Review {result.samples_found} redacted samples</p>
+            <div className="space-y-2 max-h-56 overflow-auto mb-4">
               {(result.preview || []).map((p, i) => (
-                <div key={i} className="text-xs text-ink-dim bg-surface border border-line rounded-lg p-2">{p}…</div>
+                <div key={i} className="text-xs text-ink-dim bg-surface border border-line rounded-lg p-2 whitespace-pre-wrap">{p}…</div>
               ))}
             </div>
-            <button onClick={() => nav(result.next)} data-testid="train-open-builder"
-              className="w-full h-11 rounded-xl bg-ai text-black font-bold">Review & save profile in AI builder</button>
+            <div className="flex gap-2">
+              <button onClick={() => setResult(null)} data-testid="train-back"
+                className="flex-1 h-11 rounded-xl border border-line text-ink-dim hover:text-ink font-semibold">Back</button>
+              <button onClick={save} disabled={busy} data-testid="train-save"
+                className="flex-1 h-11 rounded-xl bg-ai text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save to employee
+              </button>
+            </div>
           </div>
         ) : (
           <>
             <div className="rounded-xl bg-ai-tint border border-ai/20 p-3 text-xs text-ink mb-4">
               Read-only. We analyse your recent sent emails to learn your writing style, then redact
-              names, emails, numbers and amounts before anything is saved. We learn style, not secrets.
+              names, emails, numbers and amounts. You review the redacted samples before anything is saved.
+              We learn style, not secrets.
             </div>
             <label className="text-[11px] uppercase tracking-widest text-ink-mute">AI employee</label>
             <select value={eid} onChange={(e) => setEid(e.target.value)} data-testid="train-employee"
@@ -76,7 +96,7 @@ function TrainModal({ account, onClose }) {
               {employees.length === 0 && <option value="">No AI employees yet</option>}
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
-            <label className="text-[11px] uppercase tracking-widest text-ink-mute">Analyse last</label>
+            <label className="text-[11px] uppercase tracking-widest text-ink-mute">Date range — analyse last</label>
             <select value={days} onChange={(e) => setDays(e.target.value)} data-testid="train-days"
               className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
               <option value={30}>30 days</option>
@@ -85,7 +105,7 @@ function TrainModal({ account, onClose }) {
             </select>
             <button onClick={run} disabled={busy || !eid} data-testid="train-run"
               className="w-full h-11 rounded-xl bg-ai text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Analyse & attach style
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Preview samples
             </button>
           </>
         )}

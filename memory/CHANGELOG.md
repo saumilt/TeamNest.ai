@@ -2,6 +2,22 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 106 (Jul 2026) — Chat/employee memory + Role Intelligence P2 (Knowledge Capture) + connector review-before-save
+### AI memory (backend)
+- **Inline `@ai` chat now carries conversation memory**: `services/ai_runtime.py` new `build_chat_context()` pulls the last ~16 non-deleted chat messages (human + prior AI) and prepends them to the model prompt so answers follow on from what was already discussed (resolves "it/that/the previous one"). Attachments now append to (not replace) this context.
+- **AI employees now use chat memory + workspace RAG memory**: `services/ai_employee_runtime.py` new `workspace_memory_block()` (best-effort `retrieve_memory` + `build_rag_context`, mode="workspace") wired into the deployed responder (`ai_employee_deploy_dispatcher.py`, already had chat history) and the sandbox (`routes/ai_employee_builder.py`). Never blocks a reply on failure.
+### Role Intelligence P2 — Knowledge Capture → Proposed Memory Review (web + backend)
+- `services/enterprise_intelligence.py` `propose_memories_from_text()` — Claude extracts 1-3 anonymized, role-transferable memories (title/type/content/transferable/sensitivity/confidence), never names a person; deterministic fallback.
+- Endpoints: `POST /api/enterprise/roles/{role_id}/capture` (from pasted text OR a chat via `build_chat_context`) → creates `approval_status:"proposed"` memories; `GET /api/enterprise/memories/review?status=proposed` (queue + pending_count); `POST /api/enterprise/memories/{mid}/decide` (approve→"approved" enters role knowledge / reject→"rejected", supports title/content edits); `GET /api/enterprise/roles/{role_id}/memories`. Closed loop verified: approved captures immediately feed Ask Role + handoffs.
+- Web `EnterprisePage.jsx`: **Review** tab (pending badge that live-decrements, editable proposed-memory cards, Approve/Reject). `EnterpriseProfile.jsx`: **Capture knowledge** button on the Knowledge tab → modal (paste text OR pick a chat) → "Propose knowledge".
+### Connectors polish (web + backend)
+- Gmail training is now **review-before-save**: `train-employee` gains `preview_only` (pulls + redacts sent mail, stages in `connector_style_previews`, returns samples WITHOUT saving); new `POST /api/connectors/gmail/save-training {preview_id}` confirms + attaches. UI TrainModal is now 2-step (date-range → Preview samples → review redacted list → Save to employee). `connector_style_previews` collection.
+### Notes
+- **Seller weekly digest** confirmed already live (weekly loop in server.py + `POST /ai-builder/marketplace/digest/run` + `GET .../digest/preview`) — no work needed.
+- **Office 365 connector**: playbook obtained (Microsoft Graph delegated OAuth, scopes User.Read/Mail.Read/offline_access, redirect `/api/oauth/m365/callback`); DEFERRED pending user Azure creds (M365_CLIENT_ID/SECRET/TENANT_ID).
+- Tested: P2 13/13 backend pytest + web 95% (`/app/test_reports/iteration_103.json`); review-badge staleness fixed. Connector preview/save validated via lint + endpoint checks (full e2e needs a live Gmail account).
+
+
 ## Iteration 105 (Jul 2026) — Role Intelligence Phase C + D: Expertise Map/Risk dashboard + Storage billing
 ### Enterprise module (web + backend)
 - **Phase C — Expertise Map + Knowledge Risk dashboard**: `GET /api/enterprise/risk-dashboard` → summary {roles, at_risk, critical, single_person_deps, avg_continuity}, risk distribution {Critical/High/Medium/Low}, and roles[] (sorted by continuity asc) each with continuity_score, risk_level, dependency flags (Departing / Single-person dependency / No successor / No backup / High unique knowledge), 10-component score breakdown, and person_id/person_name for drill-down.

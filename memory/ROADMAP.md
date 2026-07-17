@@ -27,7 +27,9 @@
 - (DONE iter 104) Phase B — Successor Assignment & Knowledge Transfer (30/60/90 handoff + checklist) + "Ask Previous Role" grounded/anonymized chat.
 - (DONE iter 105) Phase C — Expertise Map + Knowledge Risk dashboard (visual per-role continuity, dependency flags, at-risk ranking + drill-down).
 - (DONE iter 105) Phase D — Storage metering + packs + billing dashboard (Cloudflare R2 base + 40% markup; displayed, not charged).
-- P2 — Knowledge capture from chats/tasks/meetings → Proposed Memory Review queue (approve before it enters role knowledge).
+- (DONE iter 106) P2 — Knowledge capture from chats/tasks/notes → Proposed Memory Review queue (approve before it enters role knowledge; feeds Ask Role + handoffs).
+- P2 — Office 365 connector (Microsoft Graph read-only style training) — playbook ready, awaiting user Azure credentials.
+- P3 — Mobile parity for the enterprise Role Intelligence module (currently web-only): overview/people/profile/risk/billing/ask-role/review.
 
 ## Marketplace backlog (post iter 84)
 - (DONE iter 89) Stripe Connect payouts: Express onboarding + dual-mode transfers (real key → live; emergent key → simulated, flagged).
