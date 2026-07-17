@@ -555,6 +555,7 @@ function PricingTeaser() {
     { name: "Free", price: "$0", line: "Best for trying it out.", credits: "300 credits / month" },
     { name: "Pro", price: "$9.99", unit: "/ seat / mo", line: "Pay per seat. Audio + video calls with transcription.", credits: "3,000 credits / seat" },
     { name: "Team", price: "$19.99", unit: "/ seat / mo", line: "Live transcription FREE + unlimited recordings.", credits: "9,000 credits / seat", highlighted: true },
+    { name: "Enterprise", price: "$29.99", unit: "/ seat / mo", line: "SSO, bring your own keys. Custom pricing available.", credits: "Unlimited credits" },
   ];
   return (
     <section className="bg-[var(--w-bg-2)] py-20 md:py-[120px]">
@@ -563,7 +564,7 @@ function PricingTeaser() {
           <Eyebrow className="mb-3">Pricing</Eyebrow>
           <SectionTitle>Built for AI usage.</SectionTitle>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-[960px] mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-[1100px] mx-auto">
           {plans.map((p) => (
             <div
               key={p.name}
