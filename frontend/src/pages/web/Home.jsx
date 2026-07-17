@@ -206,7 +206,7 @@ function ConnectedStory() {
             <span className="text-amber-500">All in the same chat.</span>
           </SectionTitle>
           <SectionSub className="mt-4">
-            TeamNest isn't five tools bolted together — it's one conversation where
+            TeamNest isn&apos;t five tools bolted together — it&apos;s one conversation where
             answers turn into decisions, decisions into tasks, and tasks into shipped work.
           </SectionSub>
         </div>
@@ -530,7 +530,7 @@ function AICompareDeepDive() {
               One question, six answers, side-by-side.
             </SectionTitle>
             <SectionSub className="mb-8">
-              We auto-synthesize the best answer so you don't have to compare them yourself.
+              We auto-synthesize the best answer so you don&apos;t have to compare them yourself.
             </SectionSub>
             <SixModelStrip />
           </div>
@@ -616,7 +616,7 @@ function BuiltByEmergent() {
           <p className="text-[16px] leading-7 text-[var(--w-text-dim)] max-w-[52ch]">
             TeamNest is the chat layer Emergent uses internally to ship faster. The
             best ideas show up in conversation — so we built the workspace around
-            that, with AI quietly available everywhere it's useful.
+            that, with AI quietly available everywhere it&apos;s useful.
           </p>
         </div>
         <div className="relative">
@@ -632,7 +632,7 @@ function BuiltByEmergent() {
             </div>
             <p className="text-[13px] leading-5 text-[var(--w-text-dim)]">
               We ship one tool every month. TeamNest is what we built when we
-              realised the bottleneck for AI teams wasn't models — it was getting
+              realised the bottleneck for AI teams wasn&apos;t models — it was getting
               everyone on the same page about which answer to ship.
             </p>
           </div>
@@ -742,10 +742,10 @@ export default function WebHome() {
       />
       <Hero />
       <WhatsNewSection />
+      <DevOsSection />
       <FeatureGlance />
       <ConnectedStory />
       <TrustLine />
-      <DevOsSection />
       <ShowcaseTeaser />
       <HookSection />
       <FeatureGrid />

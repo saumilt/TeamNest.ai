@@ -3057,3 +3057,20 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - 13-case pytest (test_iteration92_superadmin.py) + Playwright UI, report iteration_92.json.
 - Two bugs found by testing agent FIXED + curl-verified: (1) workspace-suspend no-op,
   (2) free-plan top-up swallowed by cap.
+
+## 2026-06 — Marketing parity: landing highlights on web + mobile
+### Web (frontend/src/pages/web/Home.jsx)
+- Fixed 5 react/no-unescaped-entities lint errors (stray `'` -> `&apos;`) that blocked the build.
+- Reordered sections so DevOsSection renders right after WhatsNewSection (highlights the
+  development / @devmanager story higher, per user request).
+- WhatsNewSection already leads with Role Intelligence + AI Memory (enterprise employee memory).
+
+### Mobile (mobile/app/(tabs)/you.tsx)
+- Added a "New in TeamNest" highlight section mirroring the web landing, with tappable cards:
+  Dev OS (@devmanager, featured first), Role Intelligence (Enterprise), AI Memory, Live Connectors.
+- Cards navigate to /(tabs) chats, /enterprise, /memory, /builder respectively.
+- Fixed a pre-existing unescaped `'` in the delete-account modal copy.
+
+### Testing
+- Lint clean on both files. Verified via screenshots: web landing renders new sections;
+  mobile You tab renders the new highlight cards (logged in as owner). UI-only change, no backend.

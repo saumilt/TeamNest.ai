@@ -26,6 +26,43 @@ const LEGAL_LINKS = [
   { icon: "help-buoy-outline", label: "Help & Support", url: "https://teamnest.ai/support" },
 ];
 
+// Mirrors the web landing "What's New" — Dev OS (development) and enterprise
+// employee memory are featured first per product priority.
+const WHATS_NEW = [
+  {
+    key: "dev-os",
+    icon: "rocket-outline",
+    tag: "Dev OS",
+    title: "@devmanager builds working apps",
+    body: "Describe an app in plain English inside any chat. @devmanager plans, builds, browser-tests and ships it — no code, no sub-agents.",
+    to: "/(tabs)",
+  },
+  {
+    key: "role-intel",
+    icon: "shield-checkmark-outline",
+    tag: "Enterprise",
+    title: "Role Intelligence",
+    body: "Capture a role's approved work as institutional memory and hand it to a successor — identity-safe. Ask the previous role, expertise & risk maps.",
+    to: "/enterprise",
+  },
+  {
+    key: "ai-memory",
+    icon: "sparkles-outline",
+    tag: "Memory",
+    title: "AI Memory that learns",
+    body: "Like ChatGPT memory, but for your team. AI learns durable personal & workspace preferences from your chats. Say \u201c@ai remember …\u201d — you stay in control.",
+    to: "/memory",
+  },
+  {
+    key: "connectors",
+    icon: "git-network-outline",
+    tag: "New",
+    title: "Live Connectors",
+    body: "Connect Gmail and Microsoft 365 / Teams (read-only) to train an AI employee in your real writing voice. Redacted, and you review before saving.",
+    to: "/builder",
+  },
+];
+
 export default function YouScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
@@ -107,6 +144,33 @@ export default function YouScreen() {
           label="Workspaces"
           value={String((user?.workspaces || []).length)}
         />
+      </View>
+
+      {/* What's new — mirrors the web landing highlights */}
+      <Text style={styles.sectionEyebrow}>Just shipped</Text>
+      <Text style={styles.sectionTitle}>New in TeamNest</Text>
+      <View style={{ gap: spacing.md }}>
+        {WHATS_NEW.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            testID={`whats-new-${f.key}`}
+            activeOpacity={0.75}
+            style={styles.newCard}
+            onPress={() => router.push(f.to as any)}
+          >
+            <View style={styles.newCardHead}>
+              <View style={styles.newIcon}>
+                <Ionicons name={f.icon as any} size={18} color={colors.accent} />
+              </View>
+              <View style={styles.newTag}>
+                <Text style={styles.newTagText}>{f.tag}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+            </View>
+            <Text style={styles.newTitle}>{f.title}</Text>
+            <Text style={styles.newBody}>{f.body}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* AI Employees */}
@@ -192,7 +256,7 @@ export default function YouScreen() {
             <Text style={styles.modalTitle}>Delete your account?</Text>
             <Text style={styles.modalDesc}>
               This permanently deletes your account and personal data. Workspaces you
-              solely own are deleted; shared ones are transferred. This can't be undone.
+              solely own are deleted; shared ones are transferred. This can&apos;t be undone.
             </Text>
 
             <Text style={styles.modalLabel}>CURRENT PASSWORD</Text>
@@ -277,6 +341,49 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   linkLabel: { color: colors.textPrimary, fontSize: font.body, flex: 1 },
   betaTag: { color: colors.accent, fontSize: font.tiny, fontWeight: "800" },
+  sectionEyebrow: {
+    color: colors.accent,
+    fontSize: font.tiny,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginTop: spacing.xl,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: font.h2,
+    fontWeight: "800",
+    marginTop: 4,
+    marginBottom: spacing.md,
+  },
+  newCard: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  newCardHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  newIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newTag: {
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  newTagText: { color: colors.accent, fontSize: font.tiny, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  newTitle: { color: colors.textPrimary, fontSize: font.h3, fontWeight: "800", marginTop: 2 },
+  newBody: { color: colors.textSecondary, fontSize: font.small, lineHeight: 20 },
   divider: { height: 1, backgroundColor: colors.borderSubtle },
   logoutBtn: {
     marginTop: spacing.xl,
