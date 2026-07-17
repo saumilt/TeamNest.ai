@@ -3074,3 +3074,11 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 ### Testing
 - Lint clean on both files. Verified via screenshots: web landing renders new sections;
   mobile You tab renders the new highlight cards (logged in as owner). UI-only change, no backend.
+
+## 2026-06 — Mobile Chats "What's New" nudge
+### Mobile (mobile/app/(tabs)/index.tsx)
+- Added a dismissible one-time "New in TeamNest" banner at the top of the Chats list
+  (ListHeaderComponent). Tapping opens the You-tab highlight cards; X dismisses.
+- Persistence via src/storage (SecureStore native / localStorage web) key `whatsnew_seen_v1`
+  — shows once until the key is bumped for a future release.
+- Verified via screenshots: banner renders, tap navigates to You tab. Lint clean.

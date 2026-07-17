@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,7 +16,10 @@ import { Avatar } from "@/src/components/Avatar";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { NotificationBell } from "@/src/components/NotificationBell";
 import { shortTime } from "@/src/format";
+import { getItem, setItem } from "@/src/storage";
 import { colors, font, radius, spacing } from "@/src/theme";
+
+const WHATS_NEW_SEEN_KEY = "whatsnew_seen_v1";
 
 function chatTitle(c: any): string {
   if (c.type === "personal_ai") return c.name || "My AI Assistant";
@@ -38,6 +41,24 @@ export default function ChatsScreen() {
   const [chats, setChats] = useState<any[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [showNudge, setShowNudge] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const seen = await getItem(WHATS_NEW_SEEN_KEY);
+      if (!seen) setShowNudge(true);
+    })();
+  }, []);
+
+  const dismissNudge = useCallback(async () => {
+    setShowNudge(false);
+    await setItem(WHATS_NEW_SEEN_KEY, "1");
+  }, []);
+
+  const openWhatsNew = useCallback(async () => {
+    await dismissNudge();
+    router.push("/you");
+  }, [dismissNudge]);
 
   const load = useCallback(async () => {
     setError("");
@@ -113,6 +134,33 @@ export default function ChatsScreen() {
           keyExtractor={(c) => c.id}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 40 }}
+          ListHeaderComponent={
+            showNudge ? (
+              <TouchableOpacity
+                testID="whats-new-nudge"
+                activeOpacity={0.85}
+                style={styles.nudge}
+                onPress={openWhatsNew}
+              >
+                <View style={styles.nudgeIcon}>
+                  <Ionicons name="sparkles" size={16} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.nudgeTitle}>New in TeamNest</Text>
+                  <Text style={styles.nudgeBody} numberOfLines={2}>
+                    Dev OS, Role Intelligence &amp; AI Memory — see what&apos;s new
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  testID="whats-new-nudge-dismiss"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  onPress={dismissNudge}
+                >
+                  <Ionicons name="close" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ) : null
+          }
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           refreshControl={
             <RefreshControl
@@ -164,6 +212,27 @@ const styles = StyleSheet.create({
   time: { color: colors.textMuted, fontSize: font.tiny },
   preview: { color: colors.textSecondary, fontSize: font.small, flex: 1 },
   sep: { height: 1, backgroundColor: colors.borderSubtle, marginLeft: 62 },
+  nudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  nudgeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(251,191,36,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nudgeTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800" },
+  nudgeBody: { color: colors.textSecondary, fontSize: font.small, marginTop: 1 },
   center: { alignItems: "center", justifyContent: "center", paddingTop: 120, gap: spacing.md },
   emptyText: { color: colors.textMuted, fontSize: font.body },
   retryBtn: {
