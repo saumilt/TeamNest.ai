@@ -628,6 +628,10 @@ async def sandbox_reply(eid: str, payload: SandboxMessage, current=Depends(requi
     mem = await workspace_memory_block(current["workspace_id"], payload.message)
     if mem:
         system += "\n\n" + mem
+    from services import learned_memory as _lm
+    profile = await _lm.build_memory_profile_block(current["workspace_id"], current["id"])
+    if profile:
+        system += "\n\n" + profile
     result = await generate_reply(system, payload.message, history=history)
 
     now = now_iso()

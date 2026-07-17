@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
-import { ContinuityBar, FlagChip, RiskBadge, SectionTitle, Stat, eui } from "@/src/components/enterprise/ui";
+import { ContinuityBar, FlagChip, Freshness, RiskBadge, SectionTitle, Stat, eui } from "@/src/components/enterprise/ui";
 
 const TABS = ["Overview", "People", "Roles", "Risk", "Review", "Billing"];
 
@@ -143,6 +143,7 @@ export default function EnterpriseDashboard() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>{r.role_name}</Text>
               <Text style={styles.rowMeta}>{r.department || "—"}</Text>
+              <View style={{ marginTop: 6, alignSelf: "flex-start" }}><Freshness freshness={r.freshness} /></View>
             </View>
             <ContinuityBar score={r.continuity_score} />
             <RiskBadge level={r.risk_level} />
@@ -165,6 +166,7 @@ export default function EnterpriseDashboard() {
                     <Text style={styles.rowTitle}>{r.role_name}</Text>
                     <View style={styles.flagWrap}>
                       {r.flags.length === 0 ? <FlagChip label="No flags" /> : r.flags.map((f: string) => <FlagChip key={f} label={f} />)}
+                      <Freshness freshness={r.freshness} />
                     </View>
                   </View>
                   <ContinuityBar score={r.continuity_score} />

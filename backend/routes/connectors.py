@@ -262,6 +262,7 @@ class TrainReq(BaseModel):
     days: int = 90
     max_messages: int = 40
     preview_only: bool = False
+    source: str = "mail"
 
 
 async def _save_gmail_style_source(employee_id: str, workspace_id: str, account: dict, samples: list):
@@ -417,8 +418,12 @@ async def m365_train_employee(payload: TrainReq, current=Depends(require_user)):
 
         def _on_refresh(d):
             refreshed["doc"] = d
-        samples = await m365.fetch_sent_samples(
-            token_doc, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
+        if payload.source == "teams":
+            samples = await m365.fetch_teams_messages(
+                token_doc, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
+        else:
+            samples = await m365.fetch_sent_samples(
+                token_doc, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
         if refreshed.get("doc"):
             d = refreshed["doc"]
             await db.connector_oauth_tokens.update_one(
@@ -432,7 +437,7 @@ async def m365_train_employee(payload: TrainReq, current=Depends(require_user)):
         raise HTTPException(502, "Could not read Microsoft 365 mail. Try reconnecting the account.")
 
     if not samples:
-        raise HTTPException(400, "No suitable sent emails found in the selected range.")
+        raise HTTPException(400, "No suitable messages found in the selected range.")
     sample_texts = [s["text"] for s in samples]
 
     if payload.preview_only:

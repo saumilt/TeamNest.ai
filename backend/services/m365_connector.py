@@ -30,7 +30,7 @@ AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
 GRAPH = "https://graph.microsoft.com/v1.0"
 
-SCOPES = ["User.Read", "Mail.Read", "offline_access"]
+SCOPES = ["User.Read", "Mail.Read", "Chat.Read", "offline_access"]
 _SCOPE_STR = " ".join(SCOPES)
 
 
@@ -171,4 +171,53 @@ async def fetch_sent_samples(token_doc: Dict, max_messages: int = 40, days: int 
                 content = _html_to_text(content) if "<" in content else content.strip()
             if content and len(content.split()) >= 5:
                 samples.append({"source": "m365", "text": redact(content)[:2000]})
+    return samples
+
+
+async def fetch_teams_messages(token_doc: Dict, max_messages: int = 40, days: int = 90,
+                               on_refresh=None) -> List[Dict]:
+    """Return [{source:'teams', text}] of the user's OWN recent Teams chat
+    messages (read-only, redacted). Best-effort across the user's chats."""
+    if await _is_expired(token_doc) and token_doc.get("refresh_token"):
+        token_doc = await refresh(token_doc["refresh_token"])
+        if on_refresh:
+            on_refresh(token_doc)
+    access = token_doc.get("access_token")
+    headers = {"Authorization": f"Bearer {access}"}
+    after = datetime.now(timezone.utc) - timedelta(days=days)
+    samples: List[Dict] = []
+    async with httpx.AsyncClient(timeout=45) as c:
+        me = await c.get(f"{GRAPH}/me", headers=headers)
+        me.raise_for_status()
+        my_id = me.json().get("id")
+        chats = await c.get(f"{GRAPH}/me/chats", headers=headers, params={"$top": "20"})
+        chats.raise_for_status()
+        for ch in chats.json().get("value", []):
+            if len(samples) >= max_messages:
+                break
+            try:
+                msgs = await c.get(
+                    f"{GRAPH}/me/chats/{ch['id']}/messages",
+                    headers=headers, params={"$top": "20"})
+                if msgs.status_code != 200:
+                    continue
+                for m in msgs.json().get("value", []):
+                    frm = (m.get("from") or {}).get("user") or {}
+                    if frm.get("id") != my_id:
+                        continue
+                    try:
+                        when = datetime.fromisoformat((m.get("createdDateTime") or "").replace("Z", "+00:00"))
+                        if when < after:
+                            continue
+                    except Exception:
+                        pass
+                    body = m.get("body", {})
+                    content = body.get("content", "")
+                    content = _html_to_text(content) if body.get("contentType") == "html" else content.strip()
+                    if content and len(content.split()) >= 4:
+                        samples.append({"source": "teams", "text": redact(content)[:1500]})
+                    if len(samples) >= max_messages:
+                        break
+            except Exception:
+                continue
     return samples

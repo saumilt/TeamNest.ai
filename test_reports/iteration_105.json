@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 105: Learned Memory CRUD + @ai remember + Role Freshness + M365 Teams scope tested end-to-end on WEB and MOBILE. Backend: 13/13 pytest passing (/app/backend/tests/test_iteration105_memory_freshness_m365.py, iteration105.xml). Web: /ai-memory page renders memory-page, memory-personal/workspace, memory-add-input-* / memory-add-btn-*, memory-toggle-{id}, memory-forget-{id}; add + toggle + forget round-trips work; sidebar nav-ai-memory routes correctly; Role Intelligence Roles tab = 2 freshness-pill + 1 freshness-none (Sales Director = No knowledge yet, Finance Manager = Updated today, Restaurant Ops Mgr = Updated 5d ago); Risk tab same. Mobile: You tab → you-memory → /memory renders mem-add-input-{personal,workspace} + mem-add-btn-{personal,workspace} + mem-toggle/mem-forget; add + toggle + forget round-trips work (items 4 → 3 after forget). MOBILE freshness testIDs were MISSING originally (visual pill rendered but no testID) — added testID='freshness-pill'/'freshness-none' to /app/mobile/src/components/enterprise/ui.tsx Freshness component; after mobile restart Roles/Risk tabs now expose 2 pill + 1 none each, achieving parity with web. Backend endpoints exercised: GET/POST/PATCH/DELETE /api/memory/learned (dedupe by normalized text confirmed, unknown-id → 404, empty text → 400), @ai remember flow via POST /api/chats/{id}/messages posts an ai_answer with metadata.memory_saved=true AND creates the personal memory (verified via GET /api/memory/learned), normal @ai question still returns a full research answer, GET /api/enterprise/roles + /api/enterprise/risk-dashboard include per-role freshness map, GET /api/oauth/m365/login authorization URL scope contains User.Read + Mail.Read + Chat.Read + offline_access. NOTE: Connectors M365/Gmail train-modal source selector could not be exercised live (no OAuth-connected M365/Gmail accounts in this workspace), but code inspection of /app/frontend/src/pages/ConnectorsPage.jsx confirms {base==='m365' && <select data-testid='train-source'>} guards the selector to M365 only — Gmail modal correctly omits it.",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [
+        {"component": "Freshness pill", "issue": "Missing testID='freshness-pill'/'freshness-none' on mobile Freshness component — I added them so parity with web is now achieved.", "testID": "freshness-pill", "priority": "LOW"}
+      ],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "pointerEvents prop", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' still fires on enterprise screens (pre-existing from iter 104). Not blocking. Reference: /app/mobile/app/enterprise/[id].tsx CaptureModal via <Modal>."}
+      ]
+    }
+  },
+  "parity_issues": [
+    {"flow": "Freshness pill testIDs", "platform": "mobile", "issue": "Mobile Freshness component originally had no testIDs; web had data-testid='freshness-pill' and 'freshness-none'. FIXED by adding matching testIDs to /app/mobile/src/components/enterprise/ui.tsx.", "expected": "Same testIDs on both surfaces so QA scripts port cleanly", "actual": "Fixed — both now expose freshness-pill / freshness-none"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration105_memory_freshness_m365.py",
+    "/app/test_reports/pytest/iteration105.xml"
+  ],
+  "action_items": [
+    "(Env-limited) The Connectors M365 train modal 'train-source' selector could not be live-exercised without an OAuth-connected M365 account. Code path verified by inspection — no fix needed. Main agent may want to seed a mock connector_account with provider='m365' to make this UI e2e-testable.",
+    "(Low priority) Continue tracking the deprecation warning 'props.pointerEvents' on enterprise Modal — carried over from iter 104."
+  ],
+  "critical_code_review_comments": [
+    "backend/services/learned_memory.py extract_and_store() is fire-and-forget via asyncio.create_task in ai_runtime.py — the task reference is not stored, so under short-lived workers Python may GC it before completion (same pattern flagged in iter 104 for enterprise autocapture). Consider a background-task registry or FastAPI BackgroundTasks. Reference: /app/backend/services/ai_runtime.py:401-402.",
+    "backend/services/learned_memory.py remember() dedupe key is scope+workspace+(user_id for personal)+norm_key. Norm_key truncates to 200 chars, so two memories with identical first 200 chars but different suffixes will collide. Low risk for durable facts but worth documenting. Reference: /app/backend/services/learned_memory.py:37-38, 71-72.",
+    "backend/routes/learned_memory.py PATCH /learned/{id} does NOT accept an empty body — payload.text=None + payload.active=None still returns 200 without changing anything. Consider raising 400 if both are None. Reference: /app/backend/routes/learned_memory.py:39-43.",
+    "backend/services/ai_runtime.py handle_ai_command manual-remember branch (lines 234-250) does not deduct credits and does not go through the AI-billing gate — intended for a no-model path, but confirm the /messages endpoint's rate limiter still applies so users cannot spam '@ai remember'.",
+    "backend/services/m365_connector.py fetch_teams_messages() paginates only $top=20 chats and $top=20 msgs each — no nextLink follow — so on a large tenant Teams samples may be sparse. Fine for style-learning but call out in docs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration105_memory_freshness_m365.py",
+    "/app/mobile/src/components/enterprise/ui.tsx"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (web + mobile flows verified; connector modal env-limited but code-verified)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (owner + super admin)",
+  "seed_data_creation": "Created + then cleaned up 2 TEST_iter105 personal + 1 workspace memories via API. Created 1 personal memory on web ('TEST_WEB_iter105 I love markdown tables') left in place; 1 personal memory on mobile ('TEST_MOBILE_iter105 prefer Slack DMs') created and deleted. During the @ai flow tests, ai_answer messages were appended to a self-chat.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/test_iteration105_memory_freshness_m365.py — 13 tests, ~6s incl. one @ai flow that waits up to 40s for a real LLM answer (test skips gracefully if credits exhausted). Mobile testIDs: mem-add-input-{scope}, mem-add-btn-{scope}, mem-item-{id}, mem-toggle-{id}, mem-forget-{id}, mem-back, you-memory; enterprise: freshness-pill, freshness-none (newly added in mobile). Web testIDs: memory-page, memory-personal, memory-workspace, memory-add-input-{scope}, memory-add-btn-{scope}, memory-item-{id}, memory-toggle-{id}, memory-forget-{id}, nav-ai-memory, freshness-pill, freshness-none, train-source (m365 only). To exercise the Connectors train-source selector live, seed a connector_accounts row with provider='m365' + status='connected' for the test workspace.",
+  "rca of the issue": "N/A — no functional bugs found. Only a testID parity gap on mobile Freshness component, fixed in-line."
+}

@@ -16,6 +16,7 @@ function TrainModal({ account, onClose }) {
   const [employees, setEmployees] = useState([]);
   const [eid, setEid] = useState("");
   const [days, setDays] = useState(90);
+  const [source, setSource] = useState("mail");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -33,7 +34,7 @@ function TrainModal({ account, onClose }) {
     try {
       const { data } = await api.post(`/connectors/${base}/train-employee`, {
         account_id: account.id, employee_id: eid, days: Number(days), max_messages: 40,
-        preview_only: true,
+        preview_only: true, source: base === "m365" ? source : "mail",
       });
       setResult(data);
       toast.success(`Found ${data.samples_found} redacted samples — review before saving`);
@@ -105,6 +106,16 @@ function TrainModal({ account, onClose }) {
               <option value={90}>90 days</option>
               <option value={180}>180 days</option>
             </select>
+            {base === "m365" && (
+              <>
+                <label className="text-[11px] uppercase tracking-widest text-ink-mute">Source</label>
+                <select value={source} onChange={(e) => setSource(e.target.value)} data-testid="train-source"
+                  className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
+                  <option value="mail">Outlook sent mail</option>
+                  <option value="teams">Microsoft Teams chat</option>
+                </select>
+              </>
+            )}
             <button onClick={run} disabled={busy || !eid} data-testid="train-run"
               className="w-full h-11 rounded-xl bg-ai text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Preview samples

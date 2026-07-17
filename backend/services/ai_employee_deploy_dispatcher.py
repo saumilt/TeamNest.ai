@@ -81,6 +81,10 @@ async def _respond(chat: dict, sender: dict, message: dict, deployment: dict) ->
     mem = await workspace_memory_block(ws, question, chat_id=chat["id"])
     if mem:
         system += "\n\n" + mem
+    from services import learned_memory as _lm
+    profile = await _lm.build_memory_profile_block(ws, "", workspace_only=True)
+    if profile:
+        system += "\n\n" + profile
     try:
         result = await asyncio.wait_for(generate_reply(system, question), timeout=60.0)
         answer = result["reply"] or "_(empty response)_"

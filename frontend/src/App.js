@@ -22,6 +22,7 @@ import Billing from "@/pages/Billing";
 import Me from "@/pages/Me";
 import Calls from "@/pages/Calls";
 import Memory from "@/pages/Memory";
+import MemoryPage from "@/pages/MemoryPage";
 import Decisions from "@/pages/Decisions";
 import AuditLog from "@/pages/AuditLog";
 import ImportWhatsApp from "@/pages/ImportWhatsApp";
@@ -168,6 +169,7 @@ export default function App() {
             <Route path="/you" element={<Me />} />
             <Route path="/calls" element={<Calls />} />
             <Route path="/memory" element={<Memory />} />
+            <Route path="/ai-memory" element={<MemoryPage />} />
             <Route path="/decisions" element={<Decisions />} />
             <Route path="/audit-log" element={<AuditLog />} />
             <Route path="/import/whatsapp" element={<ImportWhatsApp />} />

@@ -3,6 +3,7 @@
 Pulled out of server.py so they can be invoked from multiple routers (chats,
 ai) without circular imports.
 """
+import re
 from typing import List, Optional
 
 from ai_service import ask_models_parallel, synthesize_answer
@@ -229,6 +230,24 @@ async def handle_ai_command(
     user = await db.users.find_one({"id": user_id}, PROJ)
     favorite = (user or {}).get("preferences", {}).get("favorite_ai_model")
     workspace_id = (user or {}).get("workspace_id")
+
+    # Manual "remember this" — store a durable memory, no model call.
+    _q = question.strip()
+    if re.match(r"(?i)^remember\b", _q):
+        from services import learned_memory as _lm
+        fact = re.sub(r"(?i)^remember( that| this)?\s*[:,-]?\s*", "", _q).strip()
+        saved = await _lm.remember(workspace_id, user_id, fact, scope="personal", source="manual") if fact else None
+        body = (f"Got it — I'll remember that: \"{fact}\"." if saved
+                else "Tell me what to remember, e.g. \"@ai remember I prefer short answers\".")
+        msg = {
+            "id": new_id(), "chat_id": chat_id, "sender_id": "ai-system",
+            "message_type": "ai_answer", "body": body, "parent_message_id": None,
+            "metadata": {"memory_saved": bool(saved)}, "reactions": {},
+            "created_at": now_iso(), "edited_at": None, "deleted_at": None,
+        }
+        await db.messages.insert_one(msg.copy())
+        await _broadcast_message(chat_id, msg)
+        return
     # ===== Per-chat AI Billing & Permissions gate =====
     chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
     if chat and user:
@@ -316,15 +335,21 @@ async def handle_ai_command(
     # Documents are inlined into the model prompt; images go to vision-capable
     # models. The stored thread/placeholder question stays clean for display.
     prompt_question = question
-    # Conversation memory — always ground inline @ai answers in the prior chat.
+    # Personalized memory + conversation memory — ground every inline @ai answer.
+    from services import learned_memory as _lm
+    mem_block = await _lm.build_memory_profile_block(workspace_id, user_id)
     history_ctx = await build_chat_context(chat_id, placeholder["created_at"])
+    prefix = []
+    if mem_block:
+        prefix.append(mem_block)
     if history_ctx:
-        prompt_question = (
+        prefix.append(
             "[Conversation so far in this chat — use it as context to give a coherent, "
             "context-aware answer that follows on from what was already discussed. "
             "Resolve references like 'it', 'that', 'the previous one' against this history.]\n"
-            f"{history_ctx}\n\n[Current question]\n{question}"
-        )
+            f"{history_ctx}")
+    if prefix:
+        prompt_question = "\n\n".join(prefix) + f"\n\n[Current question]\n{question}"
     image_bytes: Optional[list] = None
     if attachments:
         try:
@@ -370,6 +395,11 @@ async def handle_ai_command(
         thread, responses, chat_id, placeholder["id"],
         favorite_model=favorite, compare=compare,
     )
+
+    # Auto-learn durable facts/preferences from this exchange (fire-and-forget).
+    if workspace_id:
+        import asyncio
+        asyncio.create_task(_lm.extract_and_store(workspace_id, user_id, question, history_ctx or ""))
 
 
 async def handle_inline_task(chat_id: str, creator: dict, source_msg_id: str, cmd: dict):

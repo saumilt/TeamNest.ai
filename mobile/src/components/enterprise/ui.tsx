@@ -44,6 +44,24 @@ export function FlagChip({ label }: { label: string }) {
   );
 }
 
+export function Freshness({ freshness }: { freshness?: any }) {
+  const last = freshness?.last_captured_at;
+  if (!last) return (
+    <View testID="freshness-none" style={[eui.flag, { backgroundColor: colors.surfaceHover }]}>
+      <Text style={[eui.flagText, { color: colors.textMuted }]}>No knowledge yet</Text>
+    </View>
+  );
+  const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+  const stale = days > 90;
+  const label = days <= 0 ? "today" : days === 1 ? "1d ago" : days < 30 ? `${days}d ago` : `~${Math.round(days / 30)}mo ago`;
+  const c = stale ? "#fbbf24" : "#4ade80";
+  return (
+    <View testID="freshness-pill" style={[eui.flag, { backgroundColor: `${c}22` }]}>
+      <Text style={[eui.flagText, { color: c }]}>{stale ? "Stale · " : "Updated "}{label}</Text>
+    </View>
+  );
+}
+
 export function Stat({ label, value, testID }: { label: string; value: any; testID?: string }) {
   return (
     <View style={eui.stat} testID={testID}>

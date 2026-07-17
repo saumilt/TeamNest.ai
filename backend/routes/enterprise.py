@@ -46,6 +46,30 @@ async def _role_map(ws: str) -> dict:
     return {r["id"]: r for r in rows}
 
 
+async def _freshness_map(ws: str) -> dict:
+    """Per-role knowledge freshness: newest captured item + newest approved item
+    + count of approved memories. Powers the 'Knowledge freshness' indicator."""
+    pipeline = [
+        {"$match": {"workspace_id": ws}},
+        {"$group": {
+            "_id": "$role_id",
+            "last_captured_at": {"$max": "$created_at"},
+            "last_approved_at": {"$max": {"$cond": [
+                {"$eq": ["$approval_status", "approved"]}, "$created_at", None]}},
+            "approved_count": {"$sum": {"$cond": [
+                {"$eq": ["$approval_status", "approved"]}, 1, 0]}},
+        }},
+    ]
+    out = {}
+    async for r in db.enterprise_role_memories.aggregate(pipeline):
+        out[r["_id"]] = {
+            "last_captured_at": r.get("last_captured_at"),
+            "last_approved_at": r.get("last_approved_at"),
+            "approved_count": r.get("approved_count", 0),
+        }
+    return out
+
+
 # ── Overview ───────────────────────────────────────────────────────────────
 @router.get("/enterprise/overview")
 async def overview(current=Depends(require_user)):
@@ -170,8 +194,10 @@ async def list_roles(current=Depends(require_user)):
     ws = current["workspace_id"]
     roles = await db.enterprise_roles.find({"workspace_id": ws}, {"_id": 0}).to_list(500)
     scores = await _score_map(ws)
+    fresh = await _freshness_map(ws)
     return {"roles": [{**r, "continuity_score": scores.get(r["id"], {}).get("overall_score", 0),
-                       "risk_level": scores.get(r["id"], {}).get("risk_level", "Unknown")} for r in roles]}
+                       "risk_level": scores.get(r["id"], {}).get("risk_level", "Unknown"),
+                       "freshness": fresh.get(r["id"], {})} for r in roles]}
 
 
 @router.get("/enterprise/roles/{role_id}/profile")
@@ -404,6 +430,7 @@ async def risk_dashboard(current=Depends(require_user)):
     by_role: dict = {}
     for p in people:
         by_role.setdefault(p.get("role_id"), []).append(p)
+    fresh = await _freshness_map(ws)
 
     items = []
     for r in roles:
@@ -431,6 +458,7 @@ async def risk_dashboard(current=Depends(require_user)):
             "flags": flags, "headcount": len(rp),
             "person_id": rp[0]["id"] if rp else None,
             "person_name": rp[0]["employee_name"] if rp else None,
+            "freshness": fresh.get(r["id"], {}),
             "breakdown": {k: sc.get(k, 0) for k in _BREAKDOWN_KEYS},
         })
     items.sort(key=lambda x: x["continuity_score"])

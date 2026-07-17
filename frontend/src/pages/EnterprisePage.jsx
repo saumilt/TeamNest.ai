@@ -45,6 +45,22 @@ export function ContinuityBar({ score }) {
   );
 }
 
+export function Freshness({ freshness }) {
+  const last = freshness?.last_captured_at;
+  if (!last) return <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-mute" data-testid="freshness-none">No knowledge yet</span>;
+  const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+  const stale = days > 90;
+  const label = days <= 0 ? "today" : days === 1 ? "1 day ago" : days < 30 ? `${days} days ago` : days < 60 ? "~1 month ago" : `~${Math.round(days / 30)} months ago`;
+  return (
+    <span data-testid="freshness-pill"
+      className={`text-[10px] px-2 py-0.5 rounded-full ${stale ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-400"}`}
+      title={`${freshness.approved_count || 0} approved item(s) · updated ${label}`}>
+      {stale ? "Stale · " : "Updated "}{label}
+    </span>
+  );
+}
+
+
 function Stat({ label, value, testid }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-4" data-testid={testid}>
@@ -215,6 +231,7 @@ function RiskDashboard() {
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {r.flags.length === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">No dependency flags</span>}
                     {r.flags.map((f) => <span key={f} className={`text-[10px] px-2 py-0.5 rounded-full ${FLAG_COLOR[f] || "bg-white/10 text-ink-mute"}`}>{f}</span>)}
+                    <Freshness freshness={r.freshness} />
                   </div>
                 </div>
                 <ContinuityBar score={r.continuity_score} />
@@ -438,7 +455,7 @@ export default function EnterprisePage() {
                   <RiskBadge level={r.risk_level} />
                 </div>
                 <div className="text-xs text-ink-dim mt-1 line-clamp-2">{r.description}</div>
-                <div className="mt-3"><ContinuityBar score={r.continuity_score} /></div>
+                <div className="mt-3 flex items-center gap-2"><div className="flex-1"><ContinuityBar score={r.continuity_score} /></div><Freshness freshness={r.freshness} /></div>
                 <div className="flex flex-wrap gap-1 mt-3">
                   {(r.responsibilities || []).slice(0, 3).map((x, i) => (
                     <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-dim">{x}</span>
