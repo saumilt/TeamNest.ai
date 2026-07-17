@@ -1,10 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
 import { useAuth } from "@/src/auth";
+import { getItem, setItem } from "@/src/storage";
 import { colors } from "@/src/theme";
+
+const WHATS_NEW_SEEN_KEY = "whatsnew_seen_v1";
 
 export default function TabsLayout() {
   const { token, loading } = useAuth();
+  const [seenNew, setSeenNew] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const seen = await getItem(WHATS_NEW_SEEN_KEY);
+      setSeenNew(!!seen);
+    })();
+  }, []);
+
+  const markNewSeen = () => {
+    if (seenNew) return;
+    setSeenNew(true);
+    setItem(WHATS_NEW_SEEN_KEY, "1");
+  };
+
   if (!loading && !token) return <Redirect href="/(auth)/login" />;
 
   return (
@@ -56,9 +76,28 @@ export default function TabsLayout() {
         options={{
           title: "You",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle" size={size} color={color} />
+            <View>
+              <Ionicons name="person-circle" size={size} color={color} />
+              {!seenNew ? (
+                <View
+                  testID="you-tab-new-dot"
+                  style={{
+                    position: "absolute",
+                    top: -1,
+                    right: -1,
+                    width: 9,
+                    height: 9,
+                    borderRadius: 5,
+                    backgroundColor: colors.accent,
+                    borderWidth: 1.5,
+                    borderColor: colors.bgElevated,
+                  }}
+                />
+              ) : null}
+            </View>
           ),
         }}
+        listeners={{ tabPress: markNewSeen }}
       />
     </Tabs>
   );

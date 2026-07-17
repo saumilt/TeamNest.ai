@@ -64,16 +64,16 @@ const MONTHLY_PLANS = [
   {
     id: "enterprise",
     name: "Enterprise",
-    price: "Custom",
-    unit: "",
-    tagline: "For SOC2-bound teams.",
+    price: "$29.99",
+    unit: "/ seat / month",
+    tagline: "For SOC2-bound teams. Custom pricing available.",
     features: [
       "Unlimited credits",
       "Bring your own AI keys",
       "SSO + SAML",
       "Custom DPA + sub-processors",
       "Dedicated CSM",
-      "Annual contracts",
+      "Volume & annual custom pricing",
     ],
     cta: "Talk to sales",
     cta_href: "/support",
@@ -81,9 +81,10 @@ const MONTHLY_PLANS = [
 ];
 
 const ANNUAL_PLANS = MONTHLY_PLANS.map((p) => {
-  if (p.id === "free" || p.id === "enterprise") return p;
+  if (p.id === "free") return p;
   if (p.id === "pro") return { ...p, price: "$99", unit: "/ seat / year", tagline: "Pay yearly · save 17%." };
   if (p.id === "team") return { ...p, price: "$199", unit: "/ seat / year", tagline: "Pay yearly · save 17%." };
+  if (p.id === "enterprise") return { ...p, price: "$299", unit: "/ seat / year", tagline: "Pay yearly · save 17%. Custom pricing available." };
   return p;
 });
 
@@ -246,33 +247,15 @@ export default function WebPricing() {
   const [mode, setMode] = useState("monthly");
   const cfg = useLaunchConfig();
   const plans = mode === "annual" ? ANNUAL_PLANS : MONTHLY_PLANS;
-  const gatedFully = cfg && cfg.mode !== "open" && !cfg.allow_public_pricing
-    && !(cfg.mode === "waitlist" || cfg.allow_waitlist_pricing_preview);
-  const previewOnly = cfg && cfg.mode !== "open" && !cfg.allow_public_pricing && !gatedFully;
-  if (gatedFully) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center px-6" data-testid="pricing-launch-gate">
-        <div className="max-w-md text-center">
-          <div className="inline-flex rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 text-xs font-bold uppercase tracking-wide mb-5">Private Beta</div>
-          <h1 className="text-[34px] font-bold tracking-[-0.02em] text-[var(--w-text)] mb-3">
-            Pricing is currently available to invited members only.
-          </h1>
-          <p className="text-[15px] text-[var(--w-text-dim)] mb-7">
-            TeamNest is currently invite-only. Pricing and paid upgrades are available to invited members.
-          </p>
-          <div className="flex justify-center gap-3 flex-wrap">
-            <PrimaryButton as={Link} to="/waitlist" data-testid="pricing-gate-request">Request Invite</PrimaryButton>
-            <GhostButton as={Link} to="/invite" data-testid="pricing-gate-code">Enter Invite Code</GhostButton>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Pricing is always public — even during invite-only. When the workspace isn't
+  // fully open, we surface a banner noting checkout is limited to invited members,
+  // but the plans and prices are always visible.
+  const previewOnly = cfg && cfg.mode !== "open" && !cfg.allow_public_pricing;
   return (
     <>
       <SeoHelmet
         title="Pricing · TeamNest.ai"
-        description="Pay only for the seats you use. Free $0, Pro $9.99/seat/mo (3,000 credits), Team $19.99/seat/mo (9,000 credits + free live transcription), Enterprise custom."
+        description="Pay only for the seats you use. Free $0, Pro $9.99/seat/mo (3,000 credits), Team $19.99/seat/mo (9,000 credits + free live transcription), Enterprise $29.99/seat/mo (custom pricing available)."
         path="/pricing"
       />
 

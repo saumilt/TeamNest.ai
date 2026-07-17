@@ -3082,3 +3082,17 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Persistence via src/storage (SecureStore native / localStorage web) key `whatsnew_seen_v1`
   — shows once until the key is bumped for a future release.
 - Verified via screenshots: banner renders, tap navigates to You tab. Lint clean.
+
+## 2026-06 — Pricing public in invite-only + Enterprise $29.99 + mobile You-tab dot
+### Web (frontend/src/pages/web/Pricing.jsx)
+- Removed the full "invited members only" pricing gate: pricing/plans are now ALWAYS visible,
+  even in invite_only mode. A "Preview only — checkout disabled during the private beta" banner
+  shows whenever the workspace isn't fully open (previewOnly = mode!=open && !allow_public_pricing).
+- Enterprise plan changed from "Custom" to $29.99 / seat / month (annual $299/seat/yr),
+  tagline "For SOC2-bound teams. Custom pricing available.", feature "Volume & annual custom
+  pricing", CTA "Talk to sales" → /support. SEO description updated.
+### Mobile (mobile/app/(tabs)/_layout.tsx)
+- Added an amber unread dot on the You-tab icon while `whatsnew_seen_v1` is unset; a tabPress
+  listener (markNewSeen) sets the flag + clears the dot when the user opens the You tab.
+  Unified with the Chats "What's New" nudge (same storage key).
+- Verified via screenshots. Lint clean. UI-only, no backend.
