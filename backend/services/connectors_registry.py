@@ -23,6 +23,10 @@ def _live_gmail() -> bool:
     return bool(os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"))
 
 
+def _live_m365() -> bool:
+    return bool(os.environ.get("M365_CLIENT_ID") and os.environ.get("M365_CLIENT_SECRET"))
+
+
 # provider -> metadata. `oauth_start` is the backend path that kicks off OAuth.
 PROVIDERS = [
     # Email
@@ -35,10 +39,10 @@ PROVIDERS = [
      "oauth_start": "/api/oauth/gmail/login", "supports_style_training": True, "live": _live_gmail()},
     {"provider": "outlook", "name": "Microsoft Outlook", "category": "Email",
      "desc": "Learn tone & follow-up patterns from Outlook mail (read-only).", "scopes": ["Mail.Read"],
-     "oauth_start": None, "supports_style_training": True, "live": False},
+     "oauth_start": "/api/oauth/m365/login", "supports_style_training": True, "live": _live_m365()},
     {"provider": "m365", "name": "Microsoft 365 Mail", "category": "Email",
-     "desc": "Microsoft 365 / Exchange Online mail style training.", "scopes": ["Mail.Read"],
-     "oauth_start": None, "supports_style_training": True, "live": False},
+     "desc": "Microsoft 365 / Exchange Online mail style training (read-only).", "scopes": ["Mail.Read"],
+     "oauth_start": "/api/oauth/m365/login", "supports_style_training": True, "live": _live_m365()},
     # CRM
     {"provider": "hubspot", "name": "HubSpot", "category": "CRM",
      "desc": "Learn sales workflow style from CRM activities (sanitized).", "scopes": ["crm.objects.contacts.read"],

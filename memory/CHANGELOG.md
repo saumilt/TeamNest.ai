@@ -2,6 +2,18 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 107 (Jul 2026) — Mobile parity for Role Intelligence + auto-capture + Microsoft 365 connector
+### Mobile parity — Role Intelligence enterprise module (Expo/React Native)
+- New expo-router routes: `mobile/app/enterprise/index.tsx` (dashboard — 6 chip tabs: Overview/People/Roles/Risk/Review/Billing, owner-gated with a friendly 403 screen), `mobile/app/enterprise/[id].tsx` (person profile — 7 section chips + Capture-knowledge modal + Successor assign/handoff/30-60-90 checklist), `mobile/app/enterprise/ask/[roleId].tsx` (grounded Ask-Role chat with [S#] citation chips, multi-turn, KeyboardAvoidingView). Shared primitives in `mobile/src/components/enterprise/ui.tsx` (ContinuityBar/RiskBadge/FlagChip/Stat) mirroring web. Entry point added to the You tab (`you-enterprise`). Tested end-to-end (iteration_104): all tabs/sections/flows pass, anonymized answers with citations, no personal-name leaks.
+### Auto-capture on approval (backend)
+- `services/enterprise_intelligence.py` `autocapture_from_approval()` — when an approval is approved, if its creator is an enterprise employee, fire-and-forget stages anonymized `proposed` memories for their role (source_type "Approved decision", dedup by source_id). Wired into `routes/approvals.py` decide flow via `asyncio.create_task` — best-effort, never blocks/breaks the approval (verified 4/4 regression; no-ops for non-enterprise users).
+### Microsoft 365 / Outlook connector (live OAuth, read-only)
+- New `services/m365_connector.py` — Microsoft Graph confidential-client (Web) auth-code flow (async httpx): `authorization_url`, `exchange_code`, `refresh`, `account_email`, `fetch_sent_samples` (reads `/me/mailFolders/sentitems/messages`, HTML→text, shared `redact()`). Scopes User.Read/Mail.Read/offline_access. Tenant `2cf65966-…`.
+- `routes/connectors.py`: `/api/oauth/m365/login` + `/api/oauth/m365/callback`, plus `/api/connectors/m365/train-employee` (+ `preview_only`) and `/api/connectors/m365/save-training` (review-before-save, mirrors Gmail). Generalized `_save_*_style_source` per source. Registry marks `outlook` + `m365` live when configured (`oauth_start=/api/oauth/m365/login`).
+- `.env`: added M365_CLIENT_ID / M365_CLIENT_SECRET / M365_TENANT_ID. Web ConnectorsPage TrainModal is now provider-aware (Gmail + Microsoft 365).
+- Verified: registry live, auth URL correct (client_id/redirect_uri `…/api/oauth/m365/callback`/scopes), Connect buttons show on both Microsoft cards. NOTE: the OAuth handshake + mail fetch require the user to interactively Connect + consent via Microsoft — cannot be automated in preview; flow is structurally identical to the working Gmail connector.
+
+
 ## Iteration 106 (Jul 2026) — Chat/employee memory + Role Intelligence P2 (Knowledge Capture) + connector review-before-save
 ### AI memory (backend)
 - **Inline `@ai` chat now carries conversation memory**: `services/ai_runtime.py` new `build_chat_context()` pulls the last ~16 non-deleted chat messages (human + prior AI) and prepends them to the model prompt so answers follow on from what was already discussed (resolves "it/that/the previous one"). Attachments now append to (not replace) this context.

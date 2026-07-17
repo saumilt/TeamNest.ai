@@ -11,6 +11,8 @@ const CAT_ICON = { Email: Mail, CRM: Building2, Chat: MessageSquare, Files: Fold
 
 function TrainModal({ account, onClose }) {
   const nav = useNavigate();
+  const base = account.provider === "m365" ? "m365" : "gmail";
+  const providerName = account.provider === "m365" ? "Microsoft 365" : "Gmail";
   const [employees, setEmployees] = useState([]);
   const [eid, setEid] = useState("");
   const [days, setDays] = useState(90);
@@ -29,7 +31,7 @@ function TrainModal({ account, onClose }) {
     if (!eid) return;
     setBusy(true);
     try {
-      const { data } = await api.post("/connectors/gmail/train-employee", {
+      const { data } = await api.post(`/connectors/${base}/train-employee`, {
         account_id: account.id, employee_id: eid, days: Number(days), max_messages: 40,
         preview_only: true,
       });
@@ -44,7 +46,7 @@ function TrainModal({ account, onClose }) {
     if (!result?.preview_id) return;
     setBusy(true);
     try {
-      const { data } = await api.post("/connectors/gmail/save-training", { preview_id: result.preview_id });
+      const { data } = await api.post(`/connectors/${base}/save-training`, { preview_id: result.preview_id });
       toast.success(`Attached ${data.samples_added} samples to the employee`);
       nav(data.next);
     } catch (e) {
@@ -57,7 +59,7 @@ function TrainModal({ account, onClose }) {
       <div className="w-full max-w-lg rounded-2xl border border-line bg-bg p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-ink">Train an AI employee from Gmail</h3>
+            <h3 className="text-lg font-bold text-ink">Train an AI employee from {providerName}</h3>
             <p className="text-sm text-ink-dim">{account.provider_account_email}</p>
           </div>
           <button onClick={onClose} data-testid="train-close" className="text-ink-mute hover:text-ink"><X className="w-5 h-5" /></button>
