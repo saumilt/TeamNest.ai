@@ -209,22 +209,37 @@ async def dev_os_presence_ws(websocket: WebSocket, project_id: str, token: str =
 # ===== STARTUP / SHUTDOWN =====
 @app.on_event("startup")
 async def startup():
-    try:
-        await seed_demo(db)
-    except Exception as e:
-        logger.warning("Seed skipped: %s", e)
-    try:
-        await seed_market_templates(db)
-    except Exception as e:
-        logger.warning("Market template seed skipped: %s", e)
-    try:
-        await migrate_legacy_users(db)
-    except Exception as e:
-        logger.warning("Multi-workspace migration skipped: %s", e)
-    try:
-        init_storage()
-    except Exception as e:
-        logger.warning("Storage init failed: %s", e)
+    import asyncio as _asyncio
+
+    # Run one-time bootstrap (demo seed, market templates, legacy migration,
+    # object-storage init) OFF the readiness critical path. On a fresh
+    # production DB the seed is large and runs over network latency, and
+    # init_storage() is a blocking `requests` call — doing these inline made
+    # the container fail its readiness probe (deployment timeout). Scheduling
+    # them as a background task lets uvicorn bind and report ready immediately.
+    async def _bootstrap():
+        try:
+            await seed_demo(db)
+        except Exception as e:
+            logger.warning("Seed skipped: %s", e)
+        try:
+            await seed_market_templates(db)
+        except Exception as e:
+            logger.warning("Market template seed skipped: %s", e)
+        try:
+            await migrate_legacy_users(db)
+        except Exception as e:
+            logger.warning("Multi-workspace migration skipped: %s", e)
+        try:
+            # init_storage() uses synchronous `requests`; run it in a thread so
+            # it never blocks the event loop.
+            await _asyncio.to_thread(init_storage)
+        except Exception as e:
+            logger.warning("Storage init failed: %s", e)
+
+    _asyncio.create_task(_bootstrap())
+    logger.info("[startup] bootstrap (seed/migrate/storage) scheduled in background")
+
     # Kick off the task-reminder background loop. It runs forever, wakes once
     # an hour, fires DM + push at T-3d, T-1d, T-0, and T+1d milestones.
     try:

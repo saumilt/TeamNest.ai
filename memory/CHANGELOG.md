@@ -3121,3 +3121,16 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   only if GOOGLE_CLIENT_ID/SECRET are unset in the prod environment; (2) OAuth completion in
   prod requires PUBLIC_BACKEND_URL=https://teamnest.ai and the prod redirect URIs
   (https://teamnest.ai/api/oauth/{gmail,m365}/callback) registered in Google Cloud & Azure AD.
+
+## 2026-07-18 — Fix: production deployment "failed to become ready" timeout
+- Root cause: the FastAPI @app.on_event("startup") handler blocked before the server
+  signaled ready — it awaited the full seed_demo (large, runs entirely on a FRESH prod
+  Atlas DB), seed_market_templates, and migrate_legacy_users sequentially over network
+  latency, AND called init_storage() which is a synchronous requests.post (30s timeout)
+  that blocks the event loop. Pod never passed its readiness probe -> 10-min timeout ->
+  k8s deploy failed. Preview works because its DB is already seeded (seed_demo early-returns).
+- Fix (backend/server.py): moved seed_demo / seed_market_templates / migrate_legacy_users /
+  init_storage into a background asyncio task (_bootstrap) so uvicorn binds and reports ready
+  immediately; init_storage now runs via asyncio.to_thread so its blocking request never
+  stalls the loop. Verified: GET /api/ returns 200 in ~0.28s, "Application startup complete"
+  logs before bootstrap finishes, login/chats/pricing all 200.
