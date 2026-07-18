@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
+import ForcePasswordChange from "@/src/components/ForcePasswordChange";
 import { useAuth } from "@/src/auth";
 import { getItem, setItem } from "@/src/storage";
 import { colors } from "@/src/theme";
@@ -9,7 +10,7 @@ import { colors } from "@/src/theme";
 const WHATS_NEW_SEEN_KEY = "whatsnew_seen_v1";
 
 export default function TabsLayout() {
-  const { token, loading } = useAuth();
+  const { token, user, loading } = useAuth();
   const [seenNew, setSeenNew] = useState(true);
 
   useEffect(() => {
@@ -26,6 +27,9 @@ export default function TabsLayout() {
   };
 
   if (!loading && !token) return <Redirect href="/(auth)/login" />;
+
+  // Admin-provisioned accounts must set their own password before the app.
+  if (token && user?.must_change_password) return <ForcePasswordChange />;
 
   return (
     <Tabs

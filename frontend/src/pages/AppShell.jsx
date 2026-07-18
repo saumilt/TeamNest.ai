@@ -7,6 +7,7 @@ import ChangelogModal from "@/components/ChangelogModal";
 import EmployeeCrossSell from "@/components/EmployeeCrossSell";
 import CreditSplash from "@/components/CreditSplash";
 import CreditsBadge from "@/components/CreditsBadge";
+import ForcePasswordChange from "@/components/ForcePasswordChange";
 
 /** App shell for authenticated routes.
  *
@@ -30,6 +31,9 @@ export default function AppShell() {
     );
   }
   if (!user) return <Navigate to="/" replace />;
+
+  // Admin-provisioned accounts must set their own password before using the app.
+  if (user.must_change_password) return <ForcePasswordChange />;
 
   if (nextPath && nextPath !== window.location.pathname) return <Navigate to={nextPath} replace />;
 

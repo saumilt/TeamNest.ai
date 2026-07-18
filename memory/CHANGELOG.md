@@ -3178,3 +3178,14 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - GET /api/connectors/{provider}/folders enumerates real Gmail labels / M365 mail folders
   (fallback to common scopes). Train modal populates the Folder/Scope select dynamically.
 ### Testing: iteration 106 — 33/33 backend pass + web/mobile verified (retest_needed=false).
+
+## 2026-07-18 — Forced first-login password change (web + mobile)
+- New endpoint POST /api/me/set-initial-password (authenticated, no current pw needed):
+  works only when must_change_password=true, enforces the complexity policy, rejects reusing
+  the temporary password, sets the new hash and clears the flag.
+- Web: AppShell renders a blocking ForcePasswordChange screen when user.must_change_password
+  (before the app is reachable), with a live 5-rule checklist + confirm match + Sign out.
+- Mobile: (tabs)/_layout renders src/components/ForcePasswordChange when user.must_change_password;
+  refetches /api/auth/me on success. Same checklist UX.
+- Verified: endpoint flow (weak/reuse/strong/flag-clear/re-login) + both UI gates via screenshot
+  (logged in as os@radciti.com; not submitted, temp password preserved).

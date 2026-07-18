@@ -73,6 +73,36 @@ async def change_password(payload: PasswordChange, current=Depends(require_user)
     return {"ok": True}
 
 
+class InitialPassword(BaseModel):
+    new_password: str
+
+
+@router.post("/me/set-initial-password")
+async def set_initial_password(payload: InitialPassword, current=Depends(require_user)):
+    """Complete the forced first-login password change for admin-provisioned
+    users (must_change_password=True). No current password required — the user
+    is already authenticated with their temporary password."""
+    user = await db.users.find_one({"id": current["id"]})
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not user.get("must_change_password"):
+        raise HTTPException(400, "No password change is required for this account")
+    pw_err = password_complexity_error(payload.new_password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
+    if verify_password(payload.new_password, user.get("password_hash", "")):
+        raise HTTPException(400, "Choose a password different from your temporary one.")
+    await db.users.update_one(
+        {"id": current["id"]},
+        {"$set": {
+            "password_hash": hash_password(payload.new_password),
+            "must_change_password": False,
+            "updated_at": now_iso(),
+        }},
+    )
+    return {"ok": True}
+
+
 class EmailChange(BaseModel):
     new_email: EmailStr
     password: str
