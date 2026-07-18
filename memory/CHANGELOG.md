@@ -3157,3 +3157,24 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - seed.py "Emergent Demo Workspace" -> "TeamNest Demo Workspace" (+ idempotent rename migration
   for existing installs). template_market seller status label "Emergent test key" -> "test mode".
   (Internal code comments and functional refs like sk_test_emergent / EMERGENT_LLM_KEY left as-is.)
+
+## 2026-07-18 — Auth hardening + user provisioning + dynamic connector folders
+### Password complexity (backend auth_utils.password_complexity_error, web + mobile)
+- Policy: min 8 chars incl. uppercase, lowercase, number, special. Enforced on signup,
+  superadmin create-user, superadmin reset-password, self change-password, and password reset.
+  Relaxed Pydantic min_length so the complexity validator is the single source of truth.
+### Reset password (both flows)
+- User-facing: web already had forgot/reset; ADDED mobile screens (auth)/forgot-password.tsx +
+  (auth)/reset-password.tsx with a "Forgot password?" link on login and client-side policy checks.
+  Web /reset-password now shows the policy hint + enforces it client-side.
+- Admin-triggered: superadmin reset endpoint (existing) now complexity-checked.
+### SuperAdmin provisioning (routes/superadmin.py + UsersTab.jsx)
+- NewUser gained credits/send_credentials/cc/must_change_password. create_user now optionally
+  tops up credits (billing.add_extra_credits) and emails login + a single-use reset link
+  (with CC) via mailgun (added cc support to mailgun_service.send_email).
+- Provisioned os@radciti.com / Summer$123 + 10,000 credits + credentials email cc sam
+  (PREVIEW DB only — re-run in prod via the live UI with PUBLIC_BACKEND_URL=teamnest.ai).
+### Dynamic connector folders (connectors.py + gmail/m365 services + ConnectorsPage.jsx)
+- GET /api/connectors/{provider}/folders enumerates real Gmail labels / M365 mail folders
+  (fallback to common scopes). Train modal populates the Folder/Scope select dynamically.
+### Testing: iteration 106 — 33/33 backend pass + web/mobile verified (retest_needed=false).
