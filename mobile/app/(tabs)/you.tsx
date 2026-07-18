@@ -146,6 +146,27 @@ export default function YouScreen() {
         />
       </View>
 
+      {/* Brand positioning — mirrors the web landing hero */}
+      <View style={styles.introCard} testID="brand-intro-card">
+        <View style={styles.introPill}>
+          <Ionicons name="sparkles" size={12} color={colors.accent} />
+          <Text style={styles.introPillText}>Enterprise AI Intelligence</Text>
+        </View>
+        <Text style={styles.introTitle}>Your team&apos;s collective intelligence — kept forever.</Text>
+        <Text style={styles.introBody}>
+          Capture every role&apos;s expertise and retain it indefinitely, deploy specialized AI
+          employees you design, and train new ones with agentic AI. When people move on, the
+          intelligence stays.
+        </Text>
+        <View style={styles.introChips}>
+          {["Institutional memory", "Specialized AI employees", "Agentic training"].map((c) => (
+            <View key={c} style={styles.introChip}>
+              <Text style={styles.introChipText}>{c}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
       {/* What's new — mirrors the web landing highlights */}
       <Text style={styles.sectionEyebrow}>Just shipped</Text>
       <Text style={styles.sectionTitle}>New in TeamNest</Text>
@@ -349,6 +370,38 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginTop: spacing.xl,
   },
+  introCard: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  introPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  introPillText: { color: colors.accent, fontSize: font.tiny, fontWeight: "800", letterSpacing: 0.6 },
+  introTitle: { color: colors.textPrimary, fontSize: font.h2, fontWeight: "800", marginTop: 4, lineHeight: 26 },
+  introBody: { color: colors.textSecondary, fontSize: font.small, lineHeight: 20 },
+  introChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  introChip: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  introChipText: { color: colors.textSecondary, fontSize: font.tiny, fontWeight: "700" },
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: font.h2,

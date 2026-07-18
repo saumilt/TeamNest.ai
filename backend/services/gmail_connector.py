@@ -147,19 +147,50 @@ def _extract_body(payload: Dict) -> str:
     return "\n".join(lines).strip()
 
 
+def _date_bounds(days: int, start_date: Optional[str], end_date: Optional[str]):
+    """Return (after_epoch, before_epoch|None). `start_date`/`end_date` (ISO
+    'YYYY-MM-DD') take precedence over the rolling `days` window when provided."""
+    if start_date:
+        try:
+            after_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            after_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    else:
+        after_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    before_epoch = None
+    if end_date:
+        try:
+            before_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+            before_epoch = int(before_dt.timestamp())
+        except ValueError:
+            before_epoch = None
+    return int(after_dt.timestamp()), before_epoch
+
+
+_GMAIL_SCOPE = {"sent": "in:sent", "inbox": "in:inbox", "all": "in:anywhere"}
+
+
 def fetch_sent_samples(creds: Credentials, max_messages: int = 40, days: int = 90,
-                       on_refresh=None) -> List[Dict]:
-    """Return [{source:'gmail', text}] of the user's own recent SENT messages,
-    already redacted. Read-only."""
+                       folder: str = "sent", start_date: Optional[str] = None,
+                       end_date: Optional[str] = None, on_refresh=None) -> List[Dict]:
+    """Return [{source:'gmail', text}] of the user's own recent messages from the
+    chosen `folder` (sent|inbox|all|<label>) within the date range, already
+    redacted. Read-only."""
     if creds.expiry and datetime.now(timezone.utc) >= creds.expiry.replace(tzinfo=timezone.utc):
         creds.refresh(GoogleRequest())
         if on_refresh:
             on_refresh(creds)
 
     svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
-    after = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
+    after, before = _date_bounds(days, start_date, end_date)
+    scope = _GMAIL_SCOPE.get((folder or "sent").lower())
+    if scope is None:
+        scope = f'label:"{folder}"'
+    q = f"{scope} after:{after}"
+    if before:
+        q += f" before:{before}"
     res = svc.users().messages().list(
-        userId="me", q=f"in:sent after:{after}", maxResults=min(max_messages, 100)
+        userId="me", q=q, maxResults=min(max_messages, 100)
     ).execute()
     ids = [m["id"] for m in res.get("messages", [])]
 

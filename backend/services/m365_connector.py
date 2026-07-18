@@ -137,27 +137,54 @@ async def _is_expired(token_doc: Dict) -> bool:
         return True
 
 
+def _m365_after_before(days: int, start_date: Optional[str], end_date: Optional[str]):
+    """(after_dt, before_dt|None) — ISO 'YYYY-MM-DD' start/end override `days`."""
+    if start_date:
+        try:
+            after_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            after_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    else:
+        after_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    before_dt = None
+    if end_date:
+        try:
+            before_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        except ValueError:
+            before_dt = None
+    return after_dt, before_dt
+
+
+_M365_FOLDERS = {"sentitems": ("sentitems", "sentDateTime"), "inbox": ("inbox", "receivedDateTime")}
+
+
 async def fetch_sent_samples(token_doc: Dict, max_messages: int = 40, days: int = 90,
-                             on_refresh=None) -> List[Dict]:
-    """Return [{source:'m365', text}] of the user's own recent SENT messages,
-    already redacted. Refreshes the token if expired (via `on_refresh`)."""
+                             folder: str = "sentitems", start_date: Optional[str] = None,
+                             end_date: Optional[str] = None, on_refresh=None) -> List[Dict]:
+    """Return [{source:'m365', text}] of the user's own recent messages from the
+    chosen mail `folder` (sentitems|inbox) within the date range, redacted.
+    Refreshes the token if expired (via `on_refresh`)."""
     if await _is_expired(token_doc) and token_doc.get("refresh_token"):
         token_doc = await refresh(token_doc["refresh_token"])
         if on_refresh:
             on_refresh(token_doc)
 
     access = token_doc.get("access_token")
-    after = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    folder_path, date_field = _M365_FOLDERS.get((folder or "sentitems").lower(), ("sentitems", "sentDateTime"))
+    after_dt, before_dt = _m365_after_before(days, start_date, end_date)
+    filt = f"{date_field} ge {after_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+    if before_dt:
+        filt += f" and {date_field} le {before_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
     params = {
         "$top": str(min(max_messages, 100)),
-        "$select": "subject,body,bodyPreview,sentDateTime",
-        "$filter": f"sentDateTime ge {after}",
-        "$orderby": "sentDateTime desc",
+        "$select": f"subject,body,bodyPreview,{date_field}",
+        "$filter": filt,
+        "$orderby": f"{date_field} desc",
     }
     samples: List[Dict] = []
     async with httpx.AsyncClient(timeout=45) as c:
         r = await c.get(
-            f"{GRAPH}/me/mailFolders/sentitems/messages",
+            f"{GRAPH}/me/mailFolders/{folder_path}/messages",
             headers={"Authorization": f"Bearer {access}", "Prefer": 'outlook.body-content-type="text"'},
             params=params,
         )
@@ -175,6 +202,7 @@ async def fetch_sent_samples(token_doc: Dict, max_messages: int = 40, days: int 
 
 
 async def fetch_teams_messages(token_doc: Dict, max_messages: int = 40, days: int = 90,
+                               start_date: Optional[str] = None, end_date: Optional[str] = None,
                                on_refresh=None) -> List[Dict]:
     """Return [{source:'teams', text}] of the user's OWN recent Teams chat
     messages (read-only, redacted). Best-effort across the user's chats."""
@@ -184,7 +212,7 @@ async def fetch_teams_messages(token_doc: Dict, max_messages: int = 40, days: in
             on_refresh(token_doc)
     access = token_doc.get("access_token")
     headers = {"Authorization": f"Bearer {access}"}
-    after = datetime.now(timezone.utc) - timedelta(days=days)
+    after, before = _m365_after_before(days, start_date, end_date)
     samples: List[Dict] = []
     async with httpx.AsyncClient(timeout=45) as c:
         me = await c.get(f"{GRAPH}/me", headers=headers)
@@ -207,7 +235,7 @@ async def fetch_teams_messages(token_doc: Dict, max_messages: int = 40, days: in
                         continue
                     try:
                         when = datetime.fromisoformat((m.get("createdDateTime") or "").replace("Z", "+00:00"))
-                        if when < after:
+                        if when < after or (before and when >= before):
                             continue
                     except Exception:
                         pass

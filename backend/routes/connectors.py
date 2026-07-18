@@ -263,6 +263,9 @@ class TrainReq(BaseModel):
     max_messages: int = 40
     preview_only: bool = False
     source: str = "mail"
+    folder: str = ""            # Gmail: sent|inbox|all|<label> · M365: sentitems|inbox
+    start_date: str | None = None  # ISO "YYYY-MM-DD" — overrides `days` when set
+    end_date: str | None = None    # ISO "YYYY-MM-DD" — optional upper bound
 
 
 async def _save_gmail_style_source(employee_id: str, workspace_id: str, account: dict, samples: list):
@@ -310,7 +313,10 @@ async def train_employee(payload: TrainReq, current=Depends(require_user)):
         def _on_refresh(c):
             refreshed["doc"] = gmail.creds_to_doc(c)
         samples = gmail.fetch_sent_samples(
-            creds, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
+            creds, max_messages=payload.max_messages, days=payload.days,
+            folder=payload.folder or "sent",
+            start_date=payload.start_date, end_date=payload.end_date,
+            on_refresh=_on_refresh)
         if refreshed.get("doc"):
             await db.connector_oauth_tokens.update_one(
                 {"connector_account_id": payload.account_id},
@@ -420,10 +426,15 @@ async def m365_train_employee(payload: TrainReq, current=Depends(require_user)):
             refreshed["doc"] = d
         if payload.source == "teams":
             samples = await m365.fetch_teams_messages(
-                token_doc, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
+                token_doc, max_messages=payload.max_messages, days=payload.days,
+                start_date=payload.start_date, end_date=payload.end_date,
+                on_refresh=_on_refresh)
         else:
             samples = await m365.fetch_sent_samples(
-                token_doc, max_messages=payload.max_messages, days=payload.days, on_refresh=_on_refresh)
+                token_doc, max_messages=payload.max_messages, days=payload.days,
+                folder=payload.folder or "sentitems",
+                start_date=payload.start_date, end_date=payload.end_date,
+                on_refresh=_on_refresh)
         if refreshed.get("doc"):
             d = refreshed["doc"]
             await db.connector_oauth_tokens.update_one(

@@ -3141,3 +3141,19 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   and training more via agentic AI. Pill: "Enterprise AI Intelligence · knowledge that never leaves".
   Headline: "Your team's collective intelligence — kept forever." Trust line + SEO title/description
   updated to match. Verified via screenshot; lint clean.
+
+## 2026-07-18 — Connector scoping polish + mobile intro card + branding cleanup
+### Connector Framework Polish (web + backend)
+- TrainReq gained `folder`, `start_date`, `end_date`. Gmail fetch scopes by folder
+  (sent|inbox|all|<label>) and honours a custom date range via after:/before: query ops;
+  M365 fetch scopes by mail folder (sentitems|inbox, correct date field per folder) and
+  date range; Teams fetch now honours start/end too. Frontend TrainModal adds a Folder/Scope
+  select + a "custom date range" toggle (From/To date inputs) and 365-day quick option.
+- Verified end-to-end: M365 preview with folder=inbox + custom range returned 5 redacted samples.
+### Mobile brand intro card (mobile/app/(tabs)/you.tsx)
+- Added an "Enterprise AI Intelligence" positioning card at the top of the You tab mirroring the
+  web hero (title + body + 3 pillar chips: Institutional memory / Specialized AI employees / Agentic training).
+### Branding cleanup (no Emergent on site)
+- seed.py "Emergent Demo Workspace" -> "TeamNest Demo Workspace" (+ idempotent rename migration
+  for existing installs). template_market seller status label "Emergent test key" -> "test mode".
+  (Internal code comments and functional refs like sk_test_emergent / EMERGENT_LLM_KEY left as-is.)

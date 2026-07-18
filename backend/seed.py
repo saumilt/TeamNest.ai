@@ -54,7 +54,7 @@ async def seed_demo(db) -> None:
     owner = users[0]
     await db.workspaces.insert_one({
         "id": workspace_id,
-        "name": "Emergent Demo Workspace",
+        "name": "TeamNest Demo Workspace",
         "owner_id": owner["id"],
         "created_at": now,
     })
@@ -166,8 +166,12 @@ async def seed_demo(db) -> None:
 
 async def _seed_phase2_topup(db):
     """Idempotent Phase-2 demo data insertion for existing demo workspaces."""
+    # Rename any legacy-named demo workspace (branding cleanup), then look it up.
+    await db.workspaces.update_many(
+        {"name": "Emergent Demo Workspace"}, {"$set": {"name": "TeamNest Demo Workspace"}}
+    )
     # Find the demo workspace by its known name; bail if not present
-    ws = await db.workspaces.find_one({"name": "Emergent Demo Workspace"}, {"_id": 0})
+    ws = await db.workspaces.find_one({"name": "TeamNest Demo Workspace"}, {"_id": 0})
     if not ws:
         return
     # If we've already seeded a Phase-2 call, skip

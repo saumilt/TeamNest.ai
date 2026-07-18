@@ -17,8 +17,23 @@ function TrainModal({ account, onClose }) {
   const [eid, setEid] = useState("");
   const [days, setDays] = useState(90);
   const [source, setSource] = useState("mail");
+  const [folder, setFolder] = useState(base === "m365" ? "sentitems" : "sent");
+  const [useCustom, setUseCustom] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+
+  const showFolder = base === "gmail" || source === "mail";
+  const gmailFolders = [
+    { v: "sent", label: "Sent mail" },
+    { v: "inbox", label: "Inbox" },
+    { v: "all", label: "All mail" },
+  ];
+  const m365Folders = [
+    { v: "sentitems", label: "Sent Items" },
+    { v: "inbox", label: "Inbox" },
+  ];
 
   useEffect(() => {
     api.get("/ai-builder/employees").then((r) => {
@@ -30,11 +45,18 @@ function TrainModal({ account, onClose }) {
 
   const run = async () => {
     if (!eid) return;
+    if (useCustom && startDate && endDate && startDate > endDate) {
+      toast.error("Start date must be before end date");
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.post(`/connectors/${base}/train-employee`, {
         account_id: account.id, employee_id: eid, days: Number(days), max_messages: 40,
         preview_only: true, source: base === "m365" ? source : "mail",
+        folder: showFolder ? folder : "",
+        start_date: useCustom && startDate ? startDate : null,
+        end_date: useCustom && endDate ? endDate : null,
       });
       setResult(data);
       toast.success(`Found ${data.samples_found} redacted samples — review before saving`);
@@ -100,19 +122,55 @@ function TrainModal({ account, onClose }) {
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
             <label className="text-[11px] uppercase tracking-widest text-ink-mute">Date range — analyse last</label>
-            <select value={days} onChange={(e) => setDays(e.target.value)} data-testid="train-days"
-              className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
+            <select value={days} onChange={(e) => setDays(e.target.value)} disabled={useCustom} data-testid="train-days"
+              className="w-full mt-1 mb-3 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm disabled:opacity-50">
               <option value={30}>30 days</option>
               <option value={90}>90 days</option>
               <option value={180}>180 days</option>
+              <option value={365}>365 days</option>
             </select>
+
+            <label className="flex items-center gap-2 text-xs text-ink-dim mb-3 cursor-pointer select-none">
+              <input type="checkbox" checked={useCustom} onChange={(e) => setUseCustom(e.target.checked)}
+                data-testid="train-custom-toggle" className="accent-[var(--ai,#f5b301)]" />
+              Use a custom date range instead
+            </label>
+            {useCustom && (
+              <div className="grid grid-cols-2 gap-2 mb-4" data-testid="train-custom-range">
+                <div>
+                  <label className="text-[11px] uppercase tracking-widest text-ink-mute">From</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                    data-testid="train-start-date"
+                    className="w-full mt-1 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase tracking-widest text-ink-mute">To</label>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                    data-testid="train-end-date"
+                    className="w-full mt-1 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm" />
+                </div>
+              </div>
+            )}
+
             {base === "m365" && (
               <>
                 <label className="text-[11px] uppercase tracking-widest text-ink-mute">Source</label>
                 <select value={source} onChange={(e) => setSource(e.target.value)} data-testid="train-source"
                   className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
-                  <option value="mail">Outlook sent mail</option>
+                  <option value="mail">Outlook mail</option>
                   <option value="teams">Microsoft Teams chat</option>
+                </select>
+              </>
+            )}
+
+            {showFolder && (
+              <>
+                <label className="text-[11px] uppercase tracking-widest text-ink-mute">Folder / scope</label>
+                <select value={folder} onChange={(e) => setFolder(e.target.value)} data-testid="train-folder"
+                  className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
+                  {(base === "m365" ? m365Folders : gmailFolders).map((f) => (
+                    <option key={f.v} value={f.v}>{f.label}</option>
+                  ))}
                 </select>
               </>
             )}

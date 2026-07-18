@@ -790,7 +790,7 @@ async def payout_run(current=Depends(require_user)):
                             "status": "failed", "reason": str(e)[:160]})
     paid = sum(1 for r in results if r["status"] == "paid")
     return {"results": results, "sellers": len(results), "paid": paid,
-            "mode": "simulated (Emergent test key)" if simulated_mode else "live"}
+            "mode": "simulated (test mode)" if simulated_mode else "live"}
 
 
 # NOTE: the shared Stripe webhook lives in routes/billing.py (/webhook/stripe)
