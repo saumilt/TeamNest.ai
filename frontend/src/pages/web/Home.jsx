@@ -70,25 +70,26 @@ function Hero() {
           <div className="lg:col-span-7">
             <Pill tone="ai" className="mb-6">
               <Sparkles className="w-3.5 h-3.5" />
-              New · @devmanager builds working apps from chat
+              Enterprise AI Intelligence · knowledge that never leaves
             </Pill>
             <h1
               className="font-bold tracking-[-0.03em] text-[var(--w-text)] mb-6"
-              style={{ fontSize: "clamp(40px, 6vw, 76px)", lineHeight: 1.02, textWrap: "balance" }}
+              style={{ fontSize: "clamp(38px, 5.6vw, 72px)", lineHeight: 1.03, textWrap: "balance" }}
               data-testid="web-hero-headline"
             >
-              Chat with your team — and 6&nbsp;AIs at once.
+              Your team&apos;s collective intelligence — kept forever.
             </h1>
             <p
-              className="text-[19px] leading-[30px] text-[var(--w-text-dim)] mb-8 max-w-[34ch]"
+              className="text-[19px] leading-[30px] text-[var(--w-text-dim)] mb-8 max-w-[52ch]"
               style={{ textWrap: "pretty" }}
             >
-              Ask ChatGPT, Claude, Gemini, DeepSeek, Perplexity and Grok the same question.
-              Compare answers side-by-side. Turn decisions into tasks — without leaving the chat.
+              TeamNest turns your organisation&apos;s know-how into a living asset: capture every
+              role&apos;s expertise and retain it indefinitely, deploy specialized AI employees you
+              design, and train new ones with agentic AI. When people move on, the intelligence stays.
             </p>
             <HeroCtas />
             <p className="text-[12px] text-[var(--w-text-mute)]">
-              Free forever · 300 AI credits / month · SOC 2 in flight
+              Institutional memory · specialized AI employees · agentic training · SOC 2 in flight
             </p>
           </div>
 
@@ -699,8 +700,8 @@ export default function WebHome() {
   return (
     <>
       <SeoHelmet
-        title="TeamNest.ai — Chat with your team, and 6 AIs at once."
-        description="AI-native team chat. Ask ChatGPT, Claude, Gemini, DeepSeek, Perplexity and Grok the same question. Compare side-by-side. Turn decisions into tasks."
+        title="TeamNest.ai — Enterprise AI Intelligence that never leaves"
+        description="TeamNest is the collective intelligence layer for teams and enterprises. Capture every role's expertise and retain it indefinitely, deploy specialized AI employees you design, and train new ones with agentic AI — plus 6-model AI chat and no-code app building."
         path="/"
       />
       <Hero />

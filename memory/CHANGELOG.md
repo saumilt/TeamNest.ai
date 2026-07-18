@@ -3134,3 +3134,10 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   immediately; init_storage now runs via asyncio.to_thread so its blocking request never
   stalls the loop. Verified: GET /api/ returns 200 in ~0.28s, "Application startup complete"
   logs before bootstrap finishes, login/chats/pricing all 200.
+
+## 2026-07-18 — Landing hero repositioned to Enterprise AI Intelligence
+- Home.jsx Hero + SeoHelmet rewritten around the "collective team & enterprise AI intelligence"
+  positioning: indefinite institutional-knowledge retention, specialized AI employees you design,
+  and training more via agentic AI. Pill: "Enterprise AI Intelligence · knowledge that never leaves".
+  Headline: "Your team's collective intelligence — kept forever." Trust line + SEO title/description
+  updated to match. Verified via screenshot; lint clean.
