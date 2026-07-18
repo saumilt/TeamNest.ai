@@ -13,6 +13,7 @@ from auth_utils import (
     create_short_lived_token,
     create_token,
     hash_password,
+    password_complexity_error,
     set_session_cookie,
     verify_password,
 )
@@ -42,6 +43,9 @@ async def signup(payload: UserSignup, response: Response):
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         raise HTTPException(400, "Email already registered")
+    pw_err = password_complexity_error(payload.password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     # Phone is optional but, if provided, must not collide with another account.
     phone_norm = normalize_phone(payload.phone)
     if phone_norm:
@@ -166,8 +170,9 @@ async def forgot_password(payload: ForgotPasswordRequest):
 
 @router.post("/auth/reset-password")
 async def reset_password(payload: ResetPasswordRequest):
-    if len(payload.password or "") < 6:
-        raise HTTPException(400, "Password must be at least 6 characters")
+    pw_err = password_complexity_error(payload.password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     rec = await db.password_reset_tokens.find_one(
         {"token_hash": _hash_reset_token(payload.token), "used": False}
     )

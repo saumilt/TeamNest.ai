@@ -24,7 +24,9 @@ export default function ResetPassword() {
 
   const invalidLink = !token;
   const mismatch = confirm.length > 0 && password !== confirm;
-  const canSubmit = token && password.length >= 6 && password === confirm && !busy;
+  const pwStrong = password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password)
+    && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password);
+  const canSubmit = token && pwStrong && password === confirm && !busy;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -95,6 +97,9 @@ export default function ResetPassword() {
                       className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
                       data-testid="reset-password-input"
                     />
+                    <p className="text-[12px] text-[var(--w-text-mute)] mt-1.5">
+                      At least 8 characters with an uppercase, lowercase, number and special character.
+                    </p>
                   </div>
                   <div>
                     <label className="text-[12px] font-semibold uppercase tracking-widest text-[var(--w-text-mute)] mb-1.5 block">Confirm password</label>
@@ -109,7 +114,7 @@ export default function ResetPassword() {
                       className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
                       data-testid="reset-confirm-input"
                     />
-                    {mismatch && <p className="text-[12px] text-red-500 mt-1.5" data-testid="reset-mismatch">Passwords don't match.</p>}
+                    {mismatch && <p className="text-[12px] text-red-500 mt-1.5" data-testid="reset-mismatch">Passwords don&apos;t match.</p>}
                   </div>
                   <PrimaryButton type="submit" disabled={!canSubmit} className="w-full mt-2" data-testid="reset-submit-btn">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}

@@ -158,6 +158,36 @@ def _m365_after_before(days: int, start_date: Optional[str], end_date: Optional[
 _M365_FOLDERS = {"sentitems": ("sentitems", "sentDateTime"), "inbox": ("inbox", "receivedDateTime")}
 
 
+async def list_mail_folders(token_doc: Dict, on_refresh=None) -> List[Dict]:
+    """Return [{value, label}] of the user's mail folders for the scope picker.
+    Sent Items + Inbox are surfaced first, then top-level custom folders."""
+    if await _is_expired(token_doc) and token_doc.get("refresh_token"):
+        token_doc = await refresh(token_doc["refresh_token"])
+        if on_refresh:
+            on_refresh(token_doc)
+    access = token_doc.get("access_token")
+    out: List[Dict] = [
+        {"value": "sentitems", "label": "Sent Items"},
+        {"value": "inbox", "label": "Inbox"},
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{GRAPH}/me/mailFolders",
+                headers={"Authorization": f"Bearer {access}"},
+                params={"$top": "50", "$select": "id,displayName"},
+            )
+            if r.status_code == 200:
+                seen = {"Sent Items", "Inbox"}
+                for f in r.json().get("value", []):
+                    name = f.get("displayName")
+                    if name and name not in seen:
+                        out.append({"value": f.get("id"), "label": name})
+    except Exception:
+        pass
+    return out
+
+
 async def fetch_sent_samples(token_doc: Dict, max_messages: int = 40, days: int = 90,
                              folder: str = "sentitems", start_date: Optional[str] = None,
                              end_date: Optional[str] = None, on_refresh=None) -> List[Dict]:
@@ -170,7 +200,12 @@ async def fetch_sent_samples(token_doc: Dict, max_messages: int = 40, days: int 
             on_refresh(token_doc)
 
     access = token_doc.get("access_token")
-    folder_path, date_field = _M365_FOLDERS.get((folder or "sentitems").lower(), ("sentitems", "sentDateTime"))
+    fkey = (folder or "sentitems").lower()
+    if fkey in _M365_FOLDERS:
+        folder_path, date_field = _M365_FOLDERS[fkey]
+    else:
+        # Arbitrary mail folder id/name returned by list_mail_folders
+        folder_path, date_field = (folder, "receivedDateTime")
     after_dt, before_dt = _m365_after_before(days, start_date, end_date)
     filt = f"{date_field} ge {after_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
     if before_dt:

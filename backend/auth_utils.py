@@ -12,6 +12,7 @@ Auth strategy (v2 — Feb 2026):
     short-lived WS token from `/api/auth/ws-token` when opening a WebSocket.
 """
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -43,6 +44,30 @@ def verify_password(password: str, hashed: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
+
+
+_PW_SPECIAL = re.compile(r"[^A-Za-z0-9]")
+
+# Password policy (enforced everywhere a password is set — signup, reset,
+# change, admin-create/reset — on web AND mobile, in every environment).
+PASSWORD_POLICY = "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character."
+
+
+def password_complexity_error(password: str) -> Optional[str]:
+    """Return a human-readable error if the password fails the complexity
+    policy, else None. Policy: min 8 chars + upper + lower + digit + special."""
+    pw = password or ""
+    if len(pw) < 8:
+        return "Password must be at least 8 characters long."
+    if not any(c.isupper() for c in pw):
+        return "Password must include at least one uppercase letter."
+    if not any(c.islower() for c in pw):
+        return "Password must include at least one lowercase letter."
+    if not any(c.isdigit() for c in pw):
+        return "Password must include at least one number."
+    if not _PW_SPECIAL.search(pw):
+        return "Password must include at least one special character."
+    return None
 
 
 def create_token(user_id: str, ttl_days: int = JWT_EXP_DAYS) -> str:

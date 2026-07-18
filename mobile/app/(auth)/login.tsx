@@ -98,6 +98,12 @@ export default function Login() {
             style={styles.input}
           />
 
+          <Link href="/(auth)/forgot-password" asChild>
+            <TouchableOpacity testID="login-forgot-link" style={{ alignSelf: "flex-end", marginTop: spacing.sm }}>
+              <Text style={{ color: colors.accent, fontSize: font.small, fontWeight: "700" }}>Forgot password?</Text>
+            </TouchableOpacity>
+          </Link>
+
           {error ? (
             <Text testID="login-error" style={styles.error}>
               {error}

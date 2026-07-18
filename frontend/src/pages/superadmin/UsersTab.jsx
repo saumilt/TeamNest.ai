@@ -117,14 +117,24 @@ function Modal({ title, onClose, children }) {
 const inputCls = "w-full bg-bg border border-white/10 rounded-lg px-3 py-2 text-sm text-ink focus:border-ai focus:outline-none";
 
 function AddUserModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", credits: "" });
+  const [sendEmail, setSendEmail] = useState(true);
+  const [cc, setCc] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const submit = async () => {
     setBusy(true);
     try {
-      await api.post("/superadmin/users", form);
-      toast.success("User created (must change password on first login)");
+      const { data } = await api.post("/superadmin/users", {
+        name: form.name, email: form.email, password: form.password,
+        credits: Number(form.credits) || 0,
+        send_credentials: sendEmail,
+        cc: cc.trim() ? cc.split(",").map((s) => s.trim()).filter(Boolean) : null,
+      });
+      const bits = [];
+      if (data.credits_added) bits.push(`${data.credits_added.toLocaleString()} credits added`);
+      bits.push(data.credentials_emailed ? "credentials emailed" : "created");
+      toast.success(`User provisioned — ${bits.join(" · ")}`);
       onCreated();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to create user"); }
     setBusy(false);
@@ -133,10 +143,19 @@ function AddUserModal({ onClose, onCreated }) {
     <Modal title="Add new user" onClose={onClose}>
       <div className="space-y-3">
         <input placeholder="Full name" value={form.name} onChange={set("name")} data-testid="sa-add-name" className={inputCls} />
-        <input placeholder="Email" type="email" value={form.email} onChange={set("email")} data-testid="sa-add-email" className={inputCls} />
-        <input placeholder="Temporary password (min 6 chars)" type="text" value={form.password} onChange={set("password")} data-testid="sa-add-password" className={inputCls} />
-        <p className="text-xs text-ink-dim">A new workspace is created with this user as owner. They must change the password on first login.</p>
-        <button type="button" onClick={submit} disabled={busy || !form.name || !form.email || form.password.length < 6}
+        <input placeholder="Email (this is their login / user ID)" type="email" value={form.email} onChange={set("email")} data-testid="sa-add-email" className={inputCls} />
+        <input placeholder="Temporary password" type="text" value={form.password} onChange={set("password")} data-testid="sa-add-password" className={inputCls} />
+        <p className="text-[11px] text-ink-dim -mt-1">Min 8 chars incl. uppercase, lowercase, number & special character.</p>
+        <input placeholder="One-time credits to add (optional)" type="number" min="0" value={form.credits} onChange={set("credits")} data-testid="sa-add-credits" className={inputCls} />
+        <label className="flex items-center gap-2 text-xs text-ink-dim cursor-pointer select-none">
+          <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} data-testid="sa-add-sendemail" className="accent-[var(--ai,#f5b301)]" />
+          Email login + a reset link to the user
+        </label>
+        {sendEmail && (
+          <input placeholder="CC (comma-separated emails, optional)" value={cc} onChange={(e) => setCc(e.target.value)} data-testid="sa-add-cc" className={inputCls} />
+        )}
+        <p className="text-xs text-ink-dim">A new workspace is created with this user as owner.</p>
+        <button type="button" onClick={submit} disabled={busy || !form.name || !form.email || !form.password}
           data-testid="sa-add-submit"
           className="w-full h-10 rounded-full bg-ai text-black font-bold text-sm disabled:opacity-50">
           {busy ? "Creating…" : "Create user"}
@@ -161,9 +180,9 @@ function ResetPasswordModal({ user, onClose }) {
   return (
     <Modal title={`Reset password — ${user.email}`} onClose={onClose}>
       <div className="space-y-3">
-        <input placeholder="New password (min 6 chars)" type="text" value={pw} onChange={(e) => setPw(e.target.value)} data-testid="sa-reset-input" className={inputCls} />
-        <p className="text-xs text-ink-dim">The user will be required to change it on next login.</p>
-        <button type="button" onClick={submit} disabled={busy || pw.length < 6} data-testid="sa-reset-submit"
+        <input placeholder="New password" type="text" value={pw} onChange={(e) => setPw(e.target.value)} data-testid="sa-reset-input" className={inputCls} />
+        <p className="text-xs text-ink-dim">Min 8 chars incl. uppercase, lowercase, number & special character. The user must change it on next login.</p>
+        <button type="button" onClick={submit} disabled={busy || pw.length < 8} data-testid="sa-reset-submit"
           className="w-full h-10 rounded-full bg-ai text-black font-bold text-sm disabled:opacity-50">
           {busy ? "Saving…" : "Set new password"}
         </button>

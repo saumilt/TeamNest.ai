@@ -34,6 +34,7 @@ function TrainModal({ account, onClose }) {
     { v: "sentitems", label: "Sent Items" },
     { v: "inbox", label: "Inbox" },
   ];
+  const [folderOpts, setFolderOpts] = useState(base === "m365" ? m365Folders : gmailFolders);
 
   useEffect(() => {
     api.get("/ai-builder/employees").then((r) => {
@@ -41,6 +42,12 @@ function TrainModal({ account, onClose }) {
       setEmployees(list);
       if (list[0]) setEid(list[0].id);
     }).catch(() => {});
+    // Enumerate the account's real Gmail labels / M365 folders for the scope picker
+    api.get(`/connectors/${base}/folders`, { params: { account_id: account.id } })
+      .then((r) => {
+        const opts = (r.data?.folders || []).map((f) => ({ v: f.value ?? f.v, label: f.label }));
+        if (opts.length) setFolderOpts(opts);
+      }).catch(() => {});
   }, []);
 
   const run = async () => {
@@ -168,7 +175,7 @@ function TrainModal({ account, onClose }) {
                 <label className="text-[11px] uppercase tracking-widest text-ink-mute">Folder / scope</label>
                 <select value={folder} onChange={(e) => setFolder(e.target.value)} data-testid="train-folder"
                   className="w-full mt-1 mb-4 h-11 rounded-xl bg-surface border border-line px-3 text-ink text-sm">
-                  {(base === "m365" ? m365Folders : gmailFolders).map((f) => (
+                  {folderOpts.map((f) => (
                     <option key={f.v} value={f.v}>{f.label}</option>
                   ))}
                 </select>

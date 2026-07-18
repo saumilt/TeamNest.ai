@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from auth_utils import hash_password, verify_password
+from auth_utils import hash_password, password_complexity_error, verify_password
 from deps import db, normalize_phone, now_iso, public_user, require_user
 
 router = APIRouter()
@@ -59,8 +59,9 @@ async def change_password(payload: PasswordChange, current=Depends(require_user)
     user = await db.users.find_one({"id": current["id"]})
     if not user or not verify_password(payload.current_password, user.get("password_hash", "")):
         raise HTTPException(401, "Current password is incorrect")
-    if len(payload.new_password) < 6:
-        raise HTTPException(400, "New password must be at least 6 characters")
+    pw_err = password_complexity_error(payload.new_password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     await db.users.update_one(
         {"id": current["id"]},
         {"$set": {

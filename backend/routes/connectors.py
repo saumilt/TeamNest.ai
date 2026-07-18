@@ -503,3 +503,31 @@ async def m365_save_training(payload: SaveTrainingReq, current=Depends(require_u
     return {"ok": True, "samples_added": len(prev["samples"]),
             "next": f"/ai-builder/{prev['employee_id']}",
             "note": "Samples attached. Generate & review the style profile in the AI builder before saving."}
+
+
+
+_DEFAULT_FOLDERS = {
+    "gmail": [{"value": "sent", "label": "Sent mail"}, {"value": "inbox", "label": "Inbox"},
+              {"value": "all", "label": "All mail"}],
+    "m365": [{"value": "sentitems", "label": "Sent Items"}, {"value": "inbox", "label": "Inbox"}],
+}
+
+
+@router.get("/connectors/{provider}/folders")
+async def list_connector_folders(provider: str, account_id: str, current=Depends(require_user)):
+    """List real folders/labels for the scope picker (Gmail labels · M365 mail
+    folders). Falls back to the common scopes if the provider call fails."""
+    if provider not in ("gmail", "m365"):
+        raise HTTPException(400, "Unsupported provider")
+    acc = await db.connector_accounts.find_one(
+        {"id": account_id, "user_id": current["id"]}, {"_id": 0, "id": 1})
+    if not acc:
+        raise HTTPException(404, "Connection not found")
+    try:
+        if provider == "gmail":
+            creds = await _load_creds(account_id, current["id"])
+            return {"folders": gmail.list_labels(creds)}
+        token_doc = await _load_m365_token(account_id, current["id"])
+        return {"folders": await m365.list_mail_folders(token_doc)}
+    except Exception:
+        return {"folders": _DEFAULT_FOLDERS[provider]}

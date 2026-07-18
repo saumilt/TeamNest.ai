@@ -170,6 +170,29 @@ def _date_bounds(days: int, start_date: Optional[str], end_date: Optional[str]):
 _GMAIL_SCOPE = {"sent": "in:sent", "inbox": "in:inbox", "all": "in:anywhere"}
 
 
+def list_labels(creds: Credentials, on_refresh=None) -> List[Dict]:
+    """Return [{value, label}] for the scope picker: common scopes first, then
+    the user's own Gmail labels (usable via a label: query)."""
+    if creds.expiry and datetime.now(timezone.utc) >= creds.expiry.replace(tzinfo=timezone.utc):
+        creds.refresh(GoogleRequest())
+        if on_refresh:
+            on_refresh(creds)
+    out: List[Dict] = [
+        {"value": "sent", "label": "Sent mail"},
+        {"value": "inbox", "label": "Inbox"},
+        {"value": "all", "label": "All mail"},
+    ]
+    try:
+        svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
+        res = svc.users().labels().list(userId="me").execute()
+        for l in res.get("labels", []):
+            if l.get("type") == "user" and l.get("name"):
+                out.append({"value": l["name"], "label": l["name"]})
+    except Exception:
+        pass
+    return out
+
+
 def fetch_sent_samples(creds: Credentials, max_messages: int = 40, days: int = 90,
                        folder: str = "sent", start_date: Optional[str] = None,
                        end_date: Optional[str] = None, on_refresh=None) -> List[Dict]:

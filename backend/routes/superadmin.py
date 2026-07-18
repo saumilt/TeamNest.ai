@@ -10,10 +10,13 @@ flags that gate core platform capabilities app-wide:
 """
 from typing import Optional
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from deps import db, is_super_admin, new_id, now_iso, require_super_admin
+from services import mailgun_service
 from services.platform_settings import (
     BOOL_DEFAULTS,
     DEFAULTS,
@@ -249,20 +252,64 @@ async def list_users(search: str = "", limit: int = 100, current=Depends(require
 class NewUser(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     email: str
-    password: str = Field(min_length=6, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
     workspace_id: Optional[str] = None  # existing ws to join, else a new one
     role: str = "member"
+    credits: int = 0                    # optional one-time credit top-up
+    send_credentials: bool = False      # email login + a reset link to the user
+    cc: Optional[list] = None           # extra recipients to CC on that email
+    must_change_password: bool = True
+
+
+async def _send_credentials_email(name: str, email: str, password: str,
+                                  user_id: str, cc: Optional[list]) -> None:
+    """Email a newly-provisioned user their login + a single-use reset link."""
+    import hashlib
+    import secrets
+    from datetime import datetime, timedelta, timezone
+
+    raw = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "id": new_id(), "user_id": user_id,
+        "token_hash": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+        "used": False, "created_at": now,
+        "expires_at": now + timedelta(minutes=60),
+    })
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    link = f"{base}/reset-password?token={raw}"
+    html = f"""
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;color:#18181b">
+        <h2 style="margin:0 0 12px">Welcome to TeamNest</h2>
+        <p>Hi {name or 'there'}, an account has been created for you on TeamNest.</p>
+        <p style="background:#f4f4f5;border-radius:10px;padding:14px 16px;line-height:1.7">
+          <strong>Sign in:</strong> <a href="{base}/login">{base}/login</a><br/>
+          <strong>User ID (email):</strong> {email}<br/>
+          <strong>Temporary password:</strong> {password}
+        </p>
+        <p>For security, please set your own password using this single-use link (valid 1 hour):</p>
+        <p><a href="{link}" style="display:inline-block;background:#f5b301;color:#000;font-weight:700;text-decoration:none;padding:11px 20px;border-radius:999px">Set your password</a></p>
+        <p style="font-size:12px;color:#71717a">If the button doesn't work, paste this into your browser:<br/>{link}</p>
+      </div>"""
+    text = (f"Welcome to TeamNest.\nSign in: {base}/login\nUser ID: {email}\n"
+            f"Temporary password: {password}\nSet your own password (valid 1h): {link}")
+    await mailgun_service.send_email(
+        to=[email], cc=[c for c in (cc or []) if c], subject="Your TeamNest account",
+        html=html, text=text, tags={"type": "credentials"})
 
 
 @router.post("/superadmin/users")
 async def create_user(payload: NewUser, current=Depends(require_super_admin)):
-    from auth_utils import hash_password
+    from auth_utils import hash_password, password_complexity_error
     from deps import ensure_personal_ai_chat
     from services.workspace_membership import ensure_membership
 
     email = payload.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required")
+    pw_err = password_complexity_error(payload.password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email already registered")
 
@@ -284,7 +331,7 @@ async def create_user(payload: NewUser, current=Depends(require_super_admin)):
         "phone": None, "phone_normalized": None, "phone_hash": None,
         "password_hash": hash_password(payload.password), "avatar": None,
         "role": role, "workspace_id": workspace_id, "status": "active",
-        "must_change_password": True, "created_at": now_iso(),
+        "must_change_password": bool(payload.must_change_password), "created_at": now_iso(),
     }
     await db.users.insert_one(user.copy())
     if is_owner:
@@ -294,7 +341,21 @@ async def create_user(payload: NewUser, current=Depends(require_super_admin)):
         })
     await ensure_membership(uid, workspace_id, role=role)
     await ensure_personal_ai_chat(uid, workspace_id)
-    return {"ok": True, "id": uid, "email": email, "workspace_id": workspace_id}
+
+    credited = 0
+    if payload.credits and payload.credits > 0:
+        from services.billing import add_extra_credits
+        await add_extra_credits(workspace_id, int(payload.credits))
+        credited = int(payload.credits)
+    emailed = False
+    if payload.send_credentials:
+        try:
+            await _send_credentials_email(payload.name.strip(), email, payload.password, uid, payload.cc)
+            emailed = True
+        except Exception:
+            emailed = False
+    return {"ok": True, "id": uid, "email": email, "workspace_id": workspace_id,
+            "credits_added": credited, "credentials_emailed": emailed}
 
 
 class UserPatch(BaseModel):
@@ -329,12 +390,15 @@ async def update_user(uid: str, payload: UserPatch, current=Depends(require_supe
 
 
 class ResetPassword(BaseModel):
-    new_password: str = Field(min_length=6, max_length=200)
+    new_password: str = Field(min_length=1, max_length=200)
 
 
 @router.post("/superadmin/users/{uid}/reset-password")
 async def reset_user_password(uid: str, payload: ResetPassword, current=Depends(require_super_admin)):
-    from auth_utils import hash_password
+    from auth_utils import hash_password, password_complexity_error
+    pw_err = password_complexity_error(payload.new_password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     if not await db.users.find_one({"id": uid}, {"_id": 1}):
         raise HTTPException(404, "User not found")
     await db.users.update_one(

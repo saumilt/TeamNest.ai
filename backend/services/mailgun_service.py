@@ -43,6 +43,7 @@ async def send_email(
     html: str,
     text: Optional[str] = None,
     reply_to: Optional[str] = None,
+    cc: Optional[List[str]] = None,
     tags: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     if not _configured():
@@ -58,6 +59,8 @@ async def send_email(
         "html": html,
         "o:require-tls": "yes",
     }
+    if cc:
+        data["cc"] = cc
     if text:
         data["text"] = text
     if reply_to:
