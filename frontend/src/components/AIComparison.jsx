@@ -198,6 +198,7 @@ export default function AIComparison({ threadId, chatId, onClose }) {
           <SynthesisFooter
             thread={thread}
             threadId={threadId}
+            onShare={share}
             onTask={(payload) => setShowTask(payload)}
             onSave={(payload) => setShowSave(payload)}
           />

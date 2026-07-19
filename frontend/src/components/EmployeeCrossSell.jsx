@@ -130,12 +130,20 @@ export default function EmployeeCrossSell() {
     };
   }, [pathname]);
 
+  // Auto-hide so the nudge never lingers over the composer / content. This is
+  // a soft hide (no persisted dismissal) — it may resurface on a later route.
+  useEffect(() => {
+    if (!pitch) return undefined;
+    const t = setTimeout(() => setPitch(null), 12000);
+    return () => clearTimeout(t);
+  }, [pitch]);
+
   if (!pitch || pathname.startsWith("/dev-os/projects/")) return null;
   const Icon = pitch.icon;
   return (
     <div
       data-testid="employee-cross-sell"
-      className="fixed bottom-4 right-4 z-30 w-[320px] max-w-[calc(100vw-32px)] bg-surface-1 border border-hairline rounded-card shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2 duration-300"
+      className="fixed bottom-28 md:bottom-4 right-4 z-30 w-[320px] max-w-[calc(100vw-32px)] bg-surface-1 border border-hairline rounded-card shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2 duration-300"
     >
       <div className={`bg-gradient-to-b ${pitch.accent} px-4 pt-4 pb-3`}>
         <div className="flex items-start gap-3">

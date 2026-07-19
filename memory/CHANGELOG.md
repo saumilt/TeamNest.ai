@@ -3196,3 +3196,14 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   panel uses 85vh on mobile, header/actions wrap. Desktop keeps horizontal side-by-side columns.
 - Verified via mobile-viewport screenshot (390px): opened @ai compare thread → "Show all
   comparisons" → panel renders full-width stacked cards + synthesized answer, legible & scrollable.
+
+## 2026-07-19 — Mobile chat declutter + comparison quick-actions (web, verified)
+- ChatHeader.jsx: pills moved into a flex-wrap row; Dev OS switcher / +Dev OS / SmartHire
+  "Hire AI" pills are now desktop-only (hidden md:*). Mobile header shows just title + a
+  single Project chip → no more overlapping/cramped pills. (Hiring still surfaced by the
+  in-chat SmartHireBanner + cross-sell nudge; Dev OS via right-rail panel.)
+- EmployeeCrossSell.jsx: auto-hides after 12s (soft, no persisted dismissal) and lifts to
+  bottom-28 on mobile so it no longer covers the composer / Ask AI bar.
+- SynthesisFooter.jsx: added one-tap "Copy answer" (clipboard) + "Share" (public link)
+  buttons to the synthesized-answer action row — handy for forwarding on mobile.
+- Verified at 390px: decluttered header, and Copy/Share buttons render in the synthesis panel.

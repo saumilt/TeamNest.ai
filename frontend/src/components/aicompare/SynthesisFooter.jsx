@@ -1,11 +1,20 @@
 import { api, API } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Save, CheckCircle2, Download } from "lucide-react";
+import { Sparkles, Save, CheckCircle2, Download, Copy, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
-/** Synthesized final-answer block — body + 4 action buttons. */
-export default function SynthesisFooter({ thread, threadId, onTask, onSave }) {
+/** Synthesized final-answer block — body + action buttons. */
+export default function SynthesisFooter({ thread, threadId, onTask, onSave, onShare }) {
   if (!thread.final_answer) return null;
+
+  const copyAnswer = async () => {
+    try {
+      await navigator.clipboard.writeText(thread.final_answer);
+      toast.success("Answer copied — paste it into any chat");
+    } catch {
+      toast.error("Couldn't copy — long-press the text to select");
+    }
+  };
 
   const exportPdf = () => {
     fetch(`${API}/export/research/${threadId}?format=pdf`, { credentials: "include" })
@@ -42,6 +51,27 @@ export default function SynthesisFooter({ thread, threadId, onTask, onSave }) {
       </div>
       <div className="text-sm text-zinc-100 whitespace-pre-wrap leading-relaxed">{thread.final_answer}</div>
       <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          data-testid="copy-synthesis"
+          size="sm"
+          onClick={copyAnswer}
+          className="bg-white text-black hover:bg-zinc-200 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+        >
+          <Copy className="w-3 h-3 mr-1" />
+          Copy answer
+        </Button>
+        {onShare && (
+          <Button
+            data-testid="share-synthesis"
+            size="sm"
+            variant="outline"
+            onClick={onShare}
+            className="border-blue-400/40 text-blue-300 hover:bg-blue-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+          >
+            <Share2 className="w-3 h-3 mr-1" />
+            {thread.public_token ? "Copy link" : "Share"}
+          </Button>
+        )}
         <Button
           data-testid="task-from-synthesis"
           size="sm"
