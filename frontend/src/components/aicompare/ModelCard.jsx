@@ -12,9 +12,9 @@ export default function ModelCard({ modelKey, response, isLoading, onVote, onSel
   const name = response?.model_name || modelKey;
   return (
     <div
-      className={`w-[340px] shrink-0 bg-[#0a0a0a] border-t-2 ${
+      className={`w-full sm:w-[340px] sm:shrink-0 bg-[#0a0a0a] border-t-2 ${
         response?.selected_as_best ? "border-yellow-400" : "border-transparent"
-      } flex flex-col h-full`}
+      } flex flex-col sm:h-full`}
     >
       <div className="px-4 py-3 border-b border-white/5 shrink-0">
         <div className="flex items-center justify-between">
@@ -32,7 +32,7 @@ export default function ModelCard({ modelKey, response, isLoading, onVote, onSel
       </div>
 
       <div
-        className="p-4 text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed flex-1 overflow-y-auto min-h-0"
+        className="p-4 text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed sm:flex-1 sm:overflow-y-auto sm:min-h-0"
         data-testid={`model-answer-${modelKey}`}
       >
         {isLoading ? (

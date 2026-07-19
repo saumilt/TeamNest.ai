@@ -47,24 +47,24 @@ export function ComparisonHeader({
   onClose,
 }) {
   return (
-    <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between mt-1">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="px-4 sm:px-5 py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between mt-1">
+      <div className="flex items-center gap-2.5 min-w-0">
         <Layers className="w-4 h-4 text-yellow-400 shrink-0" />
         <div className="min-w-0">
-          <div className="label-mono">
+          <div className="label-mono text-[10px]">
             AI COMPARISON · {responses.length}/{thread.selected_models.length} READY
           </div>
-          <div className="text-sm truncate text-zinc-200">{thread.question}</div>
+          <div className="text-[13px] sm:text-sm truncate text-zinc-200">{thread.question}</div>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 shrink-0 items-center">
         <Button
           data-testid="share-snapshot-btn"
           size="sm"
           variant="outline"
           onClick={onShare}
           disabled={isLoading || responses.length < 1}
-          className="border-blue-400/40 bg-transparent text-blue-300 hover:bg-blue-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+          className="flex-1 sm:flex-none border-blue-400/40 bg-transparent text-blue-300 hover:bg-blue-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
           title="Create a public shareable link to this comparison"
         >
           <Share2 className="w-3 h-3 mr-1" />
@@ -75,7 +75,7 @@ export function ComparisonHeader({
           size="sm"
           onClick={onSynthesize}
           disabled={synthesizing || isLoading || responses.length < 2}
-          className="bg-yellow-500 text-black hover:bg-yellow-400 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+          className="flex-1 sm:flex-none bg-yellow-500 text-black hover:bg-yellow-400 rounded-sm font-mono uppercase text-[10px] tracking-widest"
         >
           <Wand2 className="w-3 h-3 mr-1" />
           {synthesizing ? "Synthesizing…" : "Synthesize Best"}
@@ -84,7 +84,7 @@ export function ComparisonHeader({
           data-testid="pin-comparison"
           onClick={onTogglePin}
           title={pinned ? "Unpin — auto-collapse on outside click" : "Pin — keep open"}
-          className={`h-8 w-8 flex items-center justify-center rounded-sm border ${
+          className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-sm border ${
             pinned
               ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-300"
               : "border-white/10 bg-transparent text-zinc-400 hover:bg-white/5"
@@ -96,7 +96,7 @@ export function ComparisonHeader({
           data-testid="minimize-comparison"
           onClick={onMinimize}
           title="Minimize"
-          className="h-8 w-8 flex items-center justify-center rounded-sm border border-white/10 bg-transparent text-zinc-400 hover:bg-white/5"
+          className="h-8 w-8 flex items-center justify-center rounded-sm border border-white/10 bg-transparent text-zinc-400 hover:bg-white/5 shrink-0"
         >
           <Minimize2 className="w-3.5 h-3.5" />
         </button>
@@ -105,7 +105,7 @@ export function ComparisonHeader({
           size="sm"
           variant="outline"
           onClick={onClose}
-          className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm h-8 w-8 p-0"
+          className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm h-8 w-8 p-0 shrink-0"
         >
           <X className="w-3.5 h-3.5" />
         </Button>

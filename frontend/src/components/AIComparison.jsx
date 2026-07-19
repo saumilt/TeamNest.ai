@@ -22,10 +22,19 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     try { return localStorage.getItem("aicompare:pinned") === "1"; } catch { return false; }
   });
   const [minimized, setMinimized] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 640
+  );
   const [heightVh, setHeightVh] = useState(() => {
     try { return Number(localStorage.getItem("aicompare:heightVh")) || 60; } catch { return 60; }
   });
   const resizingRef = useRef(false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Persist preferences (UI prefs, not sensitive)
   useEffect(() => {
@@ -35,16 +44,17 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     try { localStorage.setItem("aicompare:heightVh", String(heightVh)); } catch (err) { console.warn("[aicompare] persist height failed", err); }
   }, [heightVh]);
 
-  // Auto-collapse on outside click when not pinned
+  // Auto-collapse on outside click when not pinned (desktop only — on mobile
+  // the panel is full-height and dismissed via the explicit close/minimize).
   useEffect(() => {
-    if (pinned || minimized) return;
+    if (pinned || minimized || isMobile) return;
     const onDocClick = (e) => {
       const panel = document.querySelector("[data-testid='ai-comparison']");
       if (panel && !panel.contains(e.target)) setMinimized(true);
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [pinned, minimized]);
+  }, [pinned, minimized, isMobile]);
 
   // Resize drag
   useEffect(() => {
@@ -144,9 +154,9 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     <div
       data-testid="ai-comparison"
       className="border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
-      style={{ height: `${heightVh}vh`, maxHeight: "90vh" }}
+      style={{ height: isMobile ? "85vh" : `${heightVh}vh`, maxHeight: isMobile ? "90vh" : "90vh" }}
     >
-      <ComparisonResizeHandle onMouseDown={onResizeStart} />
+      {!isMobile && <ComparisonResizeHandle onMouseDown={onResizeStart} />}
 
       <ComparisonHeader
         thread={thread}
@@ -163,10 +173,10 @@ export default function AIComparison({ threadId, chatId, onClose }) {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div
-          className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
+          className="flex-1 min-h-0 overflow-y-auto sm:overflow-x-auto sm:overflow-y-hidden"
           data-testid="ai-comparison-scroll"
         >
-          <div className="flex gap-px bg-white/10 min-w-max p-px h-full">
+          <div className="flex flex-col sm:flex-row gap-px bg-white/10 sm:min-w-max p-px sm:h-full">
             {thread.selected_models.map((mk) => {
               const r = responses.find((x) => x.model_key === mk);
               return (
