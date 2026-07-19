@@ -3189,3 +3189,10 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   refetches /api/auth/me on success. Same checklist UX.
 - Verified: endpoint flow (weak/reuse/strong/flag-clear/re-login) + both UI gates via screenshot
   (logged in as os@radciti.com; not submitted, temp password preserved).
+
+## 2026-07-19 — AI Comparison mobile-web responsive fix (verified)
+- AIComparison.jsx / aicompare/ModelCard.jsx / ComparisonHeader.jsx: on small screens the
+  model responses now stack vertically (flex-col sm:flex-row; ModelCard w-full sm:w-[340px]),
+  panel uses 85vh on mobile, header/actions wrap. Desktop keeps horizontal side-by-side columns.
+- Verified via mobile-viewport screenshot (390px): opened @ai compare thread → "Show all
+  comparisons" → panel renders full-width stacked cards + synthesized answer, legible & scrollable.
