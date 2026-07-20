@@ -3207,3 +3207,19 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - SynthesisFooter.jsx: added one-tap "Copy answer" (clipboard) + "Share" (public link)
   buttons to the synthesized-answer action row — handy for forwarding on mobile.
 - Verified at 390px: decluttered header, and Copy/Share buttons render in the synthesis panel.
+
+## 2026-07-20 — AI Comparison as inline chat messages (mobile) + free-plan employee banner (web, tested iter 107)
+- Chose Option B: on mobile/tablet (<768px) the AI Comparison renders INLINE in the chat feed
+  as message bubbles (new AIComparisonInline.jsx) — one bubble per model (answer + confidence +
+  vote pills + Mark-best/Create-task/Save), a Synthesize CTA, and a synthesized final-answer bubble
+  with Copy/Share/Create-task/Save + a close/hide button. Scrolls with the feed, no composer overlap.
+  Desktop (>=768px) keeps the docked side-by-side panel (AIComparison.jsx).
+- Extracted shared hooks/useResearchThread.js (load/poll + vote/selectBest/synthesize/share) so the
+  desktop panel and mobile inline view stay in perfect parity. MessageList.jsx gained a `bottomSlot`
+  so the inline comparison lives inside the scroll container. Chats.jsx picks inline vs panel via a
+  matchMedia(max-width:767px) check (aligned to the header pill breakpoint).
+- EmployeeCrossSell.jsx: replaced the big overlapping floating card with a slim dismissible banner
+  docked top-right under the credits (+20%) pill. Shown ONLY to free-plan workspaces, suppressed on
+  open chats + /billing + paid/unlimited, auto-hides after 10s.
+- Testing agent iteration 107: 13/13 frontend checks pass (desktop panel + mobile inline parity,
+  header declutter, banner gating). No retest needed.

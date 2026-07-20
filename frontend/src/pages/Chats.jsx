@@ -647,14 +647,16 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
-  // Comparison renders inline in the feed on mobile, as a bottom panel on desktop.
+  // Comparison renders inline in the feed on mobile/tablet (<768px, matching the
+  // header pill breakpoint), as a docked side-by-side panel on desktop.
   const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 640,
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
   );
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.

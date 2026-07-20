@@ -145,7 +145,7 @@ export default function EmployeeCrossSell() {
             data-testid="cross-sell-cta"
             onClick={() => {
               dismiss(pitch.key);
-              nav(pitch.link || "/employees");
+              nav("/employees");
             }}
             className="mt-1.5 h-7 px-3 rounded-full bg-brand text-black hover:bg-brand-deep font-mono uppercase text-[10px] tracking-widest inline-flex items-center gap-1"
           >
