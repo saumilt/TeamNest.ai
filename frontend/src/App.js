@@ -55,6 +55,7 @@ import Terms from "@/pages/legal/Terms";
 import Support from "@/pages/legal/Support";
 import EULA from "@/pages/legal/EULA";
 import Downloads from "@/pages/Downloads";
+import CompareInlineDemo from "@/pages/demo/CompareInlineDemo";
 import WebLayout from "@/components/web/WebLayout";
 import WebHome from "@/pages/web/Home";
 import WebShowcase from "@/pages/web/Showcase";
@@ -142,6 +143,7 @@ export default function App() {
           <Route path="/support" element={<Support />} />
           <Route path="/downloads" element={<Downloads />} />
           <Route path="/downloads/" element={<Downloads />} />
+          <Route path="/demo/compare-inline" element={<CompareInlineDemo />} />
           <Route path="/s/:token" element={<PublicSnapshot />} />
           <Route path="/share/:token" element={<SharePreviewPage />} />
           <Route path="/p/:slug" element={<ProductionAppPage />} />

@@ -153,8 +153,12 @@ export default function AIComparison({ threadId, chatId, onClose }) {
   return (
     <div
       data-testid="ai-comparison"
-      className="border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
-      style={{ height: isMobile ? "85vh" : `${heightVh}vh`, maxHeight: isMobile ? "90vh" : "90vh" }}
+      className={
+        isMobile
+          ? "fixed inset-0 z-50 bg-black flex flex-col overflow-hidden pt-[env(safe-area-inset-top)]"
+          : "border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
+      }
+      style={isMobile ? undefined : { height: `${heightVh}vh`, maxHeight: "90vh" }}
     >
       {!isMobile && <ComparisonResizeHandle onMouseDown={onResizeStart} />}
 

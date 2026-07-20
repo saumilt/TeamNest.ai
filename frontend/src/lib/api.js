@@ -45,7 +45,7 @@ const PUBLIC_PATHS = [
   "/support",
 ];
 // Keep in sync with the public (non-AppShell) routes declared in App.js.
-const PUBLIC_PREFIXES = ["/join/", "/s/", "/p/", "/share/", "/call/", "/drop/"];
+const PUBLIC_PREFIXES = ["/join/", "/s/", "/p/", "/share/", "/call/", "/drop/", "/demo/"];
 
 function isPublicPath(pathname) {
   // Normalize trailing slash so `/downloads` and `/downloads/` both match.
