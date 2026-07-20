@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
 import NewTaskDialog from "@/components/NewTaskDialog";
 import ModelCard from "@/components/aicompare/ModelCard";
 import SaveToFolderDialog from "@/components/aicompare/SaveToFolderDialog";
@@ -11,10 +9,17 @@ import {
 } from "@/components/aicompare/ComparisonHeader";
 import SynthesisFooter from "@/components/aicompare/SynthesisFooter";
 import ThreadActions from "@/components/ai/ThreadActions";
+import { useResearchThread } from "@/hooks/useResearchThread";
 
+/**
+ * Desktop side-by-side comparison panel (docked at the bottom of the chat,
+ * resizable). On mobile the inline-messages view (AIComparisonInline) is used
+ * instead — see Chats.jsx.
+ */
 export default function AIComparison({ threadId, chatId, onClose }) {
-  const [data, setData] = useState(null);
-  const [synthesizing, setSynthesizing] = useState(false);
+  const { data, synthesizing, vote, selectBest, synthesize, share } = useResearchThread(threadId, {
+    onAfterSelectBest: onClose,
+  });
   const [showSave, setShowSave] = useState(null);
   const [showTask, setShowTask] = useState(null);
 
@@ -22,21 +27,11 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     try { return localStorage.getItem("aicompare:pinned") === "1"; } catch { return false; }
   });
   const [minimized, setMinimized] = useState(false);
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 640
-  );
   const [heightVh, setHeightVh] = useState(() => {
     try { return Number(localStorage.getItem("aicompare:heightVh")) || 60; } catch { return 60; }
   });
   const resizingRef = useRef(false);
 
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // Persist preferences (UI prefs, not sensitive)
   useEffect(() => {
     try { localStorage.setItem("aicompare:pinned", pinned ? "1" : "0"); } catch (err) { console.warn("[aicompare] persist pinned failed", err); }
   }, [pinned]);
@@ -44,17 +39,16 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     try { localStorage.setItem("aicompare:heightVh", String(heightVh)); } catch (err) { console.warn("[aicompare] persist height failed", err); }
   }, [heightVh]);
 
-  // Auto-collapse on outside click when not pinned (desktop only — on mobile
-  // the panel is full-height and dismissed via the explicit close/minimize).
+  // Auto-collapse on outside click when not pinned.
   useEffect(() => {
-    if (pinned || minimized || isMobile) return;
+    if (pinned || minimized) return undefined;
     const onDocClick = (e) => {
       const panel = document.querySelector("[data-testid='ai-comparison']");
       if (panel && !panel.contains(e.target)) setMinimized(true);
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [pinned, minimized, isMobile]);
+  }, [pinned, minimized]);
 
   // Resize drag
   useEffect(() => {
@@ -71,16 +65,6 @@ export default function AIComparison({ threadId, chatId, onClose }) {
       window.removeEventListener("mouseup", onUp);
     };
   }, []);
-
-  const load = useCallback(() => {
-    api.get(`/ai/research/${threadId}`).then(({ data }) => setData(data));
-  }, [threadId]);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 4000);
-    return () => clearInterval(id);
-  }, [load]);
 
   if (!data) {
     return (
@@ -104,47 +88,6 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     );
   }
 
-  const vote = async (rid, cat) => {
-    await api.post(`/ai/responses/${rid}/vote`, { vote_category: cat });
-    load();
-  };
-
-  const selectBest = async (rid) => {
-    await api.post(`/ai/responses/${rid}/select-best`);
-    toast.success("Re-synthesized with new best · posted in chat");
-    load();
-    onClose?.();
-  };
-
-  const synthesize = async () => {
-    setSynthesizing(true);
-    try {
-      await api.post(`/ai/research/${threadId}/synthesize`);
-      toast.success("Synthesized final answer");
-      load();
-    } catch {
-      toast.error("Synthesis failed");
-    } finally {
-      setSynthesizing(false);
-    }
-  };
-
-  const share = async () => {
-    try {
-      const { data: payload } = await api.post(`/ai/research/${threadId}/share`);
-      const url = `${window.location.origin}/s/${payload.token}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success("Public link copied to clipboard");
-      } catch {
-        toast.success(`Public link: ${url}`);
-      }
-      load();
-    } catch {
-      toast.error("Share failed");
-    }
-  };
-
   const onResizeStart = () => {
     resizingRef.current = true;
     document.body.style.cursor = "ns-resize";
@@ -153,14 +96,10 @@ export default function AIComparison({ threadId, chatId, onClose }) {
   return (
     <div
       data-testid="ai-comparison"
-      className={
-        isMobile
-          ? "fixed inset-0 z-50 bg-black flex flex-col overflow-hidden pt-[env(safe-area-inset-top)]"
-          : "border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
-      }
-      style={isMobile ? undefined : { height: `${heightVh}vh`, maxHeight: "90vh" }}
+      className="border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
+      style={{ height: `${heightVh}vh`, maxHeight: "90vh" }}
     >
-      {!isMobile && <ComparisonResizeHandle onMouseDown={onResizeStart} />}
+      <ComparisonResizeHandle onMouseDown={onResizeStart} />
 
       <ComparisonHeader
         thread={thread}
@@ -177,10 +116,10 @@ export default function AIComparison({ threadId, chatId, onClose }) {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div
-          className="flex-1 min-h-0 overflow-y-auto sm:overflow-x-auto sm:overflow-y-hidden"
+          className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden"
           data-testid="ai-comparison-scroll"
         >
-          <div className="flex flex-col sm:flex-row gap-px bg-white/10 sm:min-w-max p-px sm:h-full">
+          <div className="flex flex-row gap-px bg-white/10 min-w-max p-px h-full">
             {thread.selected_models.map((mk) => {
               const r = responses.find((x) => x.model_key === mk);
               return (

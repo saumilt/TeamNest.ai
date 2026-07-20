@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Layers, Wand2, Share2, X, Pin, PinOff, Minimize2, ChevronUp, ChevronLeft, GripHorizontal } from "lucide-react";
+import { Layers, Wand2, Share2, X, Pin, PinOff, Minimize2, ChevronUp, GripHorizontal } from "lucide-react";
 
 /** Minimized state — small pill at bottom of the screen. */
 export function ComparisonMinimizedBar({ thread, responses, onRestore, onClose }) {
@@ -49,16 +49,6 @@ export function ComparisonHeader({
   return (
     <div className="px-4 sm:px-5 py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between mt-1">
       <div className="flex items-center gap-2.5 min-w-0">
-        <button
-          type="button"
-          onClick={onClose}
-          data-testid="comparison-back-btn"
-          aria-label="Back to chat"
-          title="Back to chat"
-          className="sm:hidden -ml-1 p-1.5 rounded-full text-ink hover:bg-white/5 active:scale-95 shrink-0"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
         <Layers className="w-4 h-4 text-yellow-400 shrink-0" />
         <div className="min-w-0">
           <div className="label-mono text-[10px]">

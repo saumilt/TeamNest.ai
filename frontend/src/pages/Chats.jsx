@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import AIComparison from "@/components/AIComparison";
+import AIComparisonInline from "@/components/aicompare/AIComparisonInline";
 import AskAIDrawer from "@/components/AskAIDrawer";
 import NewChatDialog from "@/components/NewChatDialog";
 import WhatsAppStyleNewChatSheet from "@/components/WhatsAppStyleNewChatSheet";
@@ -646,6 +647,15 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
+  // Comparison renders inline in the feed on mobile, as a bottom panel on desktop.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 640,
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -967,10 +977,20 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             ) : null}
           </>
         }
+        bottomSlot={
+          isMobile && activeThread ? (
+            <AIComparisonInline
+              threadId={activeThread}
+              chatId={chatId}
+              onClose={() => setActiveThread(null)}
+            />
+          ) : null
+        }
       />
 
-      {/* Active thread comparison */}
-      {activeThread && (
+      {/* Active thread comparison — desktop docks a side-by-side panel; mobile
+          renders inline in the feed (see MessageList bottomSlot above). */}
+      {!isMobile && activeThread && (
         <AIComparison
           threadId={activeThread}
           chatId={chatId}
