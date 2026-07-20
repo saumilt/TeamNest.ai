@@ -22,7 +22,7 @@ import {
         Bot,
         ShieldCheck,
         PanelLeftClose,
-        PanelLeft,
+        Pin,
 } from "lucide-react";
 
 const PRIMARY = [
@@ -35,7 +35,7 @@ const PRIMARY = [
         { to: "/you",      label: "You",   icon: UserIcon,      testid: "nav-you" },
 ];
 
-const STORAGE_KEY = "sidebar-collapsed";
+const PINNED_KEY = "sidebar-pinned";
 const WIDTH_KEY = "sidebar-width";
 const COLLAPSED_WIDTH = 64;
 const DEFAULT_EXPANDED_WIDTH = 240;
@@ -45,30 +45,32 @@ const MAX_EXPANDED_WIDTH = 360;
 /** Desktop-only slim sidebar. Hidden below md breakpoint (mobile uses the
  *  bottom tab bar in `MobileTabBar.jsx`).
  *
- *  Collapses to a 64px icons-only rail when the user clicks the chevron at
- *  the top, persisting the choice via safeStorage so it sticks across
- *  reloads. Tooltips (native title attributes) keep labels discoverable
- *  while collapsed.
+ *  Collapsed (64px icon rail) BY DEFAULT. Hovering the rail expands it as an
+ *  overlay (content underneath doesn't reflow); moving the mouse away collapses
+ *  it again. A pin toggle keeps it expanded in-flow, persisted across reloads.
  */
 export default function Sidebar() {
   const { user, workspaces, logout, switchWorkspace } = useAuth();
   const nav = useNavigate();
   const [wsOpen, setWsOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [collapsed, setCollapsed] = useState(
-    () => safeStorage.get(STORAGE_KEY) === "1",
-  );
+  const [pinned, setPinned] = useState(() => safeStorage.get(PINNED_KEY) === "1");
+  const [hovered, setHovered] = useState(false);
   const [expandedWidth, setExpandedWidth] = useState(() => {
     const stored = safeStorage.getNumber(WIDTH_KEY, DEFAULT_EXPANDED_WIDTH);
     return Math.min(MAX_EXPANDED_WIDTH, Math.max(MIN_EXPANDED_WIDTH, stored));
   });
 
+  const expanded = pinned || hovered;
+  const collapsed = !expanded;
+  const overlay = hovered && !pinned; // expanded on hover only → float over content
+
   const activeWs = (workspaces || []).find((w) => w.workspace_id === user?.workspace_id);
   const multi = (workspaces || []).length > 1; // referenced inside switcher tooltip
 
   useEffect(() => {
-    safeStorage.set(STORAGE_KEY, collapsed ? "1" : "0");
-  }, [collapsed]);
+    safeStorage.set(PINNED_KEY, pinned ? "1" : "0");
+  }, [pinned]);
   useEffect(() => {
     safeStorage.set(WIDTH_KEY, String(Math.round(expandedWidth)));
   }, [expandedWidth]);
@@ -105,16 +107,26 @@ export default function Sidebar() {
     nav("/");
   };
 
-  const currentWidth = collapsed ? COLLAPSED_WIDTH : expandedWidth;
-
   return (
     <aside
       data-testid="main-sidebar"
       data-collapsed={collapsed ? "1" : "0"}
-      style={{ width: `${currentWidth}px` }}
-      className="hidden md:flex sticky top-0 h-[100dvh] shrink-0 bg-[#0a0a0a] border-r border-white/5 flex-col z-10 relative"
+      data-pinned={pinned ? "1" : "0"}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        if (!pinned) setWsOpen(false);
+      }}
+      style={{ width: `${pinned ? expandedWidth : COLLAPSED_WIDTH}px` }}
+      className="hidden md:block sticky top-0 h-[100dvh] shrink-0 z-20 relative"
     >
-      {/* Brand + collapse toggle */}
+      <div
+        style={{ width: `${expanded ? expandedWidth : COLLAPSED_WIDTH}px` }}
+        className={`h-full flex flex-col bg-[#0a0a0a] border-r border-white/5 transition-[width] duration-150 ${
+          overlay ? "absolute inset-y-0 left-0 z-50 shadow-2xl shadow-black/60" : ""
+        }`}
+      >
+      {/* Brand + pin toggle */}
       <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} pt-6 pb-5 ${collapsed ? "px-2" : "px-5"}`}>
         <NavLink to="/chats" end className="flex items-center gap-3 hover:opacity-90 min-w-0" title="teamnest.ai">
           <div className="w-10 h-10 rounded-2xl bg-yellow-400 text-black flex items-center justify-center font-bold tracking-tight shrink-0">
@@ -129,39 +141,19 @@ export default function Sidebar() {
         {!collapsed && (
           <button
             type="button"
-            data-testid="sidebar-collapse-btn"
-            onClick={() => setCollapsed(true)}
-            className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
+            data-testid="sidebar-pin-btn"
+            onClick={() => setPinned((p) => !p)}
+            className={`p-1.5 rounded-md hover:bg-white/5 ${pinned ? "text-yellow-400" : "text-zinc-500 hover:text-white"}`}
+            title={pinned ? "Unpin — collapse to an icon rail" : "Pin sidebar open"}
+            aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
+            aria-pressed={pinned}
           >
-            <PanelLeftClose className="w-4 h-4" />
+            {pinned ? <PanelLeftClose className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
           </button>
         )}
       </div>
 
-      {/* Expand button (shown only when collapsed) */}
-      {collapsed && (
-        <button
-          type="button"
-          data-testid="sidebar-expand-btn"
-          onClick={() => setCollapsed(false)}
-          className="mx-auto mb-3 p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
-        >
-          <PanelLeft className="w-4 h-4" />
-        </button>
-      )}
-
-      {/* Workspace switcher — only visible when expanded.
-       *
-       * Clicking the button always opens the popover. When the user only has
-       * one workspace we still show a useful menu (current workspace name,
-       * role, and an "Invite teammates" shortcut). Previously the button was
-       * inert in single-workspace mode, which was the bug users described as
-       * "I click the workspace and nothing happens."
-       */}
+      {/* Workspace switcher — only visible when expanded. */}
       {activeWs && !collapsed && (
         <div data-ws-switcher data-testid="workspace-switcher" className="relative px-3 mb-3">
           <button
@@ -208,8 +200,6 @@ export default function Sidebar() {
                   </button>
                 );
               })}
-              {/* Always-visible shortcuts so the menu is useful even with
-                  just one workspace. */}
               <div className="border-t border-white/5 mt-1 pt-1">
                 <button
                   type="button"
@@ -236,7 +226,7 @@ export default function Sidebar() {
       )}
 
       {/* Primary nav */}
-      <nav className={`flex-1 ${collapsed ? "px-2" : "px-3"} space-y-0.5`}>
+      <nav className={`flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-3"} space-y-0.5`}>
         {PRIMARY.map((n) => (
           <NavLink
             key={n.to}
@@ -382,8 +372,8 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Drag-to-resize handle on the right edge (only when expanded) */}
-      {!collapsed && (
+      {/* Drag-to-resize handle — only when pinned open. */}
+      {pinned && (
         <ResizableEdge
           testid="sidebar-resize-handle"
           minWidth={MIN_EXPANDED_WIDTH}
@@ -391,6 +381,7 @@ export default function Sidebar() {
           onResize={setExpandedWidth}
         />
       )}
+      </div>
     </aside>
   );
 }

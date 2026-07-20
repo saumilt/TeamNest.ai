@@ -3223,3 +3223,11 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   open chats + /billing + paid/unlimited, auto-hides after 10s.
 - Testing agent iteration 107: 13/13 frontend checks pass (desktop panel + mobile inline parity,
   header declutter, banner gating). No retest needed.
+
+## 2026-07-20 — Desktop sidebar: collapsed-by-default + hover-to-expand + pin (web)
+- Sidebar.jsx reworked: collapsed 64px icon rail BY DEFAULT (new key `sidebar-pinned`, default false).
+  Hovering the rail expands it as a FLOATING OVERLAY (absolute, shadow, z-50) so main content never
+  reflows; moving the mouse away auto-collapses. A pin toggle (data-testid `sidebar-pin-btn`) keeps it
+  expanded IN-FLOW (persisted), and unpinning returns to the rail. Resize handle only shows when pinned.
+- Verified via DOM + screenshots at 1440px: default width 64 (collapsed=1); hover → collapsed=0 overlay;
+  pin → width 240 stays after mouse-away (pinned=1, in-flow); unpin → back to 64.
