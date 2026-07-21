@@ -5,6 +5,7 @@ import { ArrowRight, ChevronLeft, Loader2, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import SeoHelmet from "@/components/web/SeoHelmet";
+import { PasswordInput } from "@/components/ui-v2/PasswordInput";
 import { LogoMark, Wordmark, PrimaryButton } from "@/components/web/atoms";
 
 function formatDetail(detail, fallback) {
