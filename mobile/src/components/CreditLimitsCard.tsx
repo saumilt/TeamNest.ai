@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { apiGet } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const SCOPE_LABEL: Record<string, string> = {
@@ -23,9 +24,11 @@ type Cap = {
 /** Read-only view of a workspace's AI credit limits (owner/admin only).
  *  Editing lives on the web Billing page. Self-hides for members / no caps. */
 export function CreditLimitsCard() {
+  const { token } = useAuth();
   const [caps, setCaps] = useState<Cap[] | null>(null);
 
   useEffect(() => {
+    if (!token) return; // wait for AuthProvider to restore the session
     (async () => {
       try {
         const d = await apiGet("/api/credit-governance/caps");
@@ -34,7 +37,7 @@ export function CreditLimitsCard() {
         setCaps([]); // 403 for members → hidden
       }
     })();
-  }, []);
+  }, [token]);
 
   if (!caps || caps.length === 0) return null;
 
