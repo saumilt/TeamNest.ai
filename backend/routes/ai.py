@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from ai_service import (
     MODEL_CONFIG,
@@ -27,6 +27,7 @@ from models import (
     AIResearchCreate,
     AISuggestTasksRequest,
     AIVote,
+    RunModelsRequest,
 )
 from services.ai_runtime import (
     _finalize_research,
@@ -274,6 +275,94 @@ async def get_research(thread_id: str, current=Depends(require_user)):
         {"research_thread_id": thread_id}, {"_id": 0}
     ).to_list(20)
     return {"thread": thread, "responses": responses}
+
+
+async def _run_extra_models(thread_id, question, models, workspace_id, user_id, chat):
+    """Background: run additional models on a thread, persist responses, bill.
+
+    Does NOT re-synthesize or post a new chat message — the comparison is shown
+    inline; synthesis happens only when the user explicitly requests it.
+    """
+    from services.billing import credit_cost_for_model as _cc
+
+    try:
+        responses = await ask_models_parallel(question, models, thread_id)
+        for r in responses:
+            r["id"] = new_id()
+            r["research_thread_id"] = thread_id
+            r["votes"] = {"best": [], "most_accurate": [], "best_citations": [], "most_useful": []}
+            r["selected_as_best"] = False
+            r["created_at"] = now_iso()
+            await db.ai_responses.insert_one(r.copy())
+
+        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_research")
+        for r in responses:
+            if not r.get("real"):
+                continue
+            await record_ai_usage(
+                chat_id=chat["id"],
+                user_id=user_id,
+                credits=_cc(r.get("model_key") or ""),
+                model=r.get("model_key"),
+                workflow="research",
+                project_folder_id=chat.get("project_folder_id"),
+            )
+    except Exception as e:
+        logger.exception("run_extra_models failed for thread %s: %s", thread_id, e)
+    finally:
+        await db.ai_threads.update_one({"id": thread_id}, {"$set": {"status": "complete"}})
+
+
+@router.post("/ai/research/{thread_id}/run-models")
+async def run_models(
+    thread_id: str,
+    payload: RunModelsRequest,
+    background: BackgroundTasks,
+    current=Depends(require_user),
+):
+    """Add & run more models on an existing thread. Idempotent: models that
+    already have a response are skipped. Runs in the background; the client
+    polls GET /ai/research/{id} to see them appear (skeletons → answers)."""
+    thread = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    chat = await db.chats.find_one({"id": thread["chat_id"], "member_ids": current["id"]})
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+
+    existing_docs = await db.ai_responses.find(
+        {"research_thread_id": thread_id}, {"model_key": 1, "_id": 0}
+    ).to_list(50)
+    existing = {d.get("model_key") for d in existing_docs}
+    requested = [m for m in (payload.selected_models or []) if m in MODEL_CONFIG and m not in existing]
+    if not requested:
+        return await get_research(thread_id, current)
+
+    gate = await check_ai_allowed(chat, current, estimated_credits=20)
+    if not gate["allowed"]:
+        raise HTTPException(403, gate["reason"])
+    if not gate["settings"].get("premium_models_enabled", True):
+        requested = [m for m in requested if m not in PREMIUM_MODEL_KEYS]
+    if not requested:
+        return await get_research(thread_id, current)
+
+    allowed_models, blocked = await filter_models_by_credits(current["workspace_id"], requested)
+    if not allowed_models:
+        raise HTTPException(402, "AI credits exhausted. Upgrade your plan from the Billing page.")
+
+    new_selected = list(dict.fromkeys(list(thread.get("selected_models") or []) + allowed_models))
+    await db.ai_threads.update_one(
+        {"id": thread_id}, {"$set": {"selected_models": new_selected, "status": "running"}}
+    )
+    background.add_task(
+        _run_extra_models,
+        thread_id, thread["question"], allowed_models,
+        current["workspace_id"], current["id"], chat,
+    )
+
+    out = await get_research(thread_id, current)
+    out["blocked_models"] = blocked
+    return out
 
 
 @router.get("/ai/threads")

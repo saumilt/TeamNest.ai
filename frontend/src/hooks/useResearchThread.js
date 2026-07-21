@@ -69,5 +69,18 @@ export function useResearchThread(threadId, { onAfterSelectBest } = {}) {
     }
   }, [threadId, load]);
 
-  return { data, synthesizing, load, vote, selectBest, synthesize, share };
+  const runModels = useCallback(
+    async (keys) => {
+      if (!keys || keys.length === 0) return;
+      try {
+        await api.post(`/ai/research/${threadId}/run-models`, { selected_models: keys });
+        load();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Couldn't run those models");
+      }
+    },
+    [threadId, load],
+  );
+
+  return { data, synthesizing, load, vote, selectBest, synthesize, share, runModels };
 }

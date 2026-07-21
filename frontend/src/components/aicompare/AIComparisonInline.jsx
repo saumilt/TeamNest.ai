@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Layers, Trophy, CheckCheck, BookOpen, ThumbsUp, Sparkles, Save, Copy, Share2, Wand2, X,
+  Layers, Trophy, CheckCheck, BookOpen, ThumbsUp, Sparkles, Save, Copy, Share2, Wand2, X, Maximize2, Plus,
 } from "lucide-react";
 import NewTaskDialog from "@/components/NewTaskDialog";
 import SaveToFolderDialog from "@/components/aicompare/SaveToFolderDialog";
+import { api } from "@/lib/api";
 import { useResearchThread } from "@/hooks/useResearchThread";
 
 const VOTE_BTNS = [
@@ -20,13 +21,20 @@ const VOTE_BTNS = [
  * instead of a floating panel. Keeps full parity with the desktop panel:
  * vote, mark-best & re-synth, create task, save, copy and share.
  */
-export default function AIComparisonInline({ threadId, chatId, onClose }) {
-  const { data, synthesizing, vote, selectBest, synthesize, share } = useResearchThread(threadId, {
-    onAfterSelectBest: onClose,
-  });
+export default function AIComparisonInline({ threadId, chatId, onClose, onExpand }) {
+  const { data, synthesizing, vote, selectBest, synthesize, share, runModels } = useResearchThread(
+    threadId,
+    { onAfterSelectBest: onClose },
+  );
   const [showSave, setShowSave] = useState(null);
   const [showTask, setShowTask] = useState(null);
+  const [allModels, setAllModels] = useState([]);
+  const [expanding, setExpanding] = useState(false);
   const rootRef = useRef(null);
+
+  useEffect(() => {
+    api.get("/ai/models").then(({ data }) => setAllModels(data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Bring the freshly-opened comparison into view within the chat scroll.
@@ -51,6 +59,14 @@ export default function AIComparisonInline({ threadId, chatId, onClose }) {
     }
   };
 
+  const leftover = allModels.filter((m) => !thread.selected_models.includes(m.key));
+  const compareMore = async () => {
+    if (leftover.length === 0) return;
+    setExpanding(true);
+    await runModels(leftover.map((m) => m.key));
+    setExpanding(false);
+  };
+
   return (
     <div ref={rootRef} data-testid="ai-comparison-inline" className="space-y-2.5 py-2">
       {/* divider */}
@@ -59,6 +75,18 @@ export default function AIComparisonInline({ threadId, chatId, onClose }) {
         <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-yellow-400">
           <Layers className="w-3 h-3" /> AI compared {thread.selected_models.length} models · {readyCount} ready
         </div>
+        {onExpand && (
+          <button
+            type="button"
+            onClick={onExpand}
+            data-testid="open-fullscreen-comparison"
+            aria-label="Open full-screen comparison"
+            title="Open full-screen comparison"
+            className="text-zinc-500 hover:text-white p-0.5"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -70,13 +98,14 @@ export default function AIComparisonInline({ threadId, chatId, onClose }) {
         </button>
       </div>
 
-      {/* one bubble per model */}
+      {/* one bubble per model — stacked on mobile, side-by-side on desktop */}
+      <div className="flex flex-col md:flex-row md:flex-wrap gap-2.5">
       {thread.selected_models.map((mk) => {
         const r = responses.find((x) => x.model_key === mk);
         return (
-          <div key={mk} className="flex justify-start">
+          <div key={mk} className="w-full md:w-[calc(50%-6px)] xl:w-[calc(33.333%-7px)]">
             <div
-              className={`max-w-[92%] w-full bg-[#0e0e0e] border rounded-2xl rounded-bl-sm overflow-hidden ${
+              className={`h-full w-full bg-[#0e0e0e] border rounded-2xl rounded-bl-sm overflow-hidden ${
                 r?.selected_as_best ? "border-yellow-400" : "border-white/10"
               }`}
             >
@@ -154,6 +183,24 @@ export default function AIComparisonInline({ threadId, chatId, onClose }) {
           </div>
         );
       })}
+      </div>
+
+      {/* Compare the remaining (leftover) models — any not yet run */}
+      {leftover.length > 0 && (
+        <div className="flex justify-start">
+          <button
+            data-testid="compare-more-models"
+            onClick={compareMore}
+            disabled={expanding}
+            className="border border-white/15 hover:border-yellow-500/50 hover:bg-yellow-500/5 disabled:opacity-60 text-zinc-200 text-[11px] font-mono uppercase tracking-widest py-2 px-3.5 rounded-full inline-flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {expanding
+              ? "Running…"
+              : `Compare ${leftover.length} more model${leftover.length > 1 ? "s" : ""}`}
+          </button>
+        </div>
+      )}
 
       {/* synthesize CTA when ready but not yet synthesized */}
       {!thread.final_answer && readyCount >= 2 && (

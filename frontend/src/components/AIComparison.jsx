@@ -16,7 +16,7 @@ import { useResearchThread } from "@/hooks/useResearchThread";
  * resizable). On mobile the inline-messages view (AIComparisonInline) is used
  * instead — see Chats.jsx.
  */
-export default function AIComparison({ threadId, chatId, onClose }) {
+export default function AIComparison({ threadId, chatId, onClose, fullScreen = false }) {
   const { data, synthesizing, vote, selectBest, synthesize, share } = useResearchThread(threadId, {
     onAfterSelectBest: onClose,
   });
@@ -39,9 +39,9 @@ export default function AIComparison({ threadId, chatId, onClose }) {
     try { localStorage.setItem("aicompare:heightVh", String(heightVh)); } catch (err) { console.warn("[aicompare] persist height failed", err); }
   }, [heightVh]);
 
-  // Auto-collapse on outside click when not pinned.
+  // Auto-collapse on outside click when not pinned (disabled in full-screen).
   useEffect(() => {
-    if (pinned || minimized) return undefined;
+    if (pinned || minimized || fullScreen) return undefined;
     const onDocClick = (e) => {
       const panel = document.querySelector("[data-testid='ai-comparison']");
       if (panel && !panel.contains(e.target)) setMinimized(true);
@@ -96,10 +96,12 @@ export default function AIComparison({ threadId, chatId, onClose }) {
   return (
     <div
       data-testid="ai-comparison"
-      className="border-t border-yellow-500/20 bg-black overflow-hidden flex flex-col relative"
-      style={{ height: `${heightVh}vh`, maxHeight: "90vh" }}
+      className={`bg-black overflow-hidden flex flex-col relative ${
+        fullScreen ? "flex-1 h-full pt-[env(safe-area-inset-top)]" : "border-t border-yellow-500/20"
+      }`}
+      style={fullScreen ? undefined : { height: `${heightVh}vh`, maxHeight: "90vh" }}
     >
-      <ComparisonResizeHandle onMouseDown={onResizeStart} />
+      {!fullScreen && <ComparisonResizeHandle onMouseDown={onResizeStart} />}
 
       <ComparisonHeader
         thread={thread}

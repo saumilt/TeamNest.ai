@@ -3,6 +3,9 @@ import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import { api } from "@/lib/api";
 import { createReconnectingWS } from "@/lib/ws";
 import { useAuth } from "@/context/AuthContext";
+
+// Default "compare" set run when a user taps "Show all comparisons".
+const DEFAULT_COMPARE_MODELS = ["chatgpt", "claude", "gemini"];
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
@@ -647,17 +650,6 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
-  // Comparison renders inline in the feed on mobile/tablet (<768px, matching the
-  // header pill breakpoint), as a docked side-by-side panel on desktop.
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const onChange = (e) => setIsMobile(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -724,6 +716,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [devOsBusy, setDevOsBusy] = useState(false);
   const [activeThread, setActiveThread] = useState(initialThread || null);
+  const [fullScreenThread, setFullScreenThread] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
   const typingTimersRef = useRef({});
   const wsRef = useRef(null);
@@ -968,7 +961,13 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         memberMap={memberMap}
         userId={user.id}
         typingUsers={typingUsers}
-        onOpenThread={(tid) => setActiveThread(tid)}
+        onOpenThread={(tid) => {
+          setActiveThread(tid);
+          // Requirement: "Show all comparisons" runs the full default compare set.
+          api
+            .post(`/ai/research/${tid}/run-models`, { selected_models: DEFAULT_COMPARE_MODELS })
+            .catch(() => {});
+        }}
         onCreateTask={(msg) => setShowTask(msg)}
         onPickIdea={(text) => setDraft((d) => (d ? `${d} ${text}` : text))}
         topSlot={
@@ -980,24 +979,30 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
           </>
         }
         bottomSlot={
-          isMobile && activeThread ? (
+          activeThread ? (
             <AIComparisonInline
               threadId={activeThread}
               chatId={chatId}
               onClose={() => setActiveThread(null)}
+              onExpand={() => setFullScreenThread(activeThread)}
             />
           ) : null
         }
       />
 
-      {/* Active thread comparison — desktop docks a side-by-side panel; mobile
-          renders inline in the feed (see MessageList bottomSlot above). */}
-      {!isMobile && activeThread && (
-        <AIComparison
-          threadId={activeThread}
-          chatId={chatId}
-          onClose={() => setActiveThread(null)}
-        />
+      {/* Full-page comparison popup (opened from the inline "Open full screen" link). */}
+      {fullScreenThread && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex flex-col"
+          data-testid="fullscreen-comparison"
+        >
+          <AIComparison
+            threadId={fullScreenThread}
+            chatId={chatId}
+            fullScreen
+            onClose={() => setFullScreenThread(null)}
+          />
+        </div>
       )}
 
       <NextIdeasPanel

@@ -178,6 +178,12 @@ class AIVote(BaseModel):
     vote_category: Literal["best", "most_accurate", "best_citations", "most_useful"]
 
 
+class RunModelsRequest(BaseModel):
+    """Run additional models on an existing research thread (dedupes)."""
+    selected_models: List[str] = []
+
+
+
 class AIImproveRequest(BaseModel):
     text: str
     action: Literal[

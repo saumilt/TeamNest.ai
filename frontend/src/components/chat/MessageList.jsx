@@ -29,12 +29,15 @@ const MessageList = forwardRef(function MessageList(
         { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot },
         scrollRef,
 ) {
+        // The "AI question" bubble echoes the user's own message verbatim (redundant —
+        // the AI answer bubble already links to "Show all comparisons"), so hide it.
+        const visible = messages.filter((m) => m.message_type !== "ai_question");
         const out = [];
         let lastDayKey = null;
         let prevSender = null;
 
-        for (let i = 0; i < messages.length; i++) {
-                const m = messages[i];
+        for (let i = 0; i < visible.length; i++) {
+                const m = visible[i];
                 const d = new Date(m.created_at);
                 const dayKey = d.toDateString();
 
@@ -44,7 +47,7 @@ const MessageList = forwardRef(function MessageList(
                         prevSender = null;
                 }
 
-                const nextMsg = messages[i + 1];
+                const nextMsg = visible[i + 1];
                 const sameNextDay =
                         nextMsg && new Date(nextMsg.created_at).toDateString() === dayKey;
                 const sameNextSender =
