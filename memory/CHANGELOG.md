@@ -2,6 +2,20 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 110–111 (Jul 2026) — AI Conversation Mode Phase 2 (both batches) + temp-password expiry
+### Batch 1 — Settings + Save-to-Role + Temp-password expiry (web + mobile)
+- New `services/workspace_settings.py`: per-user `ai_conversation_preferences` + `workspace_admin_settings` (ai_conversation + security namespaces) + `get_effective_ai_settings` (user overrides workspace; enabled/allow_in_group are master switches) + `temp_password_expired`.
+- Routing engine now reads effective settings: timeout (0 = until exit), threshold, enabled/allow-in-group master switches, ask_when_ambiguous (off = auto-route ambiguous band). Personal-AI chats always auto-route regardless.
+- Routes: `GET/PUT /api/ai-conversation/preferences`, `GET/PUT /api/ai-conversation/workspace-settings` (PUT admin-only), `GET /api/ai-conversation/roles`, `POST /api/chats/{id}/save-to-role` (owner saves / members suggest → enterprise review queue). Admin: `GET/PUT /api/admin/security-settings`, `GET /api/admin/provisioned-accounts`, `POST /api/admin/provisioned-accounts/{uid}/rotate`.
+- Temp-password expiry: login blocks provisioned accounts (must_change_password) past `temp_password_expiry_days` (default 7, owner-configurable); `temp_password_issued_at` set on provisioning; owner can list + re-issue.
+- Web: `AIConversationSettings.jsx` mounted in `/ai-memory` (user prefs + admin defaults + security + provisioned accounts + rotate); `SaveToRoleDialog.jsx` from the chat header menu. Mobile: `app/settings/ai-conversation.tsx` (linked from You tab) + save-to-role modal in chat header.
+### Batch 2 — Rolling summary, threaded-AI actions, multi-assistant banner (web + mobile)
+- Rolling summary: every 4 AI turns, `_refresh_conversation_summary` distills a structured summary (topic/goal/decisions/pending/format/files) into `ai_conversation_sessions.context_summary`, injected into follow-up prompts.
+- Threaded actions: `POST /api/chats/{id}/messages/{mid}/ai-action` — ask_about / summarize_thread / continue_ai / draft_response / explain_decision. Web: hover "Ask AI" menu on messages; Mobile: long-press action modal.
+- Multi-assistant banner: `note_active_assistant` posts "Active AI changed from @X to @Y" (system message) when a user switches the addressed assistant (@ai ↔ @devmanager); first invocation is a no-op.
+- Tests: `test_iteration111_ai_conv_phase2_batch2.py` (14/14). Reports iteration_110/111.json. All verified web + mobile.
+
+
 ## Iteration 109 (Jul 2026) — Paid-comparison gate, mobile login fix, AI Conversation Mode (Phase 1)
 ### Multi-model AI comparison → PAID-only gate (web + mobile)
 - `services/billing.py`: `is_comparison_allowed(workspace_id)` (True for unlimited/super-admin or plan_id in {pro,team}); `get_usage()` now returns `comparison_allowed`.
