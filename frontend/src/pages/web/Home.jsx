@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Sparkles, ArrowRight, MessageSquare, ListChecks, Phone, Folder,
   Megaphone, Briefcase, Scale, Calculator, CheckCircle2, Rocket, Bot, Terminal,
-  Brain, ShieldCheck, Plug, Mail,
+  Brain, ShieldCheck, Plug, Mail, GraduationCap, Users, GitCompare,
 } from "lucide-react";
 import SeoHelmet from "@/components/web/SeoHelmet";
 import { Eyebrow, Pill, PrimaryButton, GhostButton, SectionTitle, SectionSub } from "@/components/web/atoms";
@@ -551,9 +551,53 @@ function AICompareDeepDive() {
   );
 }
 
+function StudentUseCase() {
+  const points = [
+    { icon: Users, title: "Study together", body: "Spin up group chats for your class, club, or project team. Invite classmates by email — everyone collaborates in one thread." },
+    { icon: GitCompare, title: "Compare AI models", body: "Ask a question once and see answers from multiple AI models side-by-side. Pick the best explanation for essays, code, or exam prep." },
+    { icon: GraduationCap, title: "Student price", body: "$6.99/mo with 2,500 AI credits — verify once with your .edu email. Your AI seat is yours; classmates can chat alongside you." },
+  ];
+  return (
+    <section className="py-20 md:py-[120px]" data-testid="home-student-usecase">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <div className="lg:col-span-5 lg:sticky lg:top-24">
+            <span className="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 rounded-full bg-amber-400/10 text-amber-400 text-[11px] font-bold uppercase tracking-widest">
+              <GraduationCap className="w-3.5 h-3.5" /> For students
+            </span>
+            <SectionTitle className="mb-4 max-w-[18ch]">
+              Built for how students actually work.
+            </SectionTitle>
+            <SectionSub className="mb-8">
+              Collaborate with classmates and compare AI models side-by-side — on a plan made for a student budget.
+            </SectionSub>
+            <PrimaryButton as={Link} to="/pricing" data-testid="home-student-cta">
+              See student pricing <ArrowRight className="w-4 h-4" />
+            </PrimaryButton>
+          </div>
+          <div className="lg:col-span-7 space-y-4">
+            {points.map((p) => (
+              <div key={p.title} className="rounded-[16px] border border-[var(--w-hairline)] bg-[var(--w-surface)] p-6 flex gap-4">
+                <span className="inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full bg-amber-400/10 text-amber-400">
+                  <p.icon className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-[18px] font-bold tracking-[-0.01em] text-[var(--w-text)] mb-1">{p.title}</h3>
+                  <p className="text-[14px] leading-6 text-[var(--w-text-dim)]">{p.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PricingTeaser() {
   const plans = [
     { name: "Free", price: "$0", line: "Best for trying it out.", credits: "300 credits / month" },
+    { name: "Student", price: "$6.99", unit: "/ mo", line: "For students. Collaborate + compare AI models, solo. .edu verification required.", credits: "2,500 credits / month" },
     { name: "Pro", price: "$9.99", unit: "/ seat / mo", line: "Pay per seat. Audio + video calls with transcription.", credits: "3,000 credits / seat" },
     { name: "Team", price: "$19.99", unit: "/ seat / mo", line: "Live transcription FREE + unlimited recordings.", credits: "9,000 credits / seat", highlighted: true },
     { name: "Enterprise", price: "$29.99", unit: "/ seat / mo", line: "SSO, bring your own keys. Custom pricing available.", credits: "Unlimited credits" },
@@ -565,7 +609,7 @@ function PricingTeaser() {
           <Eyebrow className="mb-3">Pricing</Eyebrow>
           <SectionTitle>Built for AI usage.</SectionTitle>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-[1100px] mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 max-w-[1200px] mx-auto">
           {plans.map((p) => (
             <div
               key={p.name}
@@ -717,6 +761,7 @@ export default function WebHome() {
       <BuildAndEarnSection />
       <HowItWorks />
       <AICompareDeepDive />
+      <StudentUseCase />
       <PricingTeaser />
       <FinalCTA />
     </>
