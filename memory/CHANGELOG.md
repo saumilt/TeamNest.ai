@@ -21,6 +21,14 @@
 - Web axios interceptor (`lib/api.js`) intercepts these 402s → shows a single dedicated `sonner` toast ("AI credit limit reached" + reason) with a **"Manage limits" → /billing** action, and sets `err.isCreditLimit` so Dev OS handlers skip a generic/`[object Object]` toast. Guarded call sites: BuildConsole start-build, TalkToBuildBar, DevStudio talk (kept the separate `hire_required` 402 message), ProjectDetail scan, NewProject + SimpleAppBuilder create. Verified via curl: create-project on a capped workspace returns the structured 402.
 - Mobile has no Dev OS build surface, so the CTA is web-only; mobile chat-AI cap/solo-seat blocks continue to surface as ai-system chat messages.
 
+### Iteration 116–117 (Jul 2026) — Super-admin user management, self-serve workspaces, password UX, Help Center
+- **Super-admin user management** (`routes/superadmin.py`): `GET /superadmin/users/{uid}` (full detail incl. plan, workspace, edu status); expanded `PATCH /superadmin/users/{uid}` to edit name/email(login ID)/role/status (+ existing suspend/super-admin); `POST /superadmin/users/{uid}/reset-password` now auto-generates a strong temp password (or accepts one), sets `must_change_password`, **emails the new password** to the user (Mailgun) and returns it; `POST /superadmin/users/reset-link` mints a single-use 1-hour reset link and returns it. UI: `pages/superadmin/UsersTab.jsx` — clickable rows open a detail/edit modal with password reset + reset-link + copy.
+- **Self-serve workspaces** (`routes/workspace.py`): `POST /workspace/create` — any user creates their own workspace for FREE (becomes owner, capped at 10 owned); picks a plan (Free = instant, paid = `needs_checkout` → /billing). Rename (`PATCH /workspace`) now restricted to the **creator/owner** only (invited admins get 403). UI: workspace selector added to the Chats list header (between search and filter chips) with switch + "New workspace" (`CreateWorkspaceDialog`); `WorkspaceMetricsRow` hides rename for non-owners.
+- **Password UX**: reusable `components/ui-v2/PasswordInput.jsx` with an eye show/hide toggle, wired into web login, signup, reset-password, and super-admin forms. (Bug fixed: ResetPassword.jsx missing PasswordInput import → red-screen; now imported + verified E2E in iteration_117.)
+- **Help Center**: searchable in-app `/help` (`pages/HelpCenter.jsx` + `data/helpArticles.js`, 24 articles across 12 categories) with search + category filters + expandable articles; sidebar `nav-help` link.
+- **Security**: `.edu` verification code now uses `secrets` instead of `random`.
+- Tested: pytest `test_iteration116_superadmin_workspace_help.py` 9/9 + `test_iteration113` 4/4; testing_agent web+backend (iteration_116) and reset-password E2E re-verify (iteration_117). All green.
+
 
 ## Iteration 110–111 (Jul 2026) — AI Conversation Mode Phase 2 (both batches) + temp-password expiry
 ### Batch 1 — Settings + Save-to-Role + Temp-password expiry (web + mobile)
