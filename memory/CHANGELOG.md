@@ -2,6 +2,23 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 109 (Jul 2026) — Paid-comparison gate, mobile login fix, AI Conversation Mode (Phase 1)
+### Multi-model AI comparison → PAID-only gate (web + mobile)
+- `services/billing.py`: `is_comparison_allowed(workspace_id)` (True for unlimited/super-admin or plan_id in {pro,team}); `get_usage()` now returns `comparison_allowed`.
+- `routes/ai.py`: `/api/ai/research` caps to a single model for free users (single answer still works for everyone); `/api/ai/research/{tid}/run-models` returns 402 `{code:comparison_paid_only}` for free workspaces.
+- Web: composer `ModelComparePicker` shows an "Upgrade to compare" banner (locked) for free plans; "Show all comparisons" becomes "Upgrade to compare" → /billing; `AIComparisonInline` hides "compare more models". Mobile `research.tsx`: upgrade banner + single-select lock. Verified iter 108.
+### Mobile login fix
+- `mobile/app/(auth)/login.tsx`: hardened email/password inputs (`autoCapitalize=none`, `autoCorrect=false`, `autoComplete`, `textContentType`) + show-password toggle. Fixed Expo-web-preview autofill/autocorrect mangling the password → false 401s.
+### AI Conversation Mode — "Mention AI once, then continue naturally" (Phase 1, web + mobile)
+- New `services/ai_conversation.py`: per-user AI sessions (`ai_conversation_sessions`), routing logs (`ai_routing_decisions`), hybrid follow-up scoring (fast heuristic + LLM tie-breaker only in the 0.45–0.75 band via gpt-4o-mini), 30-min inactivity timeout, exit commands `/exit-ai` `/team`, human-mention/reply-to-human exit, reply-to-AI = follow-up.
+- New `routes/ai_conversation.py`: `GET/POST /api/chats/{id}/ai-session`, `/ai-session/exit`, `/ai-session/start`, `/ai-session/route` (ambiguous "Continue with AI?/Send to chat").
+- `routes/chats.py send_message`: exit-command short-circuit + `route_untagged_message` (personal_ai chats auto-route every message; group chats auto-continue for the active user). Dev chats excluded (@devmanager already auto-continues).
+- `ai_runtime.handle_ai_command`: refreshes the session after each answer; `_finalize_research` attaches `follow_up_suggestions` chips.
+- Web: composer "Continuing with @ai" pill + Exit AI + "Ask a follow-up…" placeholder (`ChatComposer.jsx`); follow-up chips + inline route-choice under bubbles (`MessageBubble.jsx`). Mobile: identical in `app/chat/[id].tsx`.
+- Deferred to Phase 2: user/admin settings screens, LLM semantic scoring on every message, rolling conversation summary, threaded-AI-from-any-message, multi-assistant switch UI, save-to-Role-Intelligence.
+- Tests: `backend/tests/test_iteration109_ai_conversation_mode.py` (9/9 pass). Report `test_reports/iteration_109.json`.
+
+
 ## Iteration 108 (Jul 2026) — ChatGPT-style learned memory + M365 Teams + role knowledge freshness
 ### Learned memory (personal + workspace) — backend + web + mobile
 - New `services/learned_memory.py`: durable **personal** (per-user) and **workspace** (shared) facts/preferences. `extract_and_store` (LLM, gpt-4o-mini) auto-pulls durable items from every `@ai` exchange; `remember` (manual, deduped by normalized text, soft-capped 60/scope); `build_memory_profile_block` injects the profile into prompts (`workspace_only` for shared chats); list/update/forget for the settings screen.

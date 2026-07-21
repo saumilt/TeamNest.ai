@@ -194,7 +194,7 @@ def mentions_human(body: str, member_names: List[str]) -> bool:
         if not name:
             continue
         first = name.strip().split(" ")[0].lower()
-        if len(first) >= 3 and f" {first} " in lower or f" @{first} " in lower:
+        if len(first) >= 3 and (f" {first} " in lower or f" @{first} " in lower):
             return True
     return False
 
