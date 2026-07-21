@@ -141,12 +141,20 @@ async def caps_status(workspace_id: str) -> List[Dict[str, Any]]:
 
 async def enforce_caps(workspace_id: str, user_id: Optional[str], chat_id: Optional[str],
                        cost: int) -> None:
-    """Raise HTTPException(402) when any applicable cap would be exceeded.
-    Use at the entry of non-chat AI spend paths (Dev OS builds, calls)."""
+    """Raise HTTPException(402) with a structured payload when any applicable
+    cap would be exceeded. Use at the entry of non-chat AI spend paths (Dev OS
+    builds, calls). The frontend detects `detail.code == 'credit_limit_reached'`
+    to show a dedicated limit toast/CTA."""
     from fastapi import HTTPException
     res = await check_caps(workspace_id, user_id, chat_id, cost)
     if not res["allowed"]:
-        raise HTTPException(402, res["reason"])
+        raise HTTPException(402, {
+            "code": "credit_limit_reached",
+            "message": res["reason"],
+            "scope": res.get("scope"),
+            "limit": res.get("limit"),
+            "used": res.get("used"),
+        })
 
 
 async def check_and_alert(workspace_id: str, user_id: Optional[str], chat_id: Optional[str]) -> None:

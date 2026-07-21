@@ -176,7 +176,9 @@ export default function DevStudio() {
       setHistory((h) => [...h, { id: id + 0.1, kind: "activity", activityId: data.activity_id }]);
     } catch (e) {
       setBusy(false);
-      if (e?.response?.status === 402) {
+      if (e.isCreditLimit) {
+        // handled by the global interceptor (dedicated credit-limit toast + CTA)
+      } else if (e?.response?.status === 402) {
         toast.error("Hire @devmanager to start building — use the Hire button in the toolbar.");
       } else if (e?.response?.status === 429) {
         toast.error("Demo build limit reached — the meter resets within the hour.");

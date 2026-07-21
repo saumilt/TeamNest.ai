@@ -70,7 +70,7 @@ export default function TalkToBuildBar({ projectId, onChanged }) {
       }
     } catch (e) {
       setHistory((h) => h.filter((m) => m.kind !== "thinking"));
-      toast.error(e?.response?.data?.detail || "Request failed");
+      if (!e.isCreditLimit) toast.error(e?.response?.data?.detail || "Request failed");
     }
     setBusy(false);
     inputRef.current?.focus();

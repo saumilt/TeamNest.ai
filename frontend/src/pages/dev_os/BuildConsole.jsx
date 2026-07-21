@@ -81,7 +81,7 @@ export default function BuildConsole() {
                         setActiveBuildId(data.id);
                         await load();
                 } catch (err) {
-                        toast.error(err?.response?.data?.detail || "Could not start build");
+                        if (!err.isCreditLimit) toast.error(err?.response?.data?.detail || "Could not start build");
                 } finally { setBusy(false); }
         };
 

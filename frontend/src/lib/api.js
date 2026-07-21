@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 
 const BASE = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BASE}/api`;
@@ -61,6 +62,21 @@ api.interceptors.response.use(
       if (!isPublicPath(window.location.pathname)) {
         window.location.href = "/";
       }
+    }
+    // AI credit-limit block (Dev OS builds, calls, etc.) — show a dedicated
+    // toast + CTA and mark the error so local handlers skip a generic message.
+    const detail = err?.response?.data?.detail;
+    if (err?.response?.status === 402 && detail?.code === "credit_limit_reached") {
+      err.isCreditLimit = true;
+      toast.error("AI credit limit reached", {
+        id: "credit-limit",
+        description: detail.message || "This action would exceed an AI credit cap.",
+        action: {
+          label: "Manage limits",
+          onClick: () => { window.location.href = "/billing"; },
+        },
+        duration: 8000,
+      });
     }
     return Promise.reject(err);
   },

@@ -137,7 +137,7 @@ export default function SimpleAppBuilder() {
       toast.success("Project created — @devmanager is building your first version");
       nav(`/dev-os/projects/${pid}/studio`);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not create the project");
+      if (!e.isCreditLimit) toast.error(e?.response?.data?.detail || "Could not create the project");
       setCreating(false);
     }
   };

@@ -74,7 +74,7 @@ export default function ProjectDetail() {
                         setTab("proposals");
                         load();
                 } catch (err) {
-                        toast.error(err?.response?.data?.detail || "Scan failed");
+                        if (!err.isCreditLimit) toast.error(err?.response?.data?.detail || "Scan failed");
                 } finally {
                         setScanning(false);
                 }

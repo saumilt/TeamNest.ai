@@ -16,6 +16,11 @@
 - **80%/100% cap-usage alerts**: `consume_credits` fires `credit_governance.check_and_alert()` (fire-and-forget) → creates an in-app notification (type `credit_cap_alert`) for workspace owners/admins + a best-effort Mailgun email, deduped per (cap, threshold, billing-period) in `credit_cap_alerts`. Verified: alert + notification created at 100%, idempotent on repeat.
 - Tested: backend pytest 4/4 (added annual-checkout test) + direct alert-flow verification (notification created, dedupe holds). Enforcement reuses the already-verified `check_caps`.
 
+### Iteration 116 (Jul 2026) — Dedicated "AI credit limit" toast/CTA on 402
+- `enforce_caps` now raises a **structured 402** (`detail = {code:"credit_limit_reached", message, scope, limit, used}`) so the client can reliably detect cap blocks.
+- Web axios interceptor (`lib/api.js`) intercepts these 402s → shows a single dedicated `sonner` toast ("AI credit limit reached" + reason) with a **"Manage limits" → /billing** action, and sets `err.isCreditLimit` so Dev OS handlers skip a generic/`[object Object]` toast. Guarded call sites: BuildConsole start-build, TalkToBuildBar, DevStudio talk (kept the separate `hire_required` 402 message), ProjectDetail scan, NewProject + SimpleAppBuilder create. Verified via curl: create-project on a capped workspace returns the structured 402.
+- Mobile has no Dev OS build surface, so the CTA is web-only; mobile chat-AI cap/solo-seat blocks continue to surface as ai-system chat messages.
+
 
 ## Iteration 110–111 (Jul 2026) — AI Conversation Mode Phase 2 (both batches) + temp-password expiry
 ### Batch 1 — Settings + Save-to-Role + Temp-password expiry (web + mobile)
