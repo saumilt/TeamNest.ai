@@ -1,6 +1,6 @@
 """Stripe Checkout + AI credit usage endpoints."""
 import os
-import random
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
