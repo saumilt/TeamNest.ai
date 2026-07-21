@@ -9,6 +9,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -51,6 +52,8 @@ export default function ChatScreen() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [aiSession, setAiSession] = useState<any>({ active: false });
+  const [saveRoleOpen, setSaveRoleOpen] = useState(false);
+  const [roles, setRoles] = useState<any[]>([]);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -97,6 +100,33 @@ export default function ChatScreen() {
       } catch {}
     },
     [chatId, refreshAiSession],
+  );
+
+  const openSaveRole = useCallback(async () => {
+    try {
+      const r = await apiGet("/api/ai-conversation/roles");
+      setRoles(r.roles || []);
+      setSaveRoleOpen(true);
+    } catch {
+      Alert.alert("Error", "Failed to load roles");
+    }
+  }, []);
+
+  const saveToRole = useCallback(
+    async (roleId: string) => {
+      setSaveRoleOpen(false);
+      try {
+        const r = await apiPost(`/api/chats/${chatId}/save-to-role`, { role_id: roleId });
+        if (r.proposed > 0) {
+          Alert.alert("Sent for review", `${r.proposed} item(s) sent to Role Intelligence.`);
+        } else {
+          Alert.alert("Nothing to save", r.note || "No durable knowledge was found.");
+        }
+      } catch (e: any) {
+        Alert.alert("Error", e?.message || "Failed to save");
+      }
+    },
+    [chatId],
   );
 
   const upsertMessage = useCallback((incoming: any) => {
@@ -425,6 +455,14 @@ export default function ChatScreen() {
             <Text style={styles.devPillText}>Dev OS</Text>
           </View>
         ) : null}
+        <TouchableOpacity
+          testID="chat-save-to-role-btn"
+          onPress={openSaveRole}
+          style={styles.backBtn}
+          accessibilityLabel="Save to Role Intelligence"
+        >
+          <Ionicons name="bookmark-outline" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -568,6 +606,25 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
       )}
+
+      <Modal visible={saveRoleOpen} transparent animationType="fade" onRequestClose={() => setSaveRoleOpen(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSaveRoleOpen(false)}>
+          <View style={styles.modalCard} testID="save-to-role-modal">
+            <Text style={styles.modalTitle}>Save to Role Intelligence</Text>
+            <Text style={styles.modalSub}>Staged for owner review before it&apos;s added to the role.</Text>
+            {roles.length === 0 ? (
+              <Text style={styles.rolesEmpty}>No roles defined yet.</Text>
+            ) : (
+              roles.map((r) => (
+                <TouchableOpacity key={r.id} testID={`save-role-${r.id}`} style={styles.roleRow} onPress={() => saveToRole(r.id)}>
+                  <Ionicons name="business-outline" size={16} color={colors.accent} />
+                  <Text style={styles.roleName}>{r.role_name}</Text>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -585,6 +642,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   backBtn: { padding: 2 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: spacing.lg },
+  modalCard: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  modalTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800" },
+  modalSub: { color: colors.textMuted, fontSize: font.small, marginTop: 2, marginBottom: spacing.md },
+  rolesEmpty: { color: colors.textMuted, fontSize: font.small, paddingVertical: spacing.md },
+  roleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  roleName: { color: colors.textPrimary, fontSize: font.small, fontWeight: "600" },
   headerTitle: { color: colors.textPrimary, fontSize: font.h3, fontWeight: "700" },
   headerSub: { color: colors.textMuted, fontSize: font.tiny },
   devPill: {

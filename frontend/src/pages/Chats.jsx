@@ -46,6 +46,7 @@ import NextIdeasPanel from "@/components/chat/NextIdeasPanel";
 import SmartHireBanner from "@/components/chat/SmartHireBanner";
 import PreviewViewersChip from "@/components/chat/PreviewViewersChip";
 import { LeaveChatDialog, DeleteChatDialog } from "@/components/chat/LeaveDeleteChatDialogs";
+import SaveToRoleDialog from "@/components/chat/SaveToRoleDialog";
 import MessageList from "@/components/chat/MessageList";
 import ChatComposer from "@/components/chat/ChatComposer";
 
@@ -719,6 +720,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [fullScreenThread, setFullScreenThread] = useState(null);
   const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [aiSession, setAiSession] = useState({ active: false });
+  const [showSaveRole, setShowSaveRole] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
   const typingTimersRef = useRef({});
   const wsRef = useRef(null);
@@ -993,6 +995,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onOpenGroupInfo={() => setShowGroupInfo(true)}
         onLeaveChat={() => setLeaveOpen(true)}
         onDeleteChat={() => setDeleteOpen(true)}
+        onSaveToRole={() => setShowSaveRole(true)}
         onOpenDevOs={() => chat.linked_dev_project && nav(`/dev-os/projects/${chat.linked_dev_project.id}`)}
         onProjectSwitched={() => { loadChat(); }}
         onSpinUpDevOs={async () => {
@@ -1159,6 +1162,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         chat={chat}
         onDeleted={() => { onChatChange?.(); nav("/chats"); }}
       />
+      <SaveToRoleDialog open={showSaveRole} onOpenChange={setShowSaveRole} chatId={chatId} />
       <GroupInfo
         chatId={chatId}
         open={showGroupInfo}

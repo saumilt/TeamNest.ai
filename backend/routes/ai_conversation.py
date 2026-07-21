@@ -101,3 +101,118 @@ async def route_ambiguous_message(
         )
         return {"routed": "ai"}
     return {"routed": "chat"}
+
+
+# ── Settings: per-user preferences + workspace-admin settings ───────────────
+class PreferencesIn(BaseModel):
+    auto_continue_enabled: bool | None = None
+    session_timeout_minutes: int | None = None
+    follow_up_threshold: float | None = None
+    show_recipient_indicator: bool | None = None
+    ask_when_ambiguous: bool | None = None
+
+
+class WsSettingsIn(BaseModel):
+    enabled: bool | None = None
+    default_timeout_minutes: int | None = None
+    follow_up_threshold: float | None = None
+    allow_in_group_chats: bool | None = None
+
+
+@router.get("/ai-conversation/preferences")
+async def get_preferences(current=Depends(require_user)):
+    from services.workspace_settings import (
+        get_effective_ai_settings, get_user_prefs, get_ws_ai_conversation,
+    )
+    ws = current.get("workspace_id")
+    return {
+        "preferences": await get_user_prefs(ws, current["id"]),
+        "workspace": await get_ws_ai_conversation(ws),
+        "effective": await get_effective_ai_settings(ws, current["id"]),
+    }
+
+
+@router.put("/ai-conversation/preferences")
+async def update_preferences(payload: PreferencesIn, current=Depends(require_user)):
+    from services.workspace_settings import set_user_prefs
+    vals = {k: v for k, v in payload.model_dump().items() if v is not None}
+    prefs = await set_user_prefs(current.get("workspace_id"), current["id"], vals)
+    return {"preferences": prefs}
+
+
+@router.get("/ai-conversation/workspace-settings")
+async def get_ws_settings(current=Depends(require_user)):
+    from services.workspace_settings import get_ws_ai_conversation, get_ws_security
+    ws = current.get("workspace_id")
+    return {
+        "ai_conversation": await get_ws_ai_conversation(ws),
+        "security": await get_ws_security(ws),
+        "can_edit": current.get("role") in ("owner", "admin"),
+    }
+
+
+@router.put("/ai-conversation/workspace-settings")
+async def update_ws_settings(payload: WsSettingsIn, current=Depends(require_user)):
+    if current.get("role") not in ("owner", "admin"):
+        raise HTTPException(403, "Only workspace owners/admins can change these settings")
+    from services.workspace_settings import set_ws_ai_conversation
+    vals = {k: v for k, v in payload.model_dump().items() if v is not None}
+    return {"ai_conversation": await set_ws_ai_conversation(current["workspace_id"], vals)}
+
+
+# ── Save AI conversation to Role Intelligence (owner saves, members suggest) ──
+@router.get("/ai-conversation/roles")
+async def list_roles_for_picker(current=Depends(require_user)):
+    """Lightweight role list (id + name) for the Save-to-Role picker. Available
+    to any workspace member so they can suggest knowledge for review."""
+    ws = current.get("workspace_id")
+    rows = await db.enterprise_roles.find(
+        {"workspace_id": ws}, {"_id": 0, "id": 1, "role_name": 1}
+    ).sort("role_name", 1).to_list(200)
+    return {"roles": rows}
+
+
+class SaveToRoleIn(BaseModel):
+    role_id: str
+
+
+@router.post("/chats/{chat_id}/save-to-role")
+async def save_conversation_to_role(
+    chat_id: str, payload: SaveToRoleIn, current=Depends(require_user)
+):
+    """Capture this chat's conversation as PROPOSED role-intelligence memories.
+    Everything lands in the owner review queue (`/enterprise/memories/review`),
+    so members effectively *suggest* and owners approve."""
+    ws = current.get("workspace_id")
+    chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
+    if not chat:
+        raise HTTPException(404, "Chat not found or not accessible")
+    role = await db.enterprise_roles.find_one({"id": payload.role_id, "workspace_id": ws}, {"_id": 0})
+    if not role:
+        raise HTTPException(404, "Role not found")
+
+    from services.ai_runtime import build_chat_context
+    from services.enterprise_intelligence import propose_memories_from_text
+    text = await build_chat_context(chat_id, limit=40)
+    if not text:
+        raise HTTPException(400, "This conversation has no content to save yet")
+    proposed = await propose_memories_from_text(role, text)
+    if not proposed:
+        return {"proposed": 0, "note": "Nothing worth preserving was found in this conversation."}
+
+    now = now_iso()
+    docs = []
+    for p in proposed:
+        docs.append({
+            "id": new_id(), "workspace_id": ws, "role_id": payload.role_id,
+            "source_user_id": current["id"], "source_type": "AI conversation",
+            "source_id": chat_id, "memory_type": p["memory_type"], "title": p["title"],
+            "content": p["content"], "sensitivity_level": p["sensitivity_level"],
+            "visibility": "role", "transferable": p["transferable"],
+            "approved_by_user_id": None, "approval_status": "proposed",
+            "retention_policy": "keep_indefinitely", "confidence": p["confidence"],
+            "source_date": now[:10], "last_reviewed_at": None,
+            "created_at": now, "updated_at": now,
+        })
+    await db.enterprise_role_memories.insert_many([d.copy() for d in docs])
+    return {"proposed": len(docs), "status": "pending_review"}

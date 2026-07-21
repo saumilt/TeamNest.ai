@@ -1,0 +1,48 @@
+{
+  "summary": "TeamNest.ai AI Conversation Mode Phase 2 (Batch 1) tested end-to-end across backend + web + mobile. Backend: 16/17 passed, 1 skipped (rotate — only os@radciti.com present in Sam's provisioned list and we skipped rotating it per instructions). Preferences GET/PUT, workspace settings GET/PUT (owner-only enforced), security settings GET/PUT (+ negative-day rejection), provisioned-accounts listing, roles picker (owner+member), save-to-role, and temp_password_expired helper logic all verified. Web /ai-memory settings UI: all 14 required testids render, toggle→save→reload persistence confirmed, 'Preferences saved' toast shown. Mobile /settings/ai-conversation via You → 'AI Conversation Mode' link: all pref toggles, pill selectors, workspace admin card, and security card render; save flow works (Alert shown). Sam's prefs, workspace settings, and expiry_days reset to defaults after testing.",
+  "platforms_tested": ["backend", "web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [
+        {"component": "Security settings card", "issue": "'Save' button overlaps the days-input row on 390px width (visible in /tmp/mobile_ai_settings.png bottom card) — button and input on the same row without wrap.", "testID": "sec-save", "priority": "LOW"}
+      ],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "settings/ai-conversation", "issues": ["Days input + Save button on same horizontal row can overlap on narrow screens; consider wrapping or spacing."]}
+      ],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration110_ai_conv_phase2.py",
+    "/app/test_reports/pytest/iteration110.xml"
+  ],
+  "action_items": [
+    "Optional: minor layout fix in /app/mobile/app/settings/ai-conversation.tsx to prevent Save button overlapping days input on narrow screens.",
+    "Documentation nit: /app/memory/test_credentials.md describes mate1@test.io as a 'Free member' but the account is actually owner of its own workspace. Use raj@demo.team (or any member-role user) for future 'non-admin 403' checks — this suite has been updated to use raj.",
+    "Consider adding chat-header-menu-btn / chat-save-to-role-btn e2e test on web — not verified in this run because no chat was open in the initial nav path; code review of ChatHeader.jsx + SaveToRoleDialog.jsx confirms the testids exist."
+  ],
+  "critical_code_review_comments": [
+    "services/ai_conversation.py routing correctly honors effective settings: personal_ai bypasses eff.enabled (line 316), workspace enabled/allow_in_group_chats hard-gate group flow (line 323), ask_when_ambiguous=false auto-routes ambiguous band to AI (line 389). User auto_continue_enabled=false collapses eff.enabled to False via merge (services/workspace_settings.py:131) — behavior matches spec.",
+    "routes/admin.py rotate_temp_password returns plaintext password once — good UX; consider audit-logging the rotation action alongside emit for traceability.",
+    "AIConversationSettings.jsx: PUT sends full payload; if a field was locally-set to null (e.g. Inherit), server correctly preserves via `k: v for k,v in ... if v is not None`. OK.",
+    "Mobile ai-conversation.tsx: apiPut sends the entire `prefs` object (line 101) including any unrelated keys — safe because backend PreferencesIn strips unknowns via pydantic; still, prefer sending only the 5 known fields to reduce drift risk."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration110_ai_conv_phase2.py"
+  ],
+  "success_rate": {"backend": "94% (16/17 passed, 1 skipped by design)", "frontend": "100% (web + mobile settings UI verified)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (owner); mate1@test.io / secret123 (owner of own workspace, NOT a member — see action_items); raj@demo.team / Demo@2026 used for member-role 403 checks.",
+  "seed_data_creation": "None. Sam's prefs, workspace AI conv settings, and temp_password_expiry_days reset to defaults after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "State reset: sam prefs = defaults (auto=true, ask=true, timeout=30, threshold=0.75, show_indicator=true); workspace = enabled true, allow_group true, timeout 30, threshold 0.75; security expiry_days=7. Save-to-role staged 0-1 memories against Sam's chats (all 'proposed' status in enterprise_role_memories, owner review queue). No production data mutated.",
+  "rca of the issue": "N/A — no critical bugs found."
+}

@@ -1,4 +1,4 @@
-import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket } from "lucide-react";
+import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket, Landmark } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Avatar from "@/components/ui-v2/Avatar";
@@ -28,6 +28,7 @@ export default function ChatHeader({
   onSpinUpDevOs,
   devOsBusy,
   onProjectSwitched,
+  onSaveToRole,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -43,7 +44,8 @@ export default function ChatHeader({
 
   const canLeave = chat.type === "group" && !!onLeaveChat;
   const canDelete = !!onDeleteChat;
-  const hasMenu = canLeave || canDelete;
+  const canSaveRole = !!onSaveToRole;
+  const hasMenu = canLeave || canDelete || canSaveRole;
   const showPillRow = !!chat.project_folder_id || chat.type === "group";
 
   return (
@@ -217,6 +219,18 @@ export default function ChatHeader({
                 data-testid="chat-header-menu"
                 className="absolute right-0 top-11 min-w-[200px] rounded-card border border-hairline bg-surface shadow-xl overflow-hidden z-30"
               >
+                {canSaveRole && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="chat-save-to-role-btn"
+                    onClick={() => { setMenuOpen(false); onSaveToRole?.(); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-[14px] text-ink hover:bg-white/5"
+                  >
+                    <Landmark className="w-4 h-4 text-ai" />
+                    Save to Role Intelligence
+                  </button>
+                )}
                 {canLeave && (
                   <button
                     type="button"

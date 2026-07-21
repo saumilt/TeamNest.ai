@@ -100,6 +100,14 @@ async def login(payload: UserLogin, response: Response):
     user = await db.users.find_one({"email": payload.email.lower()})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
         raise HTTPException(401, "Invalid credentials")
+    # Provisioned accounts that never completed first login expire their
+    # temporary password after the workspace-configured window.
+    from services.workspace_settings import temp_password_expired
+    if await temp_password_expired(user):
+        raise HTTPException(
+            403,
+            "Your temporary password has expired. Ask your workspace admin to re-invite you.",
+        )
     # If user has MFA enabled, gate session issuance behind a passkey/recovery
     # challenge. Return a short-lived mfa_token instead of the session.
     if user.get("mfa_enabled"):

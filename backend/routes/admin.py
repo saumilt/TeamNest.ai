@@ -275,3 +275,83 @@ async def patch_billing_settings(payload: CreditMarginPatch, current=Depends(req
         raise HTTPException(403, "Admin only")
     from services.billing_settings import update_settings
     return await update_settings(payload.dict(exclude_unset=True))
+
+
+
+# ── Security: temporary-password expiry ──────────────────────────────────────
+def _admin_only(current: dict):
+    if current["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Admin only")
+
+
+class SecuritySettingsPatch(BaseModel):
+    temp_password_expiry_days: Optional[int] = None
+
+
+@router.get("/admin/security-settings")
+async def get_security_settings(current=Depends(require_user)):
+    _admin_only(current)
+    from services.workspace_settings import get_ws_security
+    return await get_ws_security(current["workspace_id"])
+
+
+@router.put("/admin/security-settings")
+async def put_security_settings(
+    payload: SecuritySettingsPatch, current=Depends(require_user)
+):
+    _admin_only(current)
+    if payload.temp_password_expiry_days is not None and payload.temp_password_expiry_days < 0:
+        raise HTTPException(400, "Expiry days cannot be negative (use 0 to disable expiry)")
+    from services.workspace_settings import set_ws_security
+    return await set_ws_security(
+        current["workspace_id"],
+        {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None},
+    )
+
+
+@router.get("/admin/provisioned-accounts")
+async def list_provisioned_accounts(current=Depends(require_user)):
+    """Provisioned accounts (still on a temporary password) with expiry status,
+    so owners can spot and re-issue expired invitations."""
+    _admin_only(current)
+    from services.workspace_settings import get_ws_security, temp_password_expired
+    ws = current["workspace_id"]
+    days = (await get_ws_security(ws)).get("temp_password_expiry_days", 7)
+    rows = []
+    async for u in db.users.find(
+        {"workspace_id": ws, "must_change_password": True},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "created_at": 1, "temp_password_issued_at": 1},
+    ):
+        issued = u.get("temp_password_issued_at") or u.get("created_at")
+        rows.append({
+            "id": u["id"], "name": u.get("name"), "email": u.get("email"),
+            "issued_at": issued,
+            "expired": await temp_password_expired({**u, "workspace_id": ws}),
+        })
+    rows.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
+    return {"accounts": rows, "expiry_days": days}
+
+
+@router.post("/admin/provisioned-accounts/{uid}/rotate")
+async def rotate_temp_password(uid: str, current=Depends(require_user)):
+    """Issue a fresh temporary password for a provisioned account and reset its
+    expiry clock. Returns the plaintext once for the admin to share securely."""
+    _admin_only(current)
+    import secrets as _secrets
+    from auth_utils import hash_password
+    user = await db.users.find_one(
+        {"id": uid, "workspace_id": current["workspace_id"]}, {"_id": 0, "id": 1, "email": 1}
+    )
+    if not user:
+        raise HTTPException(404, "User not found in this workspace")
+    new_pw = _secrets.token_urlsafe(9) + "aA1$"
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {
+            "password_hash": hash_password(new_pw),
+            "must_change_password": True,
+            "temp_password_issued_at": now_iso(),
+            "updated_at": now_iso(),
+        }},
+    )
+    return {"ok": True, "email": user["email"], "temporary_password": new_pw}

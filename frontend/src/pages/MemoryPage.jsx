@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Brain, Plus, Trash2, Loader2, Sparkles, Building2, User } from "lucide-react";
 import { api } from "@/lib/api";
+import AIConversationSettings from "@/components/AIConversationSettings";
 
 function MemoryList({ title, icon: Icon, items, scope, onChange }) {
   const [text, setText] = useState("");
@@ -77,6 +78,7 @@ export default function MemoryPage() {
           <div className="space-y-4">
             <MemoryList title="About you" icon={User} items={data.personal} scope="personal" onChange={load} />
             <MemoryList title="About your workspace" icon={Building2} items={data.workspace} scope="workspace" onChange={load} />
+            <AIConversationSettings />
           </div>
         )}
       </div>

@@ -332,6 +332,7 @@ async def create_user(payload: NewUser, current=Depends(require_super_admin)):
         "password_hash": hash_password(payload.password), "avatar": None,
         "role": role, "workspace_id": workspace_id, "status": "active",
         "must_change_password": bool(payload.must_change_password), "created_at": now_iso(),
+        "temp_password_issued_at": now_iso() if payload.must_change_password else None,
     }
     await db.users.insert_one(user.copy())
     if is_owner:
@@ -404,7 +405,8 @@ async def reset_user_password(uid: str, payload: ResetPassword, current=Depends(
     await db.users.update_one(
         {"id": uid},
         {"$set": {"password_hash": hash_password(payload.new_password),
-                  "must_change_password": True, "updated_at": now_iso()}},
+                  "must_change_password": True, "temp_password_issued_at": now_iso(),
+                  "updated_at": now_iso()}},
     )
     return {"ok": True}
 

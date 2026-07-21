@@ -99,9 +99,14 @@ async def start_or_refresh_session(
     topic: Optional[str] = None,
     start_message_id: Optional[str] = None,
 ) -> dict:
-    """Create or bump the user's AI session for this chat. Idempotent."""
+    """Create or bump the user's AI session for this chat. Idempotent. The
+    expiry window comes from the effective (workspace+user) timeout setting;
+    a timeout <= 0 means "keep active until the user exits" (no expiry)."""
     now = _now()
-    expires = (now + timedelta(minutes=TIMEOUT_MIN)).isoformat()
+    from services.workspace_settings import get_effective_ai_settings
+    eff = await get_effective_ai_settings(workspace_id, user_id)
+    timeout = eff.get("timeout_minutes", TIMEOUT_MIN)
+    expires = (now + timedelta(minutes=timeout)).isoformat() if timeout and timeout > 0 else None
     existing = await db.ai_conversation_sessions.find_one(
         {"chat_id": chat_id, "user_id": user_id, "status": "active"}, {"_id": 0}
     )
@@ -258,14 +263,16 @@ async def _llm_refine(body: str, topic: Optional[str]) -> Optional[float]:
 
 
 async def score_follow_up(
-    *, session: dict, body: str, workspace_id: Optional[str] = None
+    *, session: dict, body: str, workspace_id: Optional[str] = None,
+    high_threshold: float = THRESHOLD_HIGH,
 ) -> Tuple[float, List[str]]:
     """Hybrid confidence that `body` is a follow-up to the active AI session.
-    Fast heuristic first; LLM tie-breaker only when in the ambiguous band."""
+    Fast heuristic first; LLM tie-breaker only when in the ambiguous band
+    [THRESHOLD_LOW, high_threshold)."""
     last = _parse_iso(session.get("last_activity_at"))
     seconds = (_now() - last).total_seconds() if last else 9999
     score, reasons = _heuristic_score(body, seconds)
-    if THRESHOLD_LOW <= score < THRESHOLD_HIGH:
+    if THRESHOLD_LOW <= score < high_threshold:
         llm = await _llm_refine(body, session.get("topic"))
         if llm is not None:
             reasons.append(f"llm_refined:{round(llm, 2)}")
@@ -305,10 +312,18 @@ async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
         )
 
     # Direct AI chat → every message goes to the assistant, no @ai needed.
+    # (This is the AI chat itself, so it is not gated by the auto-continue setting.)
     if chat.get("type") == "personal_ai":
         _trigger_ai(chat_id, user_id, body, attachments)
         await _log("ai", 1.0, True, ["direct_ai_chat"])
         return {"routed": "ai"}
+
+    from services.workspace_settings import get_effective_ai_settings
+    eff = await get_effective_ai_settings(workspace_id, user_id)
+    if not eff["enabled"] or not eff["allow_in_group_chats"]:
+        return {"routed": "chat"}
+    high_threshold = eff["follow_up_threshold"]
+    ask_when_ambiguous = eff["ask_when_ambiguous"]
 
     # Resolve reply target (if any).
     parent = None
@@ -361,14 +376,20 @@ async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
 
     # Score the follow-up (heuristic + LLM tie-breaker).
     score, reasons = await score_follow_up(
-        session=session, body=body, workspace_id=workspace_id
+        session=session, body=body, workspace_id=workspace_id,
+        high_threshold=high_threshold,
     )
-    if score >= THRESHOLD_HIGH:
+    if score >= high_threshold:
         _trigger_ai(chat_id, user_id, body, attachments)
         await _log("ai", score, True, reasons, sid)
         return {"routed": "ai"}
     if score >= THRESHOLD_LOW:
-        # Ambiguous — offer the user an inline "Continue with AI?" choice.
+        # Ambiguous band. If the user opted out of being asked, auto-continue
+        # to AI; otherwise offer the inline "Continue with AI?" choice.
+        if not ask_when_ambiguous:
+            _trigger_ai(chat_id, user_id, body, attachments)
+            await _log("ai", score, True, reasons + ["ask_disabled"], sid)
+            return {"routed": "ai"}
         from deps import manager
         new_meta = {**(msg.get("metadata") or {}), "pending_ai_route": True}
         await db.messages.update_one({"id": msg["id"]}, {"$set": {"metadata": new_meta}})
