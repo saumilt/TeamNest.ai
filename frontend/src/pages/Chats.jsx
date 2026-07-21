@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import IntegrationsDialog from "@/components/IntegrationsDialog";
 import InviteGuestDialog from "@/components/InviteGuestDialog";
+import { CreateWorkspaceDialog } from "@/components/workspace/CreateWorkspaceDialog";
 import Avatar from "@/components/ui-v2/Avatar";
 import Pill from "@/components/ui-v2/Pill";
 import safeStorage from "@/lib/safeStorage";
@@ -83,6 +84,7 @@ const FILTERS = [
 function WorkspaceSelect({ workspaces, activeId, onSwitch }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const ref = useRef(null);
   const active = (workspaces || []).find((w) => w.workspace_id === activeId);
   const multi = (workspaces || []).length > 1;
@@ -112,9 +114,9 @@ function WorkspaceSelect({ workspaces, activeId, onSwitch }) {
       <button
         type="button"
         data-testid="chat-workspace-select-btn"
-        disabled={busy || !multi}
+        disabled={busy}
         onClick={() => setOpen((o) => !o)}
-        className="w-full h-10 px-3 rounded-xl bg-surface-2 hover:bg-surface-3 flex items-center gap-2 text-left transition-colors disabled:opacity-100 disabled:cursor-default"
+        className="w-full h-10 px-3 rounded-xl bg-surface-2 hover:bg-surface-3 flex items-center gap-2 text-left transition-colors"
       >
         <Building2 className="w-4 h-4 text-ink-mute shrink-0" />
         <div className="min-w-0 flex-1">
@@ -123,12 +125,12 @@ function WorkspaceSelect({ workspaces, activeId, onSwitch }) {
             {active?.name || "Workspace"}
           </div>
         </div>
-        {multi && <ChevronDown className={`w-4 h-4 text-ink-mute shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />}
+        <ChevronDown className={`w-4 h-4 text-ink-mute shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && multi && (
+      {open && (
         <div
           data-testid="chat-workspace-select-menu"
-          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl bg-surface ring-1 ring-hairline shadow-xl overflow-hidden max-h-[280px] overflow-y-auto"
+          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl bg-surface ring-1 ring-hairline shadow-xl overflow-hidden max-h-[300px] overflow-y-auto"
         >
           {(workspaces || []).map((w) => {
             const isActive = w.workspace_id === activeId;
@@ -145,8 +147,18 @@ function WorkspaceSelect({ workspaces, activeId, onSwitch }) {
               </button>
             );
           })}
+          <button
+            type="button"
+            data-testid="chat-workspace-create-btn"
+            onClick={() => { setOpen(false); setShowCreate(true); }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-2 transition-colors border-t border-hairline text-brand font-medium"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="text-[13px]">New workspace</span>
+          </button>
         </div>
       )}
+      <CreateWorkspaceDialog open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }

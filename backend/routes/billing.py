@@ -94,7 +94,7 @@ async def student_verify_start(payload: EduVerifyStart, current=Depends(require_
     email = (payload.edu_email or "").strip().lower()
     if not email or "@" not in email or not email.split("@")[-1].endswith(".edu"):
         raise HTTPException(400, "Enter a valid .edu email address")
-    code = f"{random.randint(0, 999999):06d}"
+    code = f"{secrets.randbelow(1000000):06d}"
     now = datetime.now(timezone.utc)
     await db.edu_verifications.update_one(
         {"user_id": current["id"]},

@@ -121,6 +121,13 @@ export function AuthProvider({ children }) {
                 return data.user;
         }, []);
 
+        const createWorkspace = useCallback(async (name, planId = "free") => {
+                const { data } = await api.post("/workspace/create", { name, plan_id: planId });
+                setUser(data.user);
+                setWorkspaces(data.workspaces || []);
+                return data;
+        }, []);
+
         const value = useMemo(
                 () => ({
                         user,
@@ -134,8 +141,9 @@ export function AuthProvider({ children }) {
                         refresh,
                         setAuthFromRedeem,
                         switchWorkspace,
+                        createWorkspace,
                 }),
-                [user, workspaces, loading, login, completeMfaLogin, signup, demoLogin, logout, refresh, setAuthFromRedeem, switchWorkspace],
+                [user, workspaces, loading, login, completeMfaLogin, signup, demoLogin, logout, refresh, setAuthFromRedeem, switchWorkspace, createWorkspace],
         );
 
         return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

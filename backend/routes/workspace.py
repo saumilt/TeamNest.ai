@@ -1,5 +1,6 @@
 """Workspace info, members, invites, multi-workspace switch."""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from auth_utils import hash_password
 from deps import (
@@ -33,8 +34,12 @@ async def get_workspace(current=Depends(require_user)):
 
 @router.patch("/workspace")
 async def update_workspace(payload: WorkspaceCreate, current=Depends(require_user)):
-    if current.get("role") not in ("owner", "admin"):
-        raise HTTPException(403, "Only owner/admin can rename workspace")
+    ws = await db.workspaces.find_one({"id": current["workspace_id"]}, {"_id": 0, "owner_id": 1})
+    if not ws:
+        raise HTTPException(404, "Workspace not found")
+    # Only the creator (owner) can rename — invited admins/members cannot.
+    if ws.get("owner_id") != current["id"]:
+        raise HTTPException(403, "Only the workspace creator can rename this workspace")
     await db.workspaces.update_one(
         {"id": current["workspace_id"]}, {"$set": {"name": payload.name}}
     )
@@ -103,6 +108,53 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
 async def my_workspaces(current=Depends(require_user)):
     """All workspaces the current user belongs to."""
     return await list_user_workspaces(current["id"])
+
+
+class CreateWorkspaceReq(BaseModel):
+    name: str
+    plan_id: str = "free"
+
+
+@router.post("/workspace/create")
+async def create_workspace(payload: CreateWorkspaceReq, current=Depends(require_user)):
+    """Let any user spin up their own additional workspace for FREE (they become
+    owner). The workspace always starts on the Free plan at no cost; if the user
+    chose a paid plan, the frontend routes them to checkout for the new
+    workspace afterwards. Capped per user to prevent abuse."""
+    name = (payload.name or "").strip()
+    if len(name) < 2:
+        raise HTTPException(400, "Workspace name must be at least 2 characters")
+
+    from services.billing import PLANS
+    plan_id = payload.plan_id if payload.plan_id in PLANS else "free"
+
+    MAX_OWNED = 10
+    owned = await db.workspaces.count_documents({"owner_id": current["id"]})
+    if owned >= MAX_OWNED:
+        raise HTTPException(400, f"You've reached the limit of {MAX_OWNED} workspaces you can own.")
+
+    workspace_id = new_id()
+    await db.workspaces.insert_one({
+        "id": workspace_id, "name": name, "owner_id": current["id"],
+        "created_at": now_iso(),
+    })
+    await ensure_membership(current["id"], workspace_id, role="owner")
+    await ensure_personal_ai_chat(current["id"], workspace_id)
+    # Switch the user into the freshly created workspace (starts on Free).
+    await db.users.update_one(
+        {"id": current["id"]},
+        {"$set": {"workspace_id": workspace_id, "role": "owner"}},
+    )
+    user = await db.users.find_one({"id": current["id"]}, PROJ)
+    user["role"] = "owner"
+    return {
+        "ok": True,
+        "workspace_id": workspace_id,
+        "chosen_plan_id": plan_id,
+        "needs_checkout": plan_id != "free",
+        "user": public_user(user),
+        "workspaces": await list_user_workspaces(current["id"]),
+    }
 
 
 @router.post("/workspace/switch")

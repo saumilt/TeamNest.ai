@@ -21,6 +21,7 @@ import {
         LogOut,
         Bot,
         ShieldCheck,
+        LifeBuoy,
         PanelLeftClose,
         Pin,
 } from "lucide-react";
@@ -342,6 +343,19 @@ export default function Sidebar() {
 
       {/* Credits + user */}
       <div className="border-t border-white/5 pt-3 pb-4">
+        <NavLink
+          to="/help"
+          data-testid="nav-help"
+          title="Help Center"
+          className={({ isActive }) =>
+            `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors mb-1 ${
+              isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+            }`
+          }
+        >
+          <LifeBuoy className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+          {!collapsed && <span className="truncate">Help</span>}
+        </NavLink>
         {!collapsed && <CreditsWidget collapsed={false} />}
         <div className={`${collapsed ? "px-2 flex flex-col items-center gap-2" : "px-5 flex items-center gap-3"} pt-2`}>
           {user?.avatar ? (

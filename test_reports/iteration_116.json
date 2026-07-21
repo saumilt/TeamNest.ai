@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 116 backend + web frontend testing for TeamNest.ai super-admin + workspace + help features. Backend: 9/9 pytest cases pass (super-admin user detail/edit/reset-password/reset-link, create-workspace free vs paid, rename gating owner vs non-owner). Web frontend: All acceptance-criteria testIDs and flows verified EXCEPT one CRITICAL runtime bug on /reset-password — page crashes with `ReferenceError: PasswordInput is not defined` (missing import in /app/frontend/src/pages/web/ResetPassword.jsx), so users clicking the emailed reset link see a red-screen and cannot set a new password. Every other flow works: password show/hide toggle on /login, chat workspace selector positioned between search and filter chips with 'New workspace' entry, Create-workspace dialog with Free/Student/Pro/Team plans (Free instantly creates + navigates back to /chats), Super Admin user row click opens sa-user-detail modal with all edit fields + Reset & email password (shows new password + copy + email_sent) + Reset link (shows sa-reset-link-result single-use URL), Help Center at /help with search filtering ('credit limits' → 3 articles, 'student' → 4 articles, nonsense → help-empty) + category chips + article expand + nav-help sidebar link, Team page workspace-name input disabled + Save button hidden for non-owner raj (403 gate) and editable + Save present for owner mate1.",
+  "platforms_tested": ["web"],
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [
+        {"component": "ResetPassword page (/reset-password)", "issue": "Red-screen runtime error: 'ReferenceError: PasswordInput is not defined'. PasswordInput is used at lines 89 and 105 of /app/frontend/src/pages/web/ResetPassword.jsx but never imported. The whole reset-password flow (from Super Admin reset-link OR forgot-password email link) is broken end-to-end — users can't submit a new password.", "selector": "[data-testid='reset-password-input'] / [data-testid='reset-confirm-input']", "priority": "CRITICAL"}
+      ],
+      "integration_issues": [],
+      "design_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration116_superadmin_workspace_help.py",
+    "/app/test_reports/pytest/iteration116.xml"
+  ],
+  "action_items": [
+    "URGENT: Add `import { PasswordInput } from '@/components/ui-v2/PasswordInput';` to /app/frontend/src/pages/web/ResetPassword.jsx (top of file, alongside other imports). Without this the reset-password link path is completely broken.",
+    "Optional cleanup: I created two TEST_ workspaces owned by mate1@test.io during UI + backend testing (TEST_ui_free_ws + TEST_free_* + TEST_pro_*). They are named with TEST_ prefix so easy to purge; mate1's active workspace switched into one of them — main agent may want to switch mate1 back to 'Team Mate's Workspace' via POST /api/workspace/switch.",
+    "Optional: I reset the password for os@radciti.com through the Super Admin UI while validating the flow — /app/memory/test_credentials.md lists Summer$123 but the current password is now the auto-generated one that was emailed. Consider running one more reset-password to restore Summer$123 if that credential still needs to work."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/pages/web/ResetPassword.jsx uses PasswordInput without importing it — this is a hard runtime crash on the entire page and slipped past whatever pre-commit checks the repo has. Recommend adding an ESLint rule (`no-undef`) enforcement and a CI smoke that navigates to /reset-password?token=... .",
+    "One benign console 401 fires on public marketing pages (probable /api/auth/me identity probe on the anonymous marketing shell) — not caused by this iteration.",
+    "After successful reset password via Super Admin UI, the modal shows the plaintext new password + a Copy button; this is spec but note the password sits in DOM until modal is closed — consider auto-clearing after a short timeout for security hygiene."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration116_superadmin_workspace_help.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9)",
+    "frontend": "~92% (11/12 acceptance flows, /reset-password page crashes)"
+  },
+  "seed_data_creation": "Two throwaway superadmin-created TEST_ users (`TEST_iter116_<hex>@test.io`, `TEST_iter116_ws_<hex>@test.io`) auto-cleaned up in fixture teardown. Two TEST_ workspaces owned by mate1 remain (needs_checkout=false + needs_checkout=true fixtures) — safely prefixed TEST_.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression tests live at /app/backend/tests/test_iteration116_superadmin_workspace_help.py (9 tests, all green). Web UI critical bug: /reset-password page throws `PasswordInput is not defined` — verify main agent adds the missing import from '@/components/ui-v2/PasswordInput'. After the fix, navigate to /reset-password?token=<real-token-from-POST /api/superadmin/users/reset-link> and confirm reset-password-input + reset-password-input-toggle + reset-confirm-input + reset-confirm-input-toggle render and toggle mask correctly. All other acceptance flows already verified — no need to re-test unless code changes touched those areas.",
+  "rca of the issue": "ResetPassword.jsx was refactored to use the shared PasswordInput atom (introducing testId props reset-password-input / reset-confirm-input) but the corresponding `import { PasswordInput } from '@/components/ui-v2/PasswordInput'` line was never added at the top of the file. The imports block (lines 1-8) covers only Link, toast, lucide icons, api, WebThemeProvider, SeoHelmet and LogoMark/Wordmark/PrimaryButton. React therefore throws a ReferenceError as soon as the render tree tries to instantiate <PasswordInput/>, causing the whole page to red-screen. Reproduction: visit /reset-password?token=<any-valid-or-invalid-token> → runtime error overlay. Fix: add `import { PasswordInput } from '@/components/ui-v2/PasswordInput';` (or the correct alias — matches Auth.jsx which imports it successfully)."
+}

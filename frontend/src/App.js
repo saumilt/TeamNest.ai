@@ -19,6 +19,7 @@ import CallRoom from "@/pages/CallRoom";
 import { ProjectsList, ProjectDetail as FolderDetail } from "@/pages/Projects";
 import Profile from "@/pages/Profile";
 import Billing from "@/pages/Billing";
+import HelpCenter from "@/pages/HelpCenter";
 import Me from "@/pages/Me";
 import Calls from "@/pages/Calls";
 import Memory from "@/pages/Memory";
@@ -165,6 +166,7 @@ export default function App() {
             <Route path="/superadmin" element={<SuperAdmin />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/billing" element={<Billing />} />
+            <Route path="/help" element={<HelpCenter />} />
             <Route path="/me" element={<Me />} />
             <Route path="/you" element={<Me />} />
             <Route path="/calls" element={<Calls />} />
