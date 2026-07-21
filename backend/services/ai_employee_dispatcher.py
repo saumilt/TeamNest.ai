@@ -315,7 +315,7 @@ async def _run_employee(chat: dict, sender: dict, message: dict, employee_key: s
         # employee so untagged follow-ups continue with it (no re-mention).
         try:
             from services import ai_conversation as _aiconv
-            label = f"@{(emp.get('name') or 'AI').split(' ')[0]}"
+            label = "@" + (emp.get("name") or "AI").replace("AI ", "", 1).replace(" ", "")
             await _aiconv.note_active_assistant(
                 workspace_id=workspace_id, chat_id=chat["id"], user_id=sender["id"],
                 assistant_id=f"employee:{employee_key}", assistant_label=label,
