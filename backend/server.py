@@ -34,6 +34,7 @@ from routes import (
     auth,
     billing,
     connectors,
+    credit_governance,
     enterprise,
     learned_memory,
     bookkeeper,
@@ -146,6 +147,7 @@ api.include_router(dev_gates.router)
 api.include_router(workspace_ai.router)
 api.include_router(connectors.router)
 api.include_router(enterprise.router)
+api.include_router(credit_governance.router)
 api.include_router(learned_memory.router)
 
 app.include_router(api)

@@ -249,7 +249,8 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
         await db.ai_responses.insert_one(r.copy())
 
     await deduct_credits_for_responses(
-        current["workspace_id"], current["id"], responses, source="ai_research"
+        current["workspace_id"], current["id"], responses, source="ai_research",
+        chat_id=payload.chat_id,
     )
 
     await _record_research_usage(payload, current, chat, responses)
@@ -301,7 +302,7 @@ async def _run_extra_models(thread_id, question, models, workspace_id, user_id, 
             r["created_at"] = now_iso()
             await db.ai_responses.insert_one(r.copy())
 
-        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_research")
+        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_research", chat_id=chat.get("id"))
         for r in responses:
             if not r.get("real"):
                 continue

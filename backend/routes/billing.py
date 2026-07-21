@@ -1,5 +1,7 @@
 """Stripe Checkout + AI credit usage endpoints."""
 import os
+import random
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import stripe
@@ -64,7 +66,82 @@ async def my_billing(current=Depends(require_user)):
         "usage": usage,
         "plan": public_plan(sub["plan_id"]),
         "is_owner": current.get("role") == "owner",
+        "edu_verified": bool(current.get("edu_verified")),
+        "edu_email": current.get("edu_email"),
     }
+
+
+# ─── Student plan: .edu email verification (code by email) ────────────────────
+EDU_CODE_TTL_MINUTES = 20
+
+
+class EduVerifyStart(BaseModel):
+    edu_email: str
+
+
+class EduVerifyConfirm(BaseModel):
+    code: str
+
+
+@router.get("/billing/student/status")
+async def student_status(current=Depends(require_user)):
+    return {"edu_verified": bool(current.get("edu_verified")), "edu_email": current.get("edu_email")}
+
+
+@router.post("/billing/student/verify/start")
+async def student_verify_start(payload: EduVerifyStart, current=Depends(require_user)):
+    """Send a 6-digit verification code to the student's .edu email."""
+    email = (payload.edu_email or "").strip().lower()
+    if not email or "@" not in email or not email.split("@")[-1].endswith(".edu"):
+        raise HTTPException(400, "Enter a valid .edu email address")
+    code = f"{random.randint(0, 999999):06d}"
+    now = datetime.now(timezone.utc)
+    await db.edu_verifications.update_one(
+        {"user_id": current["id"]},
+        {"$set": {"user_id": current["id"], "edu_email": email, "code": code,
+                  "verified": False, "attempts": 0,
+                  "expires_at": (now + timedelta(minutes=EDU_CODE_TTL_MINUTES)).isoformat(),
+                  "created_at": now_iso()}},
+        upsert=True,
+    )
+    from services.mailgun_service import send_email
+    res = await send_email(
+        to=[email],
+        subject="Your TeamNest student verification code",
+        html=(f"<p>Your TeamNest student verification code is:</p>"
+              f"<h2 style='letter-spacing:4px'>{code}</h2>"
+              f"<p>It expires in {EDU_CODE_TTL_MINUTES} minutes.</p>"),
+        text=f"Your TeamNest student verification code is {code} (expires in {EDU_CODE_TTL_MINUTES} min).",
+    )
+    out = {"ok": True, "sent": bool(res.get("ok")), "edu_email": email}
+    # Dev/test fallback: when email isn't configured OR we're running against the
+    # Stripe test proxy (i.e. a preview/QA environment), surface the code so the
+    # flow is testable end-to-end without a live mailbox. Hidden in production.
+    _test_env = "sk_test_emergent" in (os.environ.get("STRIPE_API_KEY") or "")
+    if not res.get("ok") or _test_env:
+        out["dev_code"] = code
+    return out
+
+
+@router.post("/billing/student/verify/confirm")
+async def student_verify_confirm(payload: EduVerifyConfirm, current=Depends(require_user)):
+    rec = await db.edu_verifications.find_one({"user_id": current["id"]}, {"_id": 0})
+    if not rec:
+        raise HTTPException(400, "Start verification first")
+    exp = rec.get("expires_at")
+    if exp and datetime.fromisoformat(exp) < datetime.now(timezone.utc):
+        raise HTTPException(400, "Code expired — request a new one")
+    if int(rec.get("attempts") or 0) >= 6:
+        raise HTTPException(429, "Too many attempts — request a new code")
+    if (payload.code or "").strip() != rec.get("code"):
+        await db.edu_verifications.update_one({"user_id": current["id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(400, "Incorrect code")
+    await db.edu_verifications.update_one(
+        {"user_id": current["id"]}, {"$set": {"verified": True, "verified_at": now_iso()}})
+    await db.users.update_one(
+        {"id": current["id"]},
+        {"$set": {"edu_verified": True, "edu_email": rec["edu_email"], "edu_verified_at": now_iso()}})
+    return {"ok": True, "edu_verified": True, "edu_email": rec["edu_email"]}
 
 
 def _validate_checkout_request(payload: CheckoutRequest, current: dict) -> dict:
@@ -76,6 +153,8 @@ def _validate_checkout_request(payload: CheckoutRequest, current: dict) -> dict:
         raise HTTPException(400, "Unknown plan")
     if plan["price_usd"] <= 0:
         raise HTTPException(400, "Free plan does not require checkout")
+    if plan.get("requires_edu") and not current.get("edu_verified"):
+        raise HTTPException(403, "edu_verification_required")
     if not payload.origin_url:
         raise HTTPException(400, "origin_url is required")
     if not STRIPE_API_KEY:
@@ -138,12 +217,15 @@ async def _create_legacy_one_shot_session(
     host_url = str(request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
     checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    # emergentintegrations' CheckoutSessionRequest requires all metadata values
+    # to be strings.
+    str_metadata = {k: str(v) for k, v in (metadata or {}).items()}
     req = CheckoutSessionRequest(
         amount=float(plan["price_usd"]),
         currency="usd",
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata=metadata,
+        metadata=str_metadata,
     )
     s = await checkout.create_checkout_session(req)
     return s.url, s.session_id

@@ -146,6 +146,22 @@ async def check_ai_allowed(
     if not settings["ai_enabled"]:
         return {"allowed": False, "reason": "AI is disabled for this group.", "settings": settings, "role": role}
 
+    # Solo-AI-seat plans (e.g. Student): only the workspace owner may use AI;
+    # invited collaborators can chat but not fire AI.
+    ws_id = chat.get("workspace_id")
+    if ws_id:
+        from services.billing import PLANS, get_subscription
+        sub = await get_subscription(ws_id)
+        plan = PLANS.get(sub.get("plan_id")) or {}
+        if plan.get("solo_ai_seat"):
+            ws = await db.workspaces.find_one({"id": ws_id}, {"_id": 0, "owner_id": 1})
+            if ws and ws.get("owner_id") != user["id"]:
+                return {"allowed": False,
+                        "reason": (f"The {plan['name']} plan includes a single AI seat — "
+                                   "only the account owner can use AI. You can keep chatting "
+                                   "and collaborating here."),
+                        "settings": settings, "role": role}
+
     # Role gating.
     role_allowed = role in (settings.get("who_can_ask_ai_roles") or [])
     if role == "guest" and not settings.get("guest_ai_enabled"):
@@ -175,6 +191,14 @@ async def check_ai_allowed(
         used = await _month_usage(chat["id"])
         if used + estimated_credits > gb:
             return {"allowed": False, "reason": f"This group has reached its monthly AI budget ({gb} credits).", "settings": settings, "role": role}
+
+    # Multi-scope credit governance (user / chat / workspace / enterprise caps).
+    if chat.get("workspace_id"):
+        from services.credit_governance import check_caps
+        gov = await check_caps(chat["workspace_id"], user["id"], chat["id"], estimated_credits)
+        if not gov["allowed"]:
+            return {"allowed": False, "reason": gov["reason"], "cap_scope": gov.get("scope"),
+                    "settings": settings, "role": role}
 
     # Approval gate.
     requires_approval = False

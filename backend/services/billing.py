@@ -61,6 +61,31 @@ PLANS = {
             "300 AI credits / month / workspace",
         ],
     },
+    "student": {
+        "id": "student",
+        "name": "Student",
+        "price_usd": 6.99,
+        "monthly_credits": 2500,
+        "max_workspaces_per_user": 3,
+        "max_members": 10,          # can invite classmates to collaborate…
+        "solo_ai_seat": True,       # …but only the account owner can use AI
+        "requires_edu": True,       # gated behind .edu email verification
+        "premium_models": True,
+        "all_features": False,
+        "per_seat": False,
+        "live_transcription": False,
+        "unlimited_transcription": False,
+        "screen_sharing": True,
+        "stripe_price_id": os.environ.get("STRIPE_STUDENT_PRICE_ID"),
+        "description": "For students. Collaborate + compare AI models, solo.",
+        "perks": [
+            "2,500 AI credits / month",
+            "All AI models + multi-model comparison",
+            "Invite classmates to collaborate (AI stays solo — yours only)",
+            "Requires .edu email verification",
+            "Voice notes & post-call summaries",
+        ],
+    },
     "pro": {
         "id": "pro",
         "name": "Pro",
@@ -199,8 +224,9 @@ async def is_unlimited_workspace(workspace_id: str) -> bool:
     return workspace_id in await _unlimited_workspace_ids()
 
 
-# Plans on which multi-model AI comparison is available.
-COMPARISON_PLAN_IDS = {"pro", "team"}
+# Plans on which multi-model AI comparison is available. Students get it too —
+# comparing AI models is a core part of the student value prop.
+COMPARISON_PLAN_IDS = {"student", "pro", "team"}
 
 
 async def is_comparison_allowed(workspace_id: str) -> bool:
@@ -499,13 +525,18 @@ async def consume_credits(
     source: str,
     model_key: str | None = None,
     user_id: str | None = None,
+    chat_id: str | None = None,
     meta: dict | None = None,
 ) -> dict:
     """Idempotency NOT guaranteed — callers must call this once per chargeable
     event. Increments the workspace's used-this-period counter and writes a
-    ledger entry for audit."""
+    ledger entry for audit. `chat_id` is recorded so credit-governance caps can
+    be enforced/attributed at chat scope."""
     if amount <= 0:
         return await get_usage(workspace_id)
+    _meta = dict(meta or {})
+    if chat_id:
+        _meta["chat_id"] = chat_id
     # Unlimited-credit workspaces: never decrement (but still log for audit).
     if await is_unlimited_workspace(workspace_id):
         try:
@@ -513,11 +544,12 @@ async def consume_credits(
                 "id": new_id(),
                 "workspace_id": workspace_id,
                 "user_id": user_id,
+                "chat_id": chat_id,
                 "amount": 0,
                 "billed_amount": amount,
                 "source": source,
                 "model_key": model_key,
-                "meta": {**(meta or {}), "unlimited": True},
+                "meta": {**_meta, "unlimited": True},
                 "at": now_iso(),
             })
         except Exception as e:
@@ -533,10 +565,11 @@ async def consume_credits(
             "id": new_id(),
             "workspace_id": workspace_id,
             "user_id": user_id,
+            "chat_id": chat_id,
             "amount": amount,
             "source": source,
             "model_key": model_key,
-            "meta": meta or {},
+            "meta": _meta,
             "at": now_iso(),
         })
     except Exception as e:
@@ -592,6 +625,8 @@ def public_plan(plan_id: str) -> dict:
         "perks": p["perks"],
         "max_members": p["max_members"],
         "per_seat": bool(p.get("per_seat")),
+        "solo_ai_seat": bool(p.get("solo_ai_seat")),
+        "requires_edu": bool(p.get("requires_edu")),
         "live_transcription": bool(p.get("live_transcription")),
         "unlimited_transcription": bool(p.get("unlimited_transcription")),
         "screen_sharing": bool(p.get("screen_sharing", True)),
@@ -601,4 +636,4 @@ def public_plan(plan_id: str) -> dict:
 
 
 def all_public_plans() -> list:
-    return [public_plan(pid) for pid in ("free", "pro", "team")]
+    return [public_plan(pid) for pid in ("free", "student", "pro", "team")]

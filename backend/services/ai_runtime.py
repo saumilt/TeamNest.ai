@@ -189,7 +189,8 @@ async def filter_models_by_credits(workspace_id: str, models: list) -> tuple[lis
 
 
 async def deduct_credits_for_responses(
-    workspace_id: str, user_id: str, responses: list, source: str = "ai_research"
+    workspace_id: str, user_id: str, responses: list, source: str = "ai_research",
+    chat_id: Optional[str] = None,
 ) -> int:
     """Charge the workspace for every real (non-mock) model response. Returns
     the total credits deducted."""
@@ -204,6 +205,7 @@ async def deduct_credits_for_responses(
             source=source,
             model_key=r.get("model_key"),
             user_id=user_id,
+            chat_id=chat_id,
             meta={"thread_id": r.get("research_thread_id")},
         )
         total += cost
@@ -417,7 +419,7 @@ async def handle_ai_command(
         await db.ai_responses.insert_one(r.copy())
 
     if workspace_id:
-        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_inline")
+        await deduct_credits_for_responses(workspace_id, user_id, responses, source="ai_inline", chat_id=chat_id)
         # Per-chat usage ledger.
         from routes.chat_ai_settings import record_ai_usage as _rec
         for r in responses:

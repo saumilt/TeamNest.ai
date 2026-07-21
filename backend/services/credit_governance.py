@@ -1,0 +1,138 @@
+"""Multi-scope AI credit governance.
+
+Workspace admins set HARD credit caps at four scopes:
+
+  * user       — a single member (scope_id = user_id)
+  * chat       — a single chat/group (scope_id = chat_id)
+  * workspace  — the whole workspace (scope_id = workspace_id)
+  * enterprise — every workspace owned by the same org owner (scope_id = owner_id)
+
+Enforcement is MOST-RESTRICTIVE-WINS: an AI request is blocked if it would push
+usage past ANY applicable cap. Caps reset with the workspace's monthly billing
+period (usage is summed from `ai_credit_ledger` since `period_start`).
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from deps import db, new_id, now_iso
+from services.billing import get_subscription
+
+SCOPES = ("user", "chat", "workspace", "enterprise")
+
+
+async def _period_start_iso(workspace_id: str) -> str:
+    sub = await get_subscription(workspace_id)
+    return sub.get("period_start") or "1970-01-01T00:00:00+00:00"
+
+
+async def _org_workspace_ids(workspace_id: str) -> List[str]:
+    """All workspace ids owned by the same owner as `workspace_id` (the 'org')."""
+    ws = await db.workspaces.find_one({"id": workspace_id}, {"_id": 0, "owner_id": 1})
+    owner_id = (ws or {}).get("owner_id")
+    if not owner_id:
+        return [workspace_id]
+    ids = set()
+    async for w in db.workspaces.find({"owner_id": owner_id}, {"_id": 0, "id": 1}):
+        ids.add(w["id"])
+    ids.add(workspace_id)
+    return list(ids)
+
+
+async def _usage_for(workspace_id: str, scope: str, scope_id: str, since_iso: str) -> int:
+    """Credits consumed this period for a given scope (from the credit ledger)."""
+    if scope == "user":
+        match = {"workspace_id": workspace_id, "user_id": scope_id, "at": {"$gte": since_iso}}
+    elif scope == "chat":
+        match = {"workspace_id": workspace_id, "chat_id": scope_id, "at": {"$gte": since_iso}}
+    elif scope == "workspace":
+        match = {"workspace_id": scope_id, "at": {"$gte": since_iso}}
+    elif scope == "enterprise":
+        match = {"workspace_id": {"$in": await _org_workspace_ids(workspace_id)},
+                 "at": {"$gte": since_iso}}
+    else:
+        return 0
+    cur = db.ai_credit_ledger.aggregate([
+        {"$match": match},
+        {"$group": {"_id": None, "credits": {"$sum": "$amount"}}},
+    ])
+    rows = await cur.to_list(1)
+    return int(rows[0]["credits"]) if rows else 0
+
+
+async def list_caps(workspace_id: str) -> List[Dict[str, Any]]:
+    return await db.credit_caps.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
+
+
+async def set_cap(workspace_id: str, scope: str, scope_id: str, limit_credits: int,
+                  created_by: str) -> Dict[str, Any]:
+    if scope not in SCOPES:
+        raise ValueError("invalid scope")
+    if int(limit_credits) < 0:
+        raise ValueError("limit must be >= 0")
+    await db.credit_caps.update_one(
+        {"workspace_id": workspace_id, "scope": scope, "scope_id": scope_id},
+        {"$set": {"limit_credits": int(limit_credits), "updated_at": now_iso(),
+                  "updated_by": created_by},
+         "$setOnInsert": {"id": new_id(), "created_at": now_iso(), "created_by": created_by}},
+        upsert=True,
+    )
+    return await db.credit_caps.find_one(
+        {"workspace_id": workspace_id, "scope": scope, "scope_id": scope_id}, {"_id": 0})
+
+
+async def delete_cap(workspace_id: str, scope: str, scope_id: str) -> bool:
+    r = await db.credit_caps.delete_one(
+        {"workspace_id": workspace_id, "scope": scope, "scope_id": scope_id})
+    return r.deleted_count > 0
+
+
+async def check_caps(workspace_id: str, user_id: Optional[str], chat_id: Optional[str],
+                     cost: int) -> Dict[str, Any]:
+    """Return {allowed, reason?, scope?, limit?, used?}. Most-restrictive-wins."""
+    caps = await list_caps(workspace_id)
+    if not caps:
+        return {"allowed": True}
+    since = await _period_start_iso(workspace_id)
+    # Order matters only for which message we surface first; check the tightest
+    # (smallest remaining) so the user gets the real binding limit.
+    applicable = []
+    for c in caps:
+        scope, sid = c["scope"], c["scope_id"]
+        if scope == "user" and sid != user_id:
+            continue
+        if scope == "chat" and sid != chat_id:
+            continue
+        applicable.append(c)
+    blockers = []
+    for c in applicable:
+        used = await _usage_for(workspace_id, c["scope"], c["scope_id"], since)
+        limit = int(c["limit_credits"])
+        if used + cost > limit:
+            blockers.append({"scope": c["scope"], "limit": limit, "used": used,
+                             "remaining": max(0, limit - used)})
+    if blockers:
+        b = min(blockers, key=lambda x: x["remaining"])
+        label = {"user": "your personal", "chat": "this chat's", "workspace": "the workspace's",
+                 "enterprise": "the enterprise"}.get(b["scope"], b["scope"])
+        return {
+            "allowed": False,
+            "reason": (f"AI credit limit reached — {label} cap of {b['limit']} credits "
+                       f"is used up ({b['used']}/{b['limit']}). Ask your workspace admin "
+                       f"to raise it, or wait for the monthly reset."),
+            "scope": b["scope"], "limit": b["limit"], "used": b["used"],
+        }
+    return {"allowed": True}
+
+
+async def caps_status(workspace_id: str) -> List[Dict[str, Any]]:
+    """Caps with live usage for the admin dashboard."""
+    caps = await list_caps(workspace_id)
+    since = await _period_start_iso(workspace_id)
+    out = []
+    for c in caps:
+        used = await _usage_for(workspace_id, c["scope"], c["scope_id"], since)
+        limit = int(c["limit_credits"])
+        out.append({**c, "used": used, "remaining": max(0, limit - used),
+                    "pct": round(used / limit * 100) if limit else 0})
+    return out

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/src/components/Avatar";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
+import { CreditLimitsCard } from "@/src/components/CreditLimitsCard";
 import { NotificationBell } from "@/src/components/NotificationBell";
 import { apiDelete } from "@/src/api";
 import { useAuth } from "@/src/auth";
@@ -145,6 +146,8 @@ export default function YouScreen() {
           value={String((user?.workspaces || []).length)}
         />
       </View>
+
+      <CreditLimitsCard />
 
       {/* Brand positioning — mirrors the web landing hero */}
       <View style={styles.introCard} testID="brand-intro-card">

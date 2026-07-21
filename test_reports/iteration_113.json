@@ -1,0 +1,51 @@
+{
+  "summary": "TeamNest iter 113 (Student plan + 4-scope AI credit governance) tested on backend + web + mobile. Backend: 8/8 relevant checks pass (5 passed + 1 skipped signup-blocked test in extended file, plus the original 3/3 iter113 suite). GET /billing/plans returns the Student plan (price 6.99, requires_edu=true, solo_ai_seat=true, checkout_available=true). .edu verify: bad domain → 400, .edu accepted → dev_code exposed (test env), wrong code → 400, correct code sets edu_verified. Student checkout before verify → 403 'edu_verification_required'; after verify → returns a Stripe checkout URL (verified by clicking 'Upgrade to Student' as mate1 which redirected to https://checkout.stripe.com/... showing US$6.99). Credit governance CRUD: PUT/GET/DELETE all 200 for owner/admin; member (raj@demo.team) gets 403 on both GET and PUT. Enforcement: with workspace cap of 5 set, /chats/{id}/ai-preflight?estimated_credits=20 returns allowed=false with cap_scope='workspace'; removing the cap returns allowed=true. Web /pricing marketing page correctly renders Student card at $6.99 with '.edu required' perk. Web /billing shows Student card, credit-governance panel with data-testid=credit-governance, cap-scope-select, cap-limit-input, cap-add-btn (all present); credit-caps-list only renders when caps exist (as designed — 0 count for mate1 which had no caps). Mobile /you shows OWNER badge for sam correctly.\n\nBUG (mobile): CreditLimitsCard fetches /api/credit-governance/caps on mount but the request goes out BEFORE AuthProvider's async token restore finishes → GET returns 401 (twice), catch block sets caps=[] → card renders null. Verified end-to-end: direct fetch with Bearer token from same page returns 200 with the workspace cap I created; the app's own fetch returns 401. Card DOES have correct testID=mobile-credit-limits + scope-labeled rows, but is unreachable due to the race. Fix: subscribe to useAuth().token and re-fetch when it becomes non-null (or guard with `if (!token) return null` and depend on `token` in the useEffect deps).",
+  "platforms_tested": ["backend", "web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [
+        {"component": "CreditLimitsCard", "issue": "Race condition: fetches /api/credit-governance/caps on mount before AuthProvider restores the token from AsyncStorage → request goes out unauthenticated (401), catch sets caps=[] → card silently returns null and never re-fetches. Reference: /app/mobile/src/components/CreditLimitsCard.tsx:28-37", "testID": "mobile-credit-limits", "priority": "HIGH"}
+      ],
+      "integration_issues": [
+        {"flow": "Owner/admin viewing AI credit limits on mobile You tab", "issue": "Card never appears even when caps exist because the initial /api/credit-governance/caps fetch fires before the auth token is set — returns 401. Direct API call with the same token from the loaded page returns 200 with the caps.", "affected_testIDs": ["mobile-credit-limits", "mb-cap-workspace"]}
+      ],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [
+    {"flow": "AI credit limits (read)", "platform": "mobile", "issue": "Web shows caps immediately; mobile card never appears (race with auth restore).", "expected": "Card renders on mobile You tab for owner/admin when caps exist", "actual": "Card returns null (401 on initial fetch, no re-fetch on token change)"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration113_student_credit_governance.py",
+    "/app/backend/tests/test_iteration113_extended.py",
+    "/app/test_reports/pytest/iteration113.xml"
+  ],
+  "action_items": [
+    "HIGH — Fix mobile CreditLimitsCard race with AuthProvider token restore. Suggested fix: `const {token} = useAuth(); useEffect(() => { if (!token) return; apiGet('/api/credit-governance/caps').then(d => setCaps(d?.caps || [])).catch(() => setCaps([])); }, [token]);` in /app/mobile/src/components/CreditLimitsCard.tsx.",
+    "OPTIONAL — Verify the same race isn't affecting other mobile screens that fetch on-mount immediately (e.g. chats list). If it is, standardize on the useAuth().token dependency pattern app-wide."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/billing.py:147-162 (_validate_checkout_request) — Correctly gates paid plans behind role=owner + requires_edu → edu_verified. Returns HTTPException(403, 'edu_verification_required') pre-verify. LGTM.",
+    "backend/routes/billing.py:212-231 (_create_legacy_one_shot_session) — Fix from note verified: metadata is stringified before CheckoutSessionRequest → student session creation no longer 500s when STRIPE_STUDENT_PRICE_ID isn't set.",
+    "backend/services/credit_governance.py:90-125 (check_caps) — Most-restrictive-wins is correctly implemented via applicable-cap filtering + `min(blockers, key=remaining)`. Message surfaces the actual binding scope. LGTM.",
+    "backend/routes/credit_governance.py:13-16 — Correctly rejects non-admin/owner (403) and lets super_admin through. Member role → 403 verified in tests.",
+    "mobile/src/components/CreditLimitsCard.tsx:28-37 — Fetches on empty deps [], no dependency on auth token. This is the RCA for the mobile-side bug reported above."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration113_extended.py"
+  ],
+  "success_rate": {"backend": "100% (5/5 pass, 1 skipped)", "frontend": "Web 100% for verified surfaces (Pricing/Billing render + Stripe redirect works); Mobile ~50% (You tab loads + owner badge shows, but CreditLimitsCard hidden due to auth race)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super admin/owner), mate1@test.io / secret123 (free plan, edu_verified from prior run), amit@demo.team / Demo@2026 (owner/super admin), raj@demo.team / Demo@2026 (member for 403 checks)",
+  "seed_data_creation": "Created 1 workspace cap on sam@funasia.net's workspace (scope=workspace, limit=10000) via API for the mobile You test. Cap ID 4706edf2-0991-403a-a439-104edc812c34. Safe to delete or leave (doesn't bite super-admin unlimited).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All backend endpoints verified. Web billing surfaces + credit governance panel selectors verified. Only remaining issue: mobile CreditLimitsCard race. After the useAuth().token fix, retest by (1) login as sam via mobile UI (2) navigate to You tab (3) verify testID='mobile-credit-limits' + 'mb-cap-workspace' appear. Delete the workspace cap via DELETE /api/credit-governance/caps/workspace/97a5fe3c-d8d0-4728-b461-367f82fc8f99 as sam after retest to clean up.",
+  "rca of the issue": "Mobile CreditLimitsCard: useEffect fires with empty deps [] on component mount. The AuthProvider (auth.tsx:33-49) restores the token asynchronously: getItem() → setAuthToken(t) → fetch /api/auth/me → setUser+setToken. The tab screen (you.tsx) mounts inside AuthProvider immediately, so CreditLimitsCard's initial /api/credit-governance/caps request goes out BEFORE the promise chain in AuthProvider's useEffect resolves and setAuthToken is called. Backend rejects with 401. The card's catch block converts that to setCaps([]) → early return null. Fix: subscribe to token via useAuth() and depend on it in useEffect."
+}

@@ -7,6 +7,8 @@ import { ExternalLink, Settings } from "lucide-react";
 import SegmentedControl from "@/components/ui-v2/SegmentedControl";
 import BillingUsageCard from "@/components/billing/BillingUsageCard";
 import BillingPlanCard from "@/components/billing/BillingPlanCard";
+import EduVerifyDialog from "@/components/billing/EduVerifyDialog";
+import CreditGovernance from "@/components/billing/CreditGovernance";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 5;
@@ -26,6 +28,7 @@ export default function Billing() {
   const [polling, setPolling] = useState(false);
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [launchAccess, setLaunchAccess] = useState(null);
+  const [eduOpen, setEduOpen] = useState(false);
   const pollTimer = useRef(null);
 
   const load = async () => {
@@ -106,6 +109,10 @@ export default function Billing() {
       } finally { setBusy(null); }
       return;
     }
+    if (planId === "student" && !billing?.edu_verified) {
+      setEduOpen(true);
+      return;
+    }
     setBusy(planId);
     try {
       const { data } = await api.post("/billing/checkout", {
@@ -115,6 +122,11 @@ export default function Billing() {
       });
       window.location.assign(data.url);
     } catch (e) {
+      if (planId === "student" && e?.response?.data?.detail === "edu_verification_required") {
+        setEduOpen(true);
+        setBusy(null);
+        return;
+      }
       toast.error(e?.response?.data?.detail || "Could not start checkout");
       setBusy(null);
     }
@@ -222,6 +234,14 @@ export default function Billing() {
           <HostingSection billing={billing} onChanged={load} />
         </>
       )}
+
+      {!loading && <CreditGovernance />}
+
+      <EduVerifyDialog
+        open={eduOpen}
+        onClose={() => setEduOpen(false)}
+        onVerified={async () => { await load(); checkout("student"); }}
+      />
 
       <div className="px-4 md:px-10 max-w-3xl mx-auto mt-6 text-[12px] text-ink-mute leading-relaxed flex flex-wrap items-center gap-x-2 gap-y-1">
         <ExternalLink className="w-3 h-3" />

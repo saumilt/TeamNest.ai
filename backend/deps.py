@@ -108,6 +108,8 @@ def public_user(u: dict) -> dict:
         "pro_boost_active": bool(boost_until and boost_until > now_iso()),
         "must_change_password": bool(u.get("must_change_password")),
         "is_super_admin": is_super_admin(u),
+        "edu_verified": bool(u.get("edu_verified")),
+        "edu_email": u.get("edu_email"),
     }
 
 

@@ -24,6 +24,22 @@ const MONTHLY_PLANS = [
     cta_href: "/login?demo=1",
   },
   {
+    id: "student",
+    name: "Student",
+    price: "$6.99",
+    unit: "/ month",
+    tagline: "For students. Solo AI, shared chats.",
+    features: [
+      "2,500 AI credits / month",
+      "All AI models + multi-model comparison",
+      "Invite classmates to collaborate",
+      "AI stays solo — yours only",
+      "Requires .edu email verification",
+    ],
+    cta: "Verify & start",
+    cta_href: "/billing",
+  },
+  {
     id: "pro",
     name: "Pro",
     price: "$9.99",
@@ -279,7 +295,7 @@ export default function WebPricing() {
 
       <section>
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {plans.map((p) => (
               <PlanCard key={p.id} plan={p} highlighted={p.highlighted} />
             ))}
