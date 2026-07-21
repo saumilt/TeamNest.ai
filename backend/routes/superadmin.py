@@ -362,6 +362,42 @@ async def create_user(payload: NewUser, current=Depends(require_super_admin)):
 class UserPatch(BaseModel):
     status: Optional[str] = None          # active | suspended
     is_super_admin: Optional[bool] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None            # owner | admin | member
+
+
+@router.get("/superadmin/users/{uid}")
+async def user_detail(uid: str, current=Depends(require_super_admin)):
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    ws_name = None
+    if user.get("workspace_id"):
+        ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "name": 1})
+        ws_name = (ws or {}).get("name")
+    plan = None
+    if user.get("workspace_id"):
+        try:
+            from services.billing import get_usage
+            usage = await get_usage(user["workspace_id"])
+            plan = {"plan_id": usage["plan_id"], "plan_name": usage["plan_name"],
+                    "credits_remaining": usage["credits_remaining"],
+                    "credits_total": usage["credits_total"], "unlimited": usage["unlimited"]}
+        except Exception:
+            plan = None
+    return {
+        "id": user["id"], "name": user.get("name"), "email": user.get("email"),
+        "role": user.get("role", "member"), "status": user.get("status", "active"),
+        "is_super_admin": is_super_admin(user),
+        "workspace_id": user.get("workspace_id"), "workspace_name": ws_name,
+        "phone": user.get("phone"), "avatar": user.get("avatar"),
+        "must_change_password": bool(user.get("must_change_password")),
+        "edu_verified": bool(user.get("edu_verified")), "edu_email": user.get("edu_email"),
+        "created_at": user.get("created_at"), "updated_at": user.get("updated_at"),
+        "last_login_at": user.get("last_login_at"),
+        "plan": plan,
+    }
 
 
 @router.patch("/superadmin/users/{uid}")
@@ -384,31 +420,156 @@ async def update_user(uid: str, payload: UserPatch, current=Depends(require_supe
         if uid == current["id"] and payload.is_super_admin is False:
             raise HTTPException(400, "You can't revoke your own super-admin access")
         update["is_super_admin"] = bool(payload.is_super_admin)
+    if payload.name is not None:
+        nm = payload.name.strip()
+        if not nm:
+            raise HTTPException(400, "Name can't be empty")
+        update["name"] = nm
+    if payload.email is not None:
+        new_email = payload.email.strip().lower()
+        if "@" not in new_email:
+            raise HTTPException(400, "A valid email is required")
+        if new_email != user.get("email"):
+            clash = await db.users.find_one({"email": new_email, "id": {"$ne": uid}}, {"_id": 1})
+            if clash:
+                raise HTTPException(400, "That email is already registered to another user")
+            update["email"] = new_email
+    if payload.role is not None:
+        if payload.role not in ("owner", "admin", "member"):
+            raise HTTPException(400, "role must be owner, admin or member")
+        update["role"] = payload.role
+        await db.workspace_members.update_many(
+            {"user_id": uid, "workspace_id": user.get("workspace_id")},
+            {"$set": {"role": payload.role}},
+        )
     if update:
         update["updated_at"] = now_iso()
         await db.users.update_one({"id": uid}, {"$set": update})
-    return {"ok": True}
+    return {"ok": True, **update}
 
 
 class ResetPassword(BaseModel):
-    new_password: str = Field(min_length=1, max_length=200)
+    new_password: Optional[str] = None    # omit to auto-generate a strong one
+    send_email: bool = True               # email the new password to the user
+
+
+def _generate_temp_password() -> str:
+    """A strong temp password that satisfies the complexity policy."""
+    import secrets
+    import string
+    while True:
+        pool = string.ascii_letters + string.digits + "!@#$%^&*"
+        pw = "".join(secrets.choice(pool) for _ in range(14))
+        from auth_utils import password_complexity_error
+        if not password_complexity_error(pw):
+            return pw
+
+
+async def _send_new_password_email(name: str, email: str, password: str) -> dict:
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    html = f"""
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;color:#18181b">
+        <h2 style="margin:0 0 12px">Your TeamNest password was reset</h2>
+        <p>Hi {name or 'there'}, an administrator has reset your TeamNest password.</p>
+        <p style="background:#f4f4f5;border-radius:10px;padding:14px 16px;line-height:1.7">
+          <strong>Sign in:</strong> <a href="{base}/login">{base}/login</a><br/>
+          <strong>User ID (email):</strong> {email}<br/>
+          <strong>New temporary password:</strong> {password}
+        </p>
+        <p style="font-size:13px;color:#52525b">For your security, you'll be asked to choose a new password the next time you sign in.</p>
+      </div>"""
+    text = (f"Your TeamNest password was reset.\nSign in: {base}/login\n"
+            f"User ID: {email}\nNew temporary password: {password}\n"
+            "You'll be asked to set a new password on next login.")
+    return await mailgun_service.send_email(
+        to=[email], subject="Your TeamNest password was reset",
+        html=html, text=text, tags={"type": "password_reset"})
 
 
 @router.post("/superadmin/users/{uid}/reset-password")
 async def reset_user_password(uid: str, payload: ResetPassword, current=Depends(require_super_admin)):
+    """Set (or auto-generate) a temporary password for a user, flag it for a
+    forced change on next login, and — by default — EMAIL the new password to
+    the user. Returns the password so an admin can share it manually if the
+    email doesn't arrive."""
     from auth_utils import hash_password, password_complexity_error
-    pw_err = password_complexity_error(payload.new_password)
-    if pw_err:
-        raise HTTPException(400, pw_err)
-    if not await db.users.find_one({"id": uid}, {"_id": 1}):
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "email": 1, "name": 1})
+    if not user:
         raise HTTPException(404, "User not found")
+
+    new_password = payload.new_password
+    if new_password:
+        pw_err = password_complexity_error(new_password)
+        if pw_err:
+            raise HTTPException(400, pw_err)
+    else:
+        new_password = _generate_temp_password()
+
     await db.users.update_one(
         {"id": uid},
-        {"$set": {"password_hash": hash_password(payload.new_password),
+        {"$set": {"password_hash": hash_password(new_password),
                   "must_change_password": True, "temp_password_issued_at": now_iso(),
                   "updated_at": now_iso()}},
     )
-    return {"ok": True}
+    email_result = {"ok": False, "reason": "skipped"}
+    if payload.send_email:
+        email_result = await _send_new_password_email(user.get("name"), user["email"], new_password)
+    return {
+        "ok": True, "email": user["email"], "password": new_password,
+        "email_sent": bool(email_result.get("ok")),
+        "email_reason": email_result.get("reason"),
+    }
+
+class ResetLinkRequest(BaseModel):
+    email: Optional[str] = None
+    uid: Optional[str] = None
+    send_email: bool = True
+
+
+@router.post("/superadmin/users/reset-link")
+async def generate_reset_link(payload: ResetLinkRequest, current=Depends(require_super_admin)):
+    """Mint a single-use, 1-hour password-reset link for a user, optionally
+    email it, and ALWAYS return the link so an admin can copy/share it directly
+    when email delivery is unreliable (e.g. corporate spam filters)."""
+    import hashlib
+    import secrets
+    from datetime import datetime, timedelta, timezone
+
+    if payload.uid:
+        q = {"id": payload.uid}
+    elif payload.email:
+        q = {"email": payload.email.strip().lower()}
+    else:
+        raise HTTPException(400, "Provide an email or uid")
+    user = await db.users.find_one(q, {"_id": 0, "id": 1, "email": 1, "name": 1})
+    if not user:
+        raise HTTPException(404, "No user found with that email/ID")
+
+    raw = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "id": new_id(), "user_id": user["id"],
+        "token_hash": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+        "used": False, "created_at": now,
+        "expires_at": now + timedelta(minutes=60),
+    })
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    link = f"{base}/reset-password?token={raw}"
+
+    email_result = {"ok": False, "reason": "skipped"}
+    if payload.send_email:
+        from services.password_reset_email import send_reset_email
+        email_result = await send_reset_email(user.get("name"), user["email"], link)
+    return {
+        "ok": True,
+        "email": user["email"],
+        "reset_link": link,
+        "expires_in_minutes": 60,
+        "email_sent": bool(email_result.get("ok")),
+        "email_reason": email_result.get("reason"),
+    }
+
+
 
 
 @router.delete("/superadmin/users/{uid}")

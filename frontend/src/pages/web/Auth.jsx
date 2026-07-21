@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import SeoHelmet from "@/components/web/SeoHelmet";
+import { PasswordInput } from "@/components/ui-v2/PasswordInput";
 import { LogoMark, Wordmark, PrimaryButton, GhostButton, Pill } from "@/components/web/atoms";
 import { ChatDetailWithCompare, ChatListPanel } from "@/components/web/mocks";
 import MfaChallenge from "@/components/MfaChallenge";
@@ -293,8 +294,7 @@ function AuthForm({ mode, setMode }) {
           <label className="text-[12px] font-semibold uppercase tracking-widest text-[var(--w-text-mute)] mb-1.5 block">
             Password
           </label>
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={6}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -302,7 +302,7 @@ function AuthForm({ mode, setMode }) {
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             placeholder="••••••••"
             className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
-            data-testid="auth-password-input"
+            testId="auth-password-input"
           />
         </div>
         {mode === "login" && (

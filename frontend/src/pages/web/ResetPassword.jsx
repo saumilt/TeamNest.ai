@@ -86,8 +86,7 @@ export default function ResetPassword() {
                 <form onSubmit={submit} className="space-y-3">
                   <div>
                     <label className="text-[12px] font-semibold uppercase tracking-widest text-[var(--w-text-mute)] mb-1.5 block">New password</label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       required
                       minLength={6}
                       autoComplete="new-password"
@@ -95,7 +94,7 @@ export default function ResetPassword() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
-                      data-testid="reset-password-input"
+                      testId="reset-password-input"
                     />
                     <p className="text-[12px] text-[var(--w-text-mute)] mt-1.5">
                       At least 8 characters with an uppercase, lowercase, number and special character.
@@ -103,8 +102,7 @@ export default function ResetPassword() {
                   </div>
                   <div>
                     <label className="text-[12px] font-semibold uppercase tracking-widest text-[var(--w-text-mute)] mb-1.5 block">Confirm password</label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       required
                       minLength={6}
                       autoComplete="new-password"
@@ -112,7 +110,7 @@ export default function ResetPassword() {
                       onChange={(e) => setConfirm(e.target.value)}
                       placeholder="••••••••"
                       className="w-full h-12 px-4 rounded-[14px] bg-[var(--w-surface)] border border-[var(--w-hairline)] text-[15px] text-[var(--w-text)] placeholder:text-[var(--w-text-mute)] focus:outline-none focus:border-[var(--w-brand)]"
-                      data-testid="reset-confirm-input"
+                      testId="reset-confirm-input"
                     />
                     {mismatch && <p className="text-[12px] text-red-500 mt-1.5" data-testid="reset-mismatch">Passwords don&apos;t match.</p>}
                   </div>

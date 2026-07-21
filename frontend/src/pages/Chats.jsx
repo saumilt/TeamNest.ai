@@ -28,6 +28,8 @@ import {
   Rocket,
   ChevronDown,
   ChevronRight,
+  Check,
+  Building2,
 } from "lucide-react";
 import IntegrationsDialog from "@/components/IntegrationsDialog";
 import InviteGuestDialog from "@/components/InviteGuestDialog";
@@ -76,10 +78,84 @@ const FILTERS = [
   { value: "unread", label: "Unread" },
 ];
 
+/** Compact workspace selector shown in the chat list header. Displays the
+ *  active workspace and lets multi-workspace users switch inline. */
+function WorkspaceSelect({ workspaces, activeId, onSwitch }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef(null);
+  const active = (workspaces || []).find((w) => w.workspace_id === activeId);
+  const multi = (workspaces || []).length > 1;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const pick = async (wsId) => {
+    setOpen(false);
+    if (wsId === activeId) return;
+    setBusy(true);
+    try {
+      await onSwitch(wsId);
+      const t = (workspaces || []).find((w) => w.workspace_id === wsId);
+      toast.success(`Switched to ${t?.name || "workspace"}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not switch workspace");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="relative" ref={ref} data-testid="chat-workspace-select">
+      <button
+        type="button"
+        data-testid="chat-workspace-select-btn"
+        disabled={busy || !multi}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full h-10 px-3 rounded-xl bg-surface-2 hover:bg-surface-3 flex items-center gap-2 text-left transition-colors disabled:opacity-100 disabled:cursor-default"
+      >
+        <Building2 className="w-4 h-4 text-ink-mute shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-wider text-ink-mute leading-none mb-0.5">Workspace</div>
+          <div data-testid="chat-workspace-active-name" className="text-[13px] font-medium text-ink truncate leading-tight">
+            {active?.name || "Workspace"}
+          </div>
+        </div>
+        {multi && <ChevronDown className={`w-4 h-4 text-ink-mute shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />}
+      </button>
+      {open && multi && (
+        <div
+          data-testid="chat-workspace-select-menu"
+          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl bg-surface ring-1 ring-hairline shadow-xl overflow-hidden max-h-[280px] overflow-y-auto"
+        >
+          {(workspaces || []).map((w) => {
+            const isActive = w.workspace_id === activeId;
+            return (
+              <button
+                key={w.workspace_id}
+                type="button"
+                data-testid={`chat-workspace-option-${w.workspace_id}`}
+                onClick={() => pick(w.workspace_id)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-2 transition-colors"
+              >
+                <span className="min-w-0 flex-1 text-[13px] text-ink truncate">{w.name}</span>
+                {isActive && <Check className="w-4 h-4 text-brand shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function Chats() {
   const { chatId } = useParams();
   const nav = useNavigate();
-  const { user } = useAuth();
+  const { user, workspaces, switchWorkspace } = useAuth();
   const [params] = useSearchParams();
 
   const [chats, setChats] = useState([]);
@@ -224,6 +300,17 @@ export default function Chats() {
             />
           </div>
         </div>
+        )}
+
+        {/* Workspace selector — sits between search and the filter chips */}
+        {!listCompact && (workspaces || []).length > 0 && (
+          <div className="px-4 md:px-5 pb-1">
+            <WorkspaceSelect
+              workspaces={workspaces}
+              activeId={user?.workspace_id}
+              onSwitch={switchWorkspace}
+            />
+          </div>
         )}
 
         {/* Filter chips (hidden in compact mode) */}
