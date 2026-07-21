@@ -1303,6 +1303,12 @@ async def send_message(
     chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]})
     if not chat:
         raise HTTPException(404, "Chat not found")
+    # AI Conversation Mode — explicit exit commands (/exit-ai, /team) end the
+    # user's AI session without posting the command as a chat message.
+    from services import ai_conversation as _aiconv
+    if payload.message_type == "text" and (payload.body or "").strip().lower() in _aiconv.EXIT_COMMANDS:
+        await _aiconv.end_session(chat_id, current["id"], reason="user_command")
+        return {"ai_session_ended": True}
     # Posting policy enforcement (group chats only).
     if chat.get("type") == "group":
         policy = chat.get("posting_policy") or "all"
@@ -1441,6 +1447,26 @@ async def send_message(
     ):
         from services.dev_os_chat_suggest import maybe_suggest
         asyncio.create_task(maybe_suggest(chat, current))
+
+    # AI Conversation Mode — for a plain text message that isn't already an AI
+    # command / task / dev / slash trigger, decide whether it's a follow-up to
+    # the user's active AI conversation and route accordingly (per-user).
+    is_command_like = (
+        parsed.get("is_ai")
+        or task_cmd.get("is_task")
+        or is_devos_slash
+        or triggered_dev_agents
+    )
+    if (
+        payload.message_type == "text"
+        and not is_command_like
+        and chat.get("kind") != "development"
+        and not ((payload.metadata or {}).get("attachments"))
+    ):
+        try:
+            await _aiconv.route_untagged_message(chat, current, msg)
+        except Exception as e:
+            logger.warning("[ai-conv] route_untagged_message failed: %s", e)
 
     return msg
 

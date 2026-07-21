@@ -24,6 +24,7 @@ from routes import (
     admin,
     superadmin,
     ai,
+    ai_conversation,
     ai_employees,
     ai_employee_builder,
     ai_employee_marketplace,
@@ -97,6 +98,7 @@ api.include_router(workspace.router)
 api.include_router(folders.router)
 api.include_router(chats.router)
 api.include_router(ai.router)
+api.include_router(ai_conversation.router)  # AI Conversation Mode sessions
 api.include_router(share.router)         # AI research /share endpoints
 api.include_router(tasks.router)
 api.include_router(dashboard.router)

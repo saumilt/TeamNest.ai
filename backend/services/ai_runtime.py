@@ -21,6 +21,7 @@ from services.billing import (
     consume_credits,
     credit_cost_for_model,
 )
+from services.ai_conversation import FOLLOW_UP_SUGGESTIONS, start_or_refresh_session
 
 
 async def _finalize_research(
@@ -128,6 +129,7 @@ async def _finalize_research(
             "response_count": len(responses),
             "credits_total": credits_total,
             "credits_breakdown": credits_breakdown,
+            "follow_up_suggestions": FOLLOW_UP_SUGGESTIONS,
         },
         "reactions": {},
         "created_at": now_iso(),
@@ -391,10 +393,25 @@ async def handle_ai_command(
                 project_folder_id=(chat or {}).get("project_folder_id"),
             )
 
-    await _finalize_research(
+    answer_msg = await _finalize_research(
         thread, responses, chat_id, placeholder["id"],
         favorite_model=favorite, compare=compare,
     )
+
+    # AI Conversation Mode — keep (or start) this user's AI session so their
+    # next follow-up routes to the assistant without another @ai mention.
+    try:
+        await start_or_refresh_session(
+            workspace_id=workspace_id,
+            chat_id=chat_id,
+            user_id=user_id,
+            assistant_id="ai",
+            latest_ai_message_id=answer_msg["id"] if answer_msg else None,
+            thread_id=thread["id"],
+            topic=(question or "")[:120],
+        )
+    except Exception as e:
+        logger.warning("[ai-conv] session refresh failed: %s", e)
 
     # Auto-learn durable facts/preferences from this exchange (fire-and-forget).
     if workspace_id:

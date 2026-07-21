@@ -70,6 +70,8 @@ export default function MessageBubble({
         onCreateTask,
         onPickIdea,
         comparisonAllowed = true,
+        onFollowUp,
+        onRouteChoice,
 }) {
         const isAI =
                 message.sender_id === "ai-system" ||
@@ -297,6 +299,28 @@ export default function MessageBubble({
                                                         </div>
                                                 )}
 
+                                                {/* AI Conversation Mode — inline "Continue with AI?" choice for an
+                                                    ambiguous message the sender just posted. */}
+                                                {isMe && onRouteChoice && message.metadata?.pending_ai_route && (
+                                                        <div className="mt-2 flex items-center flex-wrap gap-2 border border-ai/30 bg-ai/5 rounded-xl px-2.5 py-2" data-testid={`route-choice-${message.id}`}>
+                                                                <span className="text-[11px] text-ink-mute">Continue with AI?</span>
+                                                                <button
+                                                                        data-testid={`route-ai-${message.id}`}
+                                                                        onClick={() => onRouteChoice(message.id, "ai")}
+                                                                        className="text-[11px] text-black bg-ai hover:opacity-90 px-2.5 h-7 rounded-full inline-flex items-center gap-1"
+                                                                >
+                                                                        Yes, ask AI
+                                                                </button>
+                                                                <button
+                                                                        data-testid={`route-chat-${message.id}`}
+                                                                        onClick={() => onRouteChoice(message.id, "chat")}
+                                                                        className="text-[11px] text-ink-mute hover:text-ink border border-hairline px-2.5 h-7 rounded-full"
+                                                                >
+                                                                        Send to chat instead
+                                                                </button>
+                                                        </div>
+                                                )}
+
                                                 {/* AI thread peek */}
                                                 {(isAIAnswer || isAIQuestion) && message.metadata?.thread_id && (
                                                         <div className="mt-2 flex flex-wrap gap-2">
@@ -325,6 +349,22 @@ export default function MessageBubble({
                                                                                         {/* Phase 4 — Memory sources panel under AI answers */}
                                                                                         {isAIAnswer && message.metadata?.thread_id && (
                                                                                                 <MemorySourcesPanel threadId={message.metadata.thread_id} />
+                                                                                        )}
+
+                                                                                        {/* AI Conversation Mode — one-tap follow-up chips */}
+                                                                                        {isAIAnswer && onFollowUp && Array.isArray(message.metadata?.follow_up_suggestions) && (
+                                                                                                <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`followups-${message.id}`}>
+                                                                                                        {message.metadata.follow_up_suggestions.map((s) => (
+                                                                                                                <button
+                                                                                                                        key={s}
+                                                                                                                        data-testid={`followup-${s.toLowerCase().replace(/\s+/g, "-")}`}
+                                                                                                                        onClick={() => onFollowUp(s, message)}
+                                                                                                                        className="text-[11px] text-ink-mute hover:text-ink border border-hairline hover:border-ai/40 hover:bg-ai/5 px-2.5 h-7 rounded-full inline-flex items-center gap-1"
+                                                                                                                >
+                                                                                                                        {s}
+                                                                                                                </button>
+                                                                                                        ))}
+                                                                                                </div>
                                                                                         )}
                                         </Bubble>
 

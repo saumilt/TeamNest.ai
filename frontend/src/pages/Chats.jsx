@@ -718,6 +718,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [activeThread, setActiveThread] = useState(initialThread || null);
   const [fullScreenThread, setFullScreenThread] = useState(null);
   const [comparisonAllowed, setComparisonAllowed] = useState(true);
+  const [aiSession, setAiSession] = useState({ active: false });
   const [typingUsers, setTypingUsers] = useState({});
   const typingTimersRef = useRef({});
   const wsRef = useRef(null);
@@ -736,6 +737,26 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // AI Conversation Mode — track this user's active AI session for the chat so
+  // the composer can show "Continuing with @ai" and route follow-ups.
+  const refreshAiSession = useCallback(() => {
+    if (!chatId) return;
+    api.get(`/chats/${chatId}/ai-session`)
+      .then(({ data }) => setAiSession(data || { active: false }))
+      .catch(() => {});
+  }, [chatId]);
+
+  useEffect(() => { refreshAiSession(); }, [refreshAiSession]);
+
+  const exitAiSession = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      await api.post(`/chats/${chatId}/ai-session/exit`);
+    } catch { /* ignore */ }
+    setAiSession({ active: false });
+    toast.info("AI conversation ended. Your next message will go to the chat.");
+  }, [chatId]);
 
   useEffect(() => {
     setMessages([]);
@@ -859,8 +880,38 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     try {
       await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata });
       onChatChange?.();
+      refreshAiSession();
+      setTimeout(refreshAiSession, 4500);
     } catch {
       toast.error("Failed to send");
+    }
+  };
+
+  // AI Conversation Mode — follow-up chip under an AI answer. "Create task"
+  // opens the task dialog; everything else is sent as a follow-up message that
+  // auto-routes to the active AI assistant (no @ai needed).
+  const onFollowUp = async (text, message) => {
+    if (text === "Create task") {
+      setShowTask(message);
+      return;
+    }
+    try {
+      await api.post(`/chats/${chatId}/messages`, { body: text, message_type: "text", metadata: {} });
+      onChatChange?.();
+      refreshAiSession();
+      setTimeout(refreshAiSession, 4500);
+    } catch {
+      toast.error("Failed to send follow-up");
+    }
+  };
+
+  // Resolve an ambiguous message the user was asked about.
+  const onRouteChoice = async (messageId, to) => {
+    try {
+      await api.post(`/chats/${chatId}/ai-session/route`, { message_id: messageId, to });
+      if (to === "ai") setTimeout(refreshAiSession, 4500);
+    } catch {
+      toast.error("Couldn't route message");
     }
   };
 
@@ -986,6 +1037,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         comparisonAllowed={comparisonAllowed}
         onCreateTask={(msg) => setShowTask(msg)}
         onPickIdea={(text) => setDraft((d) => (d ? `${d} ${text}` : text))}
+        onFollowUp={onFollowUp}
+        onRouteChoice={onRouteChoice}
         topSlot={
           <>
             <PreviewViewersChip chatId={chatId} />
@@ -1052,6 +1105,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onOpenImprove={() => setShowImprove(true)}
         onOpenAI={() => setShowAI(true)}
         comparisonAllowed={comparisonAllowed}
+        aiSession={aiSession}
+        onExitAi={exitAiSession}
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }

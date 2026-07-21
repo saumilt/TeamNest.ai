@@ -43,6 +43,8 @@ export default function ChatComposer({
   onOpenAI,
   onRefreshMessages,
   comparisonAllowed = true,
+  aiSession = { active: false },
+  onExitAi,
 }) {
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
@@ -62,6 +64,27 @@ export default function ChatComposer({
       )}
       {!showAI && (
         <>
+          {aiSession?.active && (
+            <div
+              className="flex items-center justify-between gap-2 mb-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1"
+              data-testid="ai-conversation-indicator"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 text-ai shrink-0" />
+                <span className="text-[12px] text-ink truncate">
+                  Continuing with <span className="text-ai font-semibold">@ai</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                data-testid="ai-conversation-exit"
+                onClick={onExitAi}
+                className="text-[10px] font-mono uppercase tracking-widest text-ink-mute hover:text-ink border border-hairline hover:bg-surface-2 px-2 h-6 rounded-full inline-flex items-center gap-1 shrink-0"
+              >
+                <X className="w-3 h-3" /> Exit AI
+              </button>
+            </div>
+          )}
           {attachments.length > 0 && (
             <div
               className="flex flex-wrap gap-2 mb-2"
@@ -246,7 +269,9 @@ export default function ChatComposer({
                 }
                 onSendTyping?.();
               }}
-              placeholder={`Message ${chat.name || "team"} — type @ for AI · @dev for engineers · / for Dev OS`}
+              placeholder={aiSession?.active
+                ? "Ask a follow-up… (or type @someone to message the team)"
+                : `Message ${chat.name || "team"} — type @ for AI · @dev for engineers · / for Dev OS`}
               className="bg-surface-2 border-hairline rounded-2xl min-h-[44px] max-h-[160px] resize-none text-[14px] px-4 py-2.5"
               rows={1}
             />
