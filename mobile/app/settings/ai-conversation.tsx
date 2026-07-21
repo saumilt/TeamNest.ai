@@ -78,6 +78,8 @@ export default function AIConversationSettingsScreen() {
   const [canEdit, setCanEdit] = useState(false);
   const [sec, setSec] = useState<any>(null);
   const [accounts, setAccounts] = useState<any>(null);
+  const [previewText, setPreviewText] = useState("");
+  const [preview, setPreview] = useState<any>(null);
 
   const load = async () => {
     try {
@@ -95,6 +97,17 @@ export default function AIConversationSettingsScreen() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!ws || !previewText.trim()) { setPreview(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const r = await apiPost("/api/ai-conversation/route-preview", { text: previewText, threshold: ws.follow_up_threshold });
+        setPreview(r);
+      } catch { setPreview(null); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [previewText, ws]);
 
   const savePrefs = async () => {
     try {
@@ -172,6 +185,24 @@ export default function AIConversationSettingsScreen() {
                 value={ws.default_timeout_minutes} onSelect={(v: any) => setWs({ ...ws, default_timeout_minutes: v })} />
               <Pills testID="ws-threshold" label="Default sensitivity" options={THRESHOLDS.filter((t) => t.value !== null)}
                 value={ws.follow_up_threshold} onSelect={(v: any) => setWs({ ...ws, follow_up_threshold: v })} />
+              <View style={styles.previewBox}>
+                <Text style={styles.rowLabel}>Test a message (live preview)</Text>
+                <TextInput testID="preview-input" value={previewText} onChangeText={setPreviewText}
+                  placeholder="e.g. make it shorter" placeholderTextColor={colors.textMuted}
+                  style={styles.previewInput} />
+                {preview ? (
+                  <View style={styles.previewResult} testID="preview-result">
+                    <Text style={styles.rowHint}>Would route to:</Text>
+                    <View style={[styles.previewBadge,
+                      preview.decision === "ai" ? styles.badgeAi : preview.decision === "ask" ? styles.badgeAsk : styles.badgeChat]}>
+                      <Text style={styles.previewBadgeText} testID="preview-decision">
+                        {preview.decision === "ai" ? "AI" : preview.decision === "ask" ? "Ask" : "Team chat"}
+                      </Text>
+                    </View>
+                    <Text style={styles.rowHint}>conf {preview.score}</Text>
+                  </View>
+                ) : null}
+              </View>
               <TouchableOpacity testID="ws-save" onPress={saveWs} style={styles.saveBtn}>
                 <Text style={styles.saveBtnText}>Save workspace defaults</Text>
               </TouchableOpacity>
@@ -237,6 +268,14 @@ const styles = StyleSheet.create({
   saveBtnText: { color: "#09090b", fontWeight: "800", fontSize: font.small },
   expiryRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   expiryInput: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, color: colors.textPrimary, width: 70, textAlign: "center" },
+  previewBox: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm },
+  previewInput: { marginTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 8, color: colors.textPrimary },
+  previewResult: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  previewBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
+  previewBadgeText: { fontSize: 11, fontWeight: "800", color: colors.textPrimary },
+  badgeAi: { backgroundColor: "rgba(245,197,66,0.18)" },
+  badgeAsk: { backgroundColor: "rgba(234,179,8,0.18)" },
+  badgeChat: { backgroundColor: "rgba(255,255,255,0.08)" },
   acctRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, marginBottom: 6 },
   badge: { alignSelf: "flex-start", marginTop: 4, fontSize: 10, color: colors.textMuted, backgroundColor: colors.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, overflow: "hidden" },
   badgeExpired: { color: "#f87171", backgroundColor: "rgba(248,113,113,0.12)" },

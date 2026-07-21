@@ -5,7 +5,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from deps import db, logger, manager, require_user
+from deps import db, logger, manager, new_id, now_iso, require_user
 from services import ai_conversation as aiconv
 
 router = APIRouter()
@@ -17,9 +17,11 @@ def _public_session(sess: dict | None) -> dict:
     return {
         "active": True,
         "assistant_id": sess.get("assistant_id") or "ai",
+        "assistant_label": sess.get("assistant_label"),
         "topic": sess.get("topic"),
         "thread_id": sess.get("thread_id"),
         "latest_ai_message_id": sess.get("latest_ai_message_id"),
+        "context_summary": sess.get("context_summary"),
         "expires_at": sess.get("expires_at"),
         "started_at": sess.get("started_at"),
     }
@@ -158,6 +160,32 @@ async def update_ws_settings(payload: WsSettingsIn, current=Depends(require_user
     from services.workspace_settings import set_ws_ai_conversation
     vals = {k: v for k, v in payload.model_dump().items() if v is not None}
     return {"ai_conversation": await set_ws_ai_conversation(current["workspace_id"], vals)}
+
+
+class RoutePreviewIn(BaseModel):
+    text: str
+    threshold: float | None = None
+
+
+@router.post("/ai-conversation/route-preview")
+async def route_preview(payload: RoutePreviewIn, current=Depends(require_user)):
+    """Live preview for admins tuning the follow-up threshold: score a sample
+    message as if a fresh AI session were active and show where it would go."""
+    from services.workspace_settings import get_effective_ai_settings
+    eff = await get_effective_ai_settings(current.get("workspace_id"), current["id"])
+    high = payload.threshold if payload.threshold is not None else eff["follow_up_threshold"]
+    fake_session = {"last_activity_at": now_iso(), "topic": None}
+    score, reasons = await aiconv.score_follow_up(
+        session=fake_session, body=payload.text or "",
+        workspace_id=current.get("workspace_id"), high_threshold=high,
+    )
+    if score >= high:
+        decision = "ai"
+    elif score >= aiconv.THRESHOLD_LOW:
+        decision = "ask"
+    else:
+        decision = "chat"
+    return {"score": round(score, 3), "decision": decision, "threshold": high, "reasons": reasons}
 
 
 # ── Save AI conversation to Role Intelligence (owner saves, members suggest) ──

@@ -50,6 +50,8 @@ export default function AIConversationSettings() {
   const [accounts, setAccounts] = useState(null);
   const [savingP, setSavingP] = useState(false);
   const [savingW, setSavingW] = useState(false);
+  const [previewText, setPreviewText] = useState("");
+  const [preview, setPreview] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +67,17 @@ export default function AIConversationSettings() {
     } catch { toast.error("Failed to load settings"); }
   }, [isAdmin]);
   useEffect(() => { load(); }, [load]);
+
+  // Live preview: score a sample message at the current workspace threshold.
+  useEffect(() => {
+    if (!ws || !previewText.trim()) { setPreview(null); return; }
+    const t = setTimeout(() => {
+      api.post("/ai-conversation/route-preview", { text: previewText, threshold: ws.follow_up_threshold })
+        .then(({ data }) => setPreview(data))
+        .catch(() => setPreview(null));
+    }, 450);
+    return () => clearTimeout(t);
+  }, [previewText, ws]);
 
   const savePrefs = async () => {
     setSavingP(true);
@@ -156,6 +169,24 @@ export default function AIConversationSettings() {
           <Select label="Default follow-up sensitivity" testid="ws-threshold"
             value={String(ws.follow_up_threshold)}
             onChange={(v) => setWs({ ...ws, follow_up_threshold: Number(v) })} options={WS_THRESHOLDS} />
+          <div className="mt-2 rounded-xl border border-line bg-bg p-3">
+            <label className="text-xs text-ink-mute block mb-1.5">Test a message (live preview)</label>
+            <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} data-testid="preview-input"
+              placeholder="e.g. make it shorter"
+              className="w-full h-9 rounded-lg bg-surface border border-line px-2 text-sm text-ink" />
+            {preview && (
+              <div className="mt-2 flex items-center gap-2 text-xs" data-testid="preview-result">
+                <span className="text-ink-mute">Would route to:</span>
+                <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                  preview.decision === "ai" ? "bg-ai/15 text-ai"
+                  : preview.decision === "ask" ? "bg-yellow-500/15 text-yellow-400"
+                  : "bg-white/10 text-ink-mute"}`} data-testid="preview-decision">
+                  {preview.decision === "ai" ? "AI" : preview.decision === "ask" ? "Ask (Continue with AI?)" : "Team chat"}
+                </span>
+                <span className="text-ink-mute">confidence {preview.score}</span>
+              </div>
+            )}
+          </div>
           <button onClick={saveWs} disabled={savingW} data-testid="ws-save"
             className="mt-3 h-9 px-4 rounded-xl bg-ai text-black font-bold text-sm flex items-center gap-2 disabled:opacity-50">
             {savingW && <Loader2 className="w-4 h-4 animate-spin" />} Save workspace defaults

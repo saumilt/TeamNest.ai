@@ -311,6 +311,22 @@ async def _run_employee(chat: dict, sender: dict, message: dict, employee_key: s
             workflow="employee",
             project_folder_id=chat.get("project_folder_id"),
         )
+        # AI Conversation Mode — keep this user's session pointed at THIS
+        # employee so untagged follow-ups continue with it (no re-mention).
+        try:
+            from services import ai_conversation as _aiconv
+            label = f"@{(emp.get('name') or 'AI').split(' ')[0]}"
+            await _aiconv.note_active_assistant(
+                workspace_id=workspace_id, chat_id=chat["id"], user_id=sender["id"],
+                assistant_id=f"employee:{employee_key}", assistant_label=label,
+            )
+            await _aiconv.start_or_refresh_session(
+                workspace_id=workspace_id, chat_id=chat["id"], user_id=sender["id"],
+                assistant_id=f"employee:{employee_key}", assistant_label=label,
+                latest_ai_message_id=placeholder["id"], topic=question[:120],
+            )
+        except Exception:
+            pass
 
 
 def schedule_employee_if_addressed(chat: dict, sender: dict, message: dict) -> bool:

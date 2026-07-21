@@ -118,6 +118,22 @@ async def _respond(chat: dict, sender: dict, message: dict, deployment: dict) ->
             await record_ai_employee_usage(ws, eid, sender.get("id"))
         except Exception:
             pass
+        # AI Conversation Mode — continue with this deployed employee on
+        # subsequent untagged follow-ups.
+        try:
+            from services import ai_conversation as _aiconv
+            label = f"@{handle}" if handle else f"@{display}"
+            await _aiconv.note_active_assistant(
+                workspace_id=ws, chat_id=chat["id"], user_id=sender["id"],
+                assistant_id=f"deploy:{handle}", assistant_label=label,
+            )
+            await _aiconv.start_or_refresh_session(
+                workspace_id=ws, chat_id=chat["id"], user_id=sender["id"],
+                assistant_id=f"deploy:{handle}", assistant_label=label,
+                latest_ai_message_id=placeholder["id"], topic=question[:120],
+            )
+        except Exception:
+            pass
 
 
 async def _notify_escalation(emp, chat, sender, question, answer):

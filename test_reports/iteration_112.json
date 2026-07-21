@@ -1,0 +1,52 @@
+{
+  "summary": "TeamNest.ai AI Conversation Mode Phase 2 POLISH tested on backend + web + mobile. Backend: 9/9 pytest passed — route-preview returns {score, decision, threshold, reasons} with correct decisions ('make it shorter'->ai 0.99, 'thanks team...'->chat 0.4, threshold override lowers/raises decision as expected). ai-session now exposes context_summary + assistant_label. AI employee session hook verified end-to-end via '@cmo' catalog mention: session.assistant_id becomes 'employee:cmo' and untagged follow-up 'make it shorter' auto-routes to AI CMO (ai-cmo sender, employee_key=cmo) — NOT to generic @ai. Multi-assistant switch banner ('Active AI changed from @AI to @ai') verified in messages after switching between @cmo -> @ai. save-to-role no longer 500s (returns proposed>=0). Web: /ai-memory admin 'Workspace defaults' shows preview-input + preview-result + preview-decision='AI'. Mobile: /settings/ai-conversation admin shows preview-input + preview-result 'Would route to: AI conf 0.99' with correct badge. Memory-peek UI code is correctly gated on aiSession.active && aiSession.context_summary — code review verified selectors + bindings; not exercised end-to-end in a chat where the session had a populated context_summary in this run (rolling summary refresh requires 4+ AI turns AND the LLM background task to finish; the ai-session shape now includes the field so the UI will render as soon as it lands).",
+  "platforms_tested": ["backend", "web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [
+    {
+      "flow": "Route-preview live UI",
+      "platform": "both",
+      "issue": "Behaviour identical (both platforms show AI/Ask/Team chat badge + confidence).",
+      "expected": "Parity",
+      "actual": "Parity confirmed"
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration112_ai_conv_phase2_polish.py",
+    "/app/test_reports/pytest/iteration112.xml"
+  ],
+  "action_items": [
+    "MINOR: assistant_label for catalog AI employees currently resolves to '@AI' (from ai_employee_dispatcher.py:318: `f\"@{(emp.get('name') or 'AI').split(' ')[0]}\"` where emp.name='AI CMO' -> first token 'AI'). This makes CMO/Sales/Paralegal all render as '@AI' — indistinguishable from the base @ai assistant and from each other. Review request expected label like '@Cmo'. Suggest: use `emp.get('command')` (e.g. 'AI CMO') minus the 'AI ' prefix, or use employee_key.title() — e.g. `f\"@{employee_key.capitalize()}\"` -> '@Cmo'. Same concern in ai_employee_deploy_dispatcher.py (deploy path currently already uses the deployed handle in labels — validate). This also affects the switch banner text: currently posts 'Active AI changed from @AI to @ai' which is confusing (case-only difference).",
+    "OPTIONAL: The memory-peek toggle only renders when aiSession.context_summary is populated AND session is active — verified via code review. End-to-end UI trigger requires a chat with 4+ AI turns and the background _refresh_conversation_summary task to complete. Main agent may want to add a dev/QA affordance to force-populate context_summary or a small debug script (e.g. a POST /api/chats/{id}/ai-session/refresh-summary) so testers can exercise the UI without waiting for the rolling summary cadence."
+  ],
+  "critical_code_review_comments": [
+    "routes/ai_conversation.py:14-27 — _public_session now correctly exposes assistant_label + context_summary (Feature A). LGTM.",
+    "routes/ai_conversation.py:170-188 — /ai-conversation/route-preview: builds a synthetic session with last_activity_at=now (to satisfy 'very_recent' reason) and uses effective settings when no threshold passed. Correctly requires auth (require_user) but not admin — matches the spec 'Available to any authenticated user'. LGTM.",
+    "routes/ai_conversation.py:222-253 (save-to-role) — new_id + now_iso are now used in the proposed>0 path via top-level import (line 8: `from deps import ... new_id, now_iso ...`); regression fix verified. 200 response on real content-rich chat.",
+    "services/ai_employee_dispatcher.py:314-329 — Correctly calls both note_active_assistant() and start_or_refresh_session() so the session pointer moves to 'employee:<key>' AND the switch banner is posted when the assistant changes. Fire-and-forget wrapper via try/except so any DB error doesn't block the employee reply. LGTM apart from the label derivation bug noted above.",
+    "services/ai_employee_deploy_dispatcher.py:120-135 — Same pattern for deployed employees using 'deploy:<handle>'. Not exercised in this run (no deployed employees in preview env)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration112_ai_conv_phase2_polish.py"
+  ],
+  "success_rate": {"backend": "100% (9/9 passed)", "frontend": "100% for verified surfaces (web B live-preview + mobile B live-preview confirmed on real UI; web/mobile A memory-peek code + selectors confirmed by review, gated on runtime context_summary population)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 used (super admin, unlimited credits, has AI employees available).",
+  "seed_data_creation": "Two throwaway group chats created and best-effort cleared via /clear: TEST_iter112_polish (rolling-summary + save-to-role) and TEST_iter112_C (feature C — @cmo + follow-up + @ai switch). A handful of ai_conversation_sessions rows left in DB (safe to keep).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 3 polish features are functionally correct on backend + Feature B UI (web + mobile) is fully exercised. The one behavioural nit: catalog AI employees all get assistant_label='@AI' because the label is derived from the FIRST token of emp['name']='AI XYZ'. Recommend main agent switch to `emp['name'].replace('AI ','')` or `employee_key.title()`. Web/mobile memory-peek UI (Feature A) is code-review clean and the API now serves context_summary/assistant_label — end-to-end UI verification needs an existing chat with an active session + populated context_summary (rolling summary requires >=4 AI turns and the background task).",
+  "rca of the issue": "Assistant-label bug RCA: `services/ai_employee_dispatcher.py:318` computes `label = f\"@{(emp.get('name') or 'AI').split(' ')[0]}\"` — since all catalog employees have name starting with 'AI ' (AI CMO / AI Sales / AI Paralegal), split(' ')[0] always returns 'AI'. Fix: use `emp['name'].replace('AI ','',1)` or `employee_key.capitalize()` to yield '@Cmo' / '@Sales' / '@Paralegal' as the spec expects."
+}

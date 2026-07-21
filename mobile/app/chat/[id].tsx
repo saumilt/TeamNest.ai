@@ -55,6 +55,7 @@ export default function ChatScreen() {
   const [saveRoleOpen, setSaveRoleOpen] = useState(false);
   const [roles, setRoles] = useState<any[]>([]);
   const [msgAction, setMsgAction] = useState<any>(null);
+  const [showMemory, setShowMemory] = useState(false);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -505,19 +506,31 @@ export default function ChatScreen() {
           />
           <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
             {aiSession?.active && (
-              <View style={styles.aiIndicator} testID="ai-conversation-indicator">
-                <View style={styles.aiIndicatorLeft}>
-                  <Ionicons name="sparkles" size={14} color={colors.accent} />
-                  <Text style={styles.aiIndicatorText}>Continuing with @ai</Text>
+              <View>
+                <View style={styles.aiIndicator} testID="ai-conversation-indicator">
+                  <View style={styles.aiIndicatorLeft}>
+                    <Ionicons name="sparkles" size={14} color={colors.accent} />
+                    <Text style={styles.aiIndicatorText}>Continuing with {aiSession.assistant_label || "@ai"}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {aiSession.context_summary ? (
+                      <TouchableOpacity testID="ai-memory-toggle" onPress={() => setShowMemory((v) => !v)} style={styles.aiIndicatorExit}>
+                        <Ionicons name="bulb-outline" size={13} color={colors.textMuted} />
+                        <Text style={styles.aiIndicatorExitText}>Memory</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity testID="ai-conversation-exit" onPress={exitAiSession} style={styles.aiIndicatorExit}>
+                      <Ionicons name="close" size={13} color={colors.textMuted} />
+                      <Text style={styles.aiIndicatorExitText}>Exit AI</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <TouchableOpacity
-                  testID="ai-conversation-exit"
-                  onPress={exitAiSession}
-                  style={styles.aiIndicatorExit}
-                >
-                  <Ionicons name="close" size={13} color={colors.textMuted} />
-                  <Text style={styles.aiIndicatorExitText}>Exit AI</Text>
-                </TouchableOpacity>
+                {showMemory && aiSession.context_summary ? (
+                  <View style={styles.memoryPanel} testID="ai-memory-panel">
+                    <Text style={styles.memoryTitle}>Conversation memory</Text>
+                    <Text style={styles.memoryText}>{aiSession.context_summary}</Text>
+                  </View>
+                ) : null}
               </View>
             )}
             {attachments.length > 0 && (
@@ -775,6 +788,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   aiIndicatorExitText: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  memoryPanel: { marginTop: 6, marginBottom: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgElevated, borderRadius: radius.md, padding: 10 },
+  memoryTitle: { color: colors.accent, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
+  memoryText: { color: colors.textSecondary, fontSize: 12, lineHeight: 17 },
   systemWrap: { alignItems: "center", marginVertical: spacing.sm },
   systemText: {
     color: colors.textMuted,

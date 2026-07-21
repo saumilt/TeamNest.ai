@@ -8,6 +8,7 @@ import {
   Paperclip,
   X,
   Camera,
+  Brain,
   Image as ImageIcon,
 } from "lucide-react";
 import AIComposer from "@/components/AIComposer";
@@ -49,6 +50,7 @@ export default function ChatComposer({
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
   const [caret, setCaret] = useState(-1);
+  const [showMemory, setShowMemory] = useState(false);
   return (
     <div className="border-t border-hairline px-3 md:px-6 py-3 bg-bg pb-[calc(env(safe-area-inset-bottom)+12px)]">
       {showAI && (
@@ -65,24 +67,44 @@ export default function ChatComposer({
       {!showAI && (
         <>
           {aiSession?.active && (
-            <div
-              className="flex items-center justify-between gap-2 mb-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1"
-              data-testid="ai-conversation-indicator"
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Sparkles className="w-3.5 h-3.5 text-ai shrink-0" />
-                <span className="text-[12px] text-ink truncate">
-                  Continuing with <span className="text-ai font-semibold">@ai</span>
-                </span>
+            <div className="mb-2" data-testid="ai-conversation-indicator">
+              <div className="flex items-center justify-between gap-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Sparkles className="w-3.5 h-3.5 text-ai shrink-0" />
+                  <span className="text-[12px] text-ink truncate">
+                    Continuing with{" "}
+                    <span className="text-ai font-semibold">{aiSession.assistant_label || "@ai"}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {aiSession.context_summary && (
+                    <button
+                      type="button"
+                      data-testid="ai-memory-toggle"
+                      onClick={() => setShowMemory((v) => !v)}
+                      className="text-[10px] font-mono uppercase tracking-widest text-ink-mute hover:text-ai border border-hairline hover:bg-ai/10 px-2 h-6 rounded-full inline-flex items-center gap-1"
+                    >
+                      <Brain className="w-3 h-3" /> Memory
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-testid="ai-conversation-exit"
+                    onClick={onExitAi}
+                    className="text-[10px] font-mono uppercase tracking-widest text-ink-mute hover:text-ink border border-hairline hover:bg-surface-2 px-2 h-6 rounded-full inline-flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" /> Exit AI
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                data-testid="ai-conversation-exit"
-                onClick={onExitAi}
-                className="text-[10px] font-mono uppercase tracking-widest text-ink-mute hover:text-ink border border-hairline hover:bg-surface-2 px-2 h-6 rounded-full inline-flex items-center gap-1 shrink-0"
-              >
-                <X className="w-3 h-3" /> Exit AI
-              </button>
+              {showMemory && aiSession.context_summary && (
+                <div className="mt-1.5 rounded-xl border border-hairline bg-surface-2 p-3" data-testid="ai-memory-panel">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-ink-mute mb-1.5 flex items-center gap-1">
+                    <Brain className="w-3 h-3 text-ai" /> Conversation memory
+                  </p>
+                  <pre className="text-[11px] text-ink whitespace-pre-wrap font-sans leading-relaxed">{aiSession.context_summary}</pre>
+                </div>
+              )}
             </div>
           )}
           {attachments.length > 0 && (
