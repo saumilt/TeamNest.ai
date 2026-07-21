@@ -94,6 +94,7 @@ async def start_or_refresh_session(
     chat_id: str,
     user_id: str,
     assistant_id: str = DEFAULT_ASSISTANT_ID,
+    assistant_label: Optional[str] = None,
     latest_ai_message_id: Optional[str] = None,
     thread_id: Optional[str] = None,
     topic: Optional[str] = None,
@@ -117,6 +118,8 @@ async def start_or_refresh_session(
         "expires_at": expires,
         "updated_at": now.isoformat(),
     }
+    if assistant_label:
+        set_fields["assistant_label"] = assistant_label
     if latest_ai_message_id:
         set_fields["latest_ai_message_id"] = latest_ai_message_id
     if thread_id:
@@ -347,6 +350,33 @@ def _trigger_ai(chat_id: str, user_id: str, body: str, attachments=None) -> None
     )
 
 
+async def _trigger_for_session(session: Optional[dict], chat: dict, user: dict, msg: dict) -> None:
+    """Route a follow-up to whichever assistant owns the session — the generic
+    @ai, a catalog AI employee (`employee:<key>`), or a deployed employee
+    (`deploy:<handle>`)."""
+    aid = (session or {}).get("assistant_id") or "ai"
+    body = msg.get("body") or ""
+    attachments = (msg.get("metadata") or {}).get("attachments") or None
+    if aid.startswith("employee:"):
+        key = aid.split(":", 1)[1]
+        from services.ai_employee_dispatcher import _run_employee
+        asyncio.create_task(_run_employee(chat, user, msg, key, body))
+    elif aid.startswith("deploy:"):
+        handle = aid.split(":", 1)[1]
+        from services.ai_employee_deploy_dispatcher import _respond
+
+        async def _go():
+            d = await db.ai_employee_deployments.find_one(
+                {"workspace_id": chat.get("workspace_id"), "status": "active", "handle": handle},
+                {"_id": 0},
+            )
+            if d and not (d.get("channel") == "chat" and d.get("chat_id") and d["chat_id"] != chat["id"]):
+                await _respond(chat, user, msg, d)
+        asyncio.create_task(_go())
+    else:
+        _trigger_ai(chat["id"], user["id"], body, attachments)
+
+
 async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
     """Decide where a plain text message (no @ai / task / dev command) should
     go, honoring the user's AI Conversation Mode session. Returns a decision
@@ -409,7 +439,7 @@ async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
 
     # Replying to an AI message is an unambiguous follow-up.
     if is_reply_to_ai:
-        _trigger_ai(chat_id, user_id, body, attachments)
+        await _trigger_for_session(session, chat, user, msg)
         await _log("ai", 0.95, True, ["reply_to_ai"], sid)
         return {"routed": "ai"}
 
@@ -437,14 +467,14 @@ async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
         high_threshold=high_threshold,
     )
     if score >= high_threshold:
-        _trigger_ai(chat_id, user_id, body, attachments)
+        await _trigger_for_session(session, chat, user, msg)
         await _log("ai", score, True, reasons, sid)
         return {"routed": "ai"}
     if score >= THRESHOLD_LOW:
         # Ambiguous band. If the user opted out of being asked, auto-continue
         # to AI; otherwise offer the inline "Continue with AI?" choice.
         if not ask_when_ambiguous:
-            _trigger_ai(chat_id, user_id, body, attachments)
+            await _trigger_for_session(session, chat, user, msg)
             await _log("ai", score, True, reasons + ["ask_disabled"], sid)
             return {"routed": "ai"}
         from deps import manager
