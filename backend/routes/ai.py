@@ -34,7 +34,7 @@ from services.ai_runtime import (
     deduct_credits_for_responses,
     filter_models_by_credits,
 )
-from services.billing import get_usage
+from services.billing import get_usage, is_comparison_allowed
 from routes.chat_ai_settings import check_ai_allowed, record_ai_usage
 from services.memory_rag import (
     build_rag_context,
@@ -65,6 +65,12 @@ async def _gate_research_models(chat, current, payload):
         if not requested:
             raise HTTPException(403, "Premium models are disabled for this group.")
     if not settings.get("multi_model_compare_enabled", True) and len(requested) > 1:
+        requested = requested[:1]
+
+    # Paid-only gate: multi-model comparison requires a paid (Pro/Team) or
+    # unlimited workspace. Free-plan users still get the single AI answer, so
+    # silently cap the request to one model instead of erroring.
+    if len(requested) > 1 and not await is_comparison_allowed(current["workspace_id"]):
         requested = requested[:1]
 
     allowed_models, blocked = await filter_models_by_credits(
@@ -329,6 +335,17 @@ async def run_models(
     chat = await db.chats.find_one({"id": thread["chat_id"], "member_ids": current["id"]})
     if not chat:
         raise HTTPException(404, "Chat not found")
+
+    # Paid-only gate: running multiple models to compare is a Pro/Team feature.
+    if not await is_comparison_allowed(current["workspace_id"]):
+        raise HTTPException(
+            402,
+            {
+                "code": "comparison_paid_only",
+                "message": "Multi-model AI comparison is a Pro/Team feature. "
+                "Upgrade from the Billing page to compare models.",
+            },
+        )
 
     existing_docs = await db.ai_responses.find(
         {"research_thread_id": thread_id}, {"model_key": 1, "_id": 0}

@@ -26,7 +26,7 @@ function labelForDay(d) {
  * and day separators. Pure presentational; receives the full ordered list.
  */
 const MessageList = forwardRef(function MessageList(
-        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot },
+        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true },
         scrollRef,
 ) {
         // The "AI question" bubble echoes the user's own message verbatim (redundant —
@@ -74,6 +74,7 @@ const MessageList = forwardRef(function MessageList(
                                 onOpenThread={onOpenThread}
                                 onCreateTask={onCreateTask}
                                 onPickIdea={onPickIdea}
+                                comparisonAllowed={comparisonAllowed}
                         />,
                 );
         }

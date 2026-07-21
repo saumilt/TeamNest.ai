@@ -25,6 +25,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<null | "login" | "demo">(null);
   const [error, setError] = useState("");
+  const [showPw, setShowPw] = useState(false);
 
   const doLogin = async () => {
     setError("");
@@ -84,19 +85,42 @@ export default function Login() {
             placeholder="you@team.com"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="email"
+            textContentType="emailAddress"
             keyboardType="email-address"
             style={styles.input}
           />
           <Text style={[styles.label, { marginTop: spacing.md }]}>PASSWORD</Text>
-          <TextInput
-            testID="login-password-input"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            style={styles.input}
-          />
+          <View style={styles.pwWrap}>
+            <TextInput
+              testID="login-password-input"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showPw}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              autoComplete="current-password"
+              textContentType="password"
+              style={[styles.input, styles.pwInput]}
+            />
+            <TouchableOpacity
+              testID="login-toggle-password"
+              onPress={() => setShowPw((v) => !v)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.pwToggle}
+            >
+              <Ionicons
+                name={showPw ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
 
           <Link href="/(auth)/forgot-password" asChild>
             <TouchableOpacity testID="login-forgot-link" style={{ alignSelf: "flex-end", marginTop: spacing.sm }}>
@@ -208,6 +232,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: font.body,
   },
+  pwWrap: { position: "relative", justifyContent: "center" },
+  pwInput: { paddingRight: 48 },
+  pwToggle: { position: "absolute", right: spacing.md, padding: 4 },
   error: { color: colors.danger, fontSize: font.small, marginTop: spacing.md },
   primaryBtn: {
     marginTop: spacing.xl,

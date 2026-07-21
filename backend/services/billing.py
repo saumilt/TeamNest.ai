@@ -199,6 +199,20 @@ async def is_unlimited_workspace(workspace_id: str) -> bool:
     return workspace_id in await _unlimited_workspace_ids()
 
 
+# Plans on which multi-model AI comparison is available.
+COMPARISON_PLAN_IDS = {"pro", "team"}
+
+
+async def is_comparison_allowed(workspace_id: str) -> bool:
+    """Multi-model AI comparison is a PAID feature. Available only to paid
+    plans (Pro / Team) and unlimited/super-admin workspaces. Free-plan
+    workspaces get the single AI answer only and must upgrade to compare."""
+    if await is_unlimited_workspace(workspace_id):
+        return True
+    sub = await get_subscription(workspace_id)
+    return sub.get("plan_id") in COMPARISON_PLAN_IDS
+
+
 
 # Approximate credit cost per AI response by model key.
 # These are blended costs assuming ~500 input tokens + ~1500 output tokens,
@@ -430,6 +444,7 @@ async def get_usage(workspace_id: str) -> dict:
     unlimited = await is_unlimited_workspace(workspace_id)
     if unlimited:
         remaining = 1_000_000_000
+    comparison_allowed = unlimited or plan.get("id") in COMPARISON_PLAN_IDS
     return {
         "plan_id": sub["plan_id"],
         "plan_name": plan["name"],
@@ -443,6 +458,7 @@ async def get_usage(workspace_id: str) -> dict:
         "credits_used": used,
         "credits_remaining": remaining,
         "unlimited": unlimited,
+        "comparison_allowed": comparison_allowed,
         "hosting_tier": sub.get("hosting_tier") or "shared",
         "low": False if unlimited else remaining < max(base_credits * 0.2, 25),
         "exhausted": False if unlimited else remaining <= 0,

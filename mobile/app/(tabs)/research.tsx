@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiGet, apiPost } from "@/src/api";
+import { apiGet, apiPost, getBase } from "@/src/api";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { NotificationBell } from "@/src/components/NotificationBell";
 import { Markdown } from "@/src/markdown";
@@ -24,6 +25,7 @@ export default function ResearchScreen() {
   const insets = useSafeAreaInsets();
   const [models, setModels] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>(DEFAULT_MODELS);
+  const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [chatId, setChatId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,15 +35,20 @@ export default function ResearchScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [ms, chats] = await Promise.all([
+        const [ms, chats, usage] = await Promise.all([
           apiGet("/api/ai/models"),
           apiGet("/api/chats"),
+          apiGet("/api/billing/usage").catch(() => null),
         ]);
         // Only offer the 6 core research models.
         const core = ["chatgpt", "claude", "gemini", "deepseek", "perplexity", "grok"];
         setModels((ms || []).filter((m: any) => core.includes(m.key)));
         const personal = (chats || []).find((c: any) => c.type === "personal_ai");
         setChatId(personal?.id || (chats || [])[0]?.id || null);
+        const allowed = usage ? !!usage.comparison_allowed : true;
+        setComparisonAllowed(allowed);
+        // Free plan: comparison is paid — lock to a single model.
+        if (!allowed) setSelected(["chatgpt"]);
       } catch (e: any) {
         setError(e.message || "Failed to load models");
       }
@@ -49,6 +56,11 @@ export default function ResearchScreen() {
   }, []);
 
   const toggle = (key: string) => {
+    if (!comparisonAllowed) {
+      // Paid-only: single-model selection only.
+      setSelected([key]);
+      return;
+    }
     setSelected((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
@@ -95,6 +107,21 @@ export default function ResearchScreen() {
         </Text>
 
         <Text style={styles.label}>MODELS TO COMPARE</Text>
+        {!comparisonAllowed && (
+          <View style={styles.upgradeBanner} testID="research-upgrade-banner">
+            <Ionicons name="lock-closed" size={15} color={colors.accent} />
+            <Text style={styles.upgradeText}>
+              Comparing multiple AI models is a Pro feature.
+            </Text>
+            <TouchableOpacity
+              testID="research-upgrade-btn"
+              onPress={() => Linking.openURL(`${getBase()}/billing`).catch(() => {})}
+              style={styles.upgradeBtn}
+            >
+              <Text style={styles.upgradeBtnText}>Upgrade</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.chips}>
           {models.map((m) => {
             const on = selected.includes(m.key);
@@ -135,7 +162,9 @@ export default function ResearchScreen() {
             ) : (
               <>
                 <Ionicons name="sparkles" size={16} color="#09090b" />
-                <Text style={styles.runBtnText}>Compare {selected.length} models</Text>
+                <Text style={styles.runBtnText}>
+                  {selected.length > 1 ? `Compare ${selected.length} models` : "Ask AI"}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -195,6 +224,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  upgradeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  upgradeText: { flex: 1, color: colors.textSecondary, fontSize: font.small },
+  upgradeBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  upgradeBtnText: { color: "#09090b", fontWeight: "800", fontSize: font.small },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

@@ -42,6 +42,7 @@ export default function ChatComposer({
   onOpenImprove,
   onOpenAI,
   onRefreshMessages,
+  comparisonAllowed = true,
 }) {
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
@@ -56,6 +57,7 @@ export default function ChatComposer({
           imageAttachments={attachments.filter((a) => a.is_image)}
           onSubmit={onAIResearch}
           onCancel={onCancelAI}
+          comparisonAllowed={comparisonAllowed}
         />
       )}
       {!showAI && (

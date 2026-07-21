@@ -717,6 +717,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [devOsBusy, setDevOsBusy] = useState(false);
   const [activeThread, setActiveThread] = useState(initialThread || null);
   const [fullScreenThread, setFullScreenThread] = useState(null);
+  const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [typingUsers, setTypingUsers] = useState({});
   const typingTimersRef = useRef({});
   const wsRef = useRef(null);
@@ -726,6 +727,15 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     () => api.get(`/chats/${chatId}`).then(({ data }) => setChat(data)),
     [chatId],
   );
+
+  // Whether this workspace can use multi-model AI comparison (paid feature).
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/billing/me")
+      .then(({ data }) => { if (!cancelled) setComparisonAllowed(!!data?.usage?.comparison_allowed); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     setMessages([]);
@@ -962,12 +972,18 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         userId={user.id}
         typingUsers={typingUsers}
         onOpenThread={(tid) => {
+          if (!comparisonAllowed) {
+            toast.info("Multi-model comparison is a Pro feature — upgrade to compare");
+            nav("/billing");
+            return;
+          }
           setActiveThread(tid);
           // Requirement: "Show all comparisons" runs the full default compare set.
           api
             .post(`/ai/research/${tid}/run-models`, { selected_models: DEFAULT_COMPARE_MODELS })
             .catch(() => {});
         }}
+        comparisonAllowed={comparisonAllowed}
         onCreateTask={(msg) => setShowTask(msg)}
         onPickIdea={(text) => setDraft((d) => (d ? `${d} ${text}` : text))}
         topSlot={
@@ -983,6 +999,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             <AIComparisonInline
               threadId={activeThread}
               chatId={chatId}
+              comparisonAllowed={comparisonAllowed}
               onClose={() => setActiveThread(null)}
               onExpand={() => setFullScreenThread(activeThread)}
             />
@@ -1034,6 +1051,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onAIResearch={onAIResearch}
         onOpenImprove={() => setShowImprove(true)}
         onOpenAI={() => setShowAI(true)}
+        comparisonAllowed={comparisonAllowed}
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }

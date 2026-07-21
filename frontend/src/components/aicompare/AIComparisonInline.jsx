@@ -21,7 +21,7 @@ const VOTE_BTNS = [
  * instead of a floating panel. Keeps full parity with the desktop panel:
  * vote, mark-best & re-synth, create task, save, copy and share.
  */
-export default function AIComparisonInline({ threadId, chatId, onClose, onExpand }) {
+export default function AIComparisonInline({ threadId, chatId, comparisonAllowed = true, onClose, onExpand }) {
   const { data, synthesizing, vote, selectBest, synthesize, share, runModels } = useResearchThread(
     threadId,
     { onAfterSelectBest: onClose },
@@ -186,7 +186,7 @@ export default function AIComparisonInline({ threadId, chatId, onClose, onExpand
       </div>
 
       {/* Compare the remaining (leftover) models — any not yet run */}
-      {leftover.length > 0 && (
+      {comparisonAllowed && leftover.length > 0 && (
         <div className="flex justify-start">
           <button
             data-testid="compare-more-models"

@@ -69,6 +69,7 @@ export default function MessageBubble({
         onOpenThread,
         onCreateTask,
         onPickIdea,
+        comparisonAllowed = true,
 }) {
         const isAI =
                 message.sender_id === "ai-system" ||
@@ -305,7 +306,7 @@ export default function MessageBubble({
                                                                         className="text-[11px] text-ai hover:text-ai/80 hover:bg-ai/10 border border-ai/30 px-2.5 h-7 rounded-full inline-flex items-center gap-1.5"
                                                                 >
                                                                         <CornerDownRight className="w-3 h-3" />
-                                                                        Show all comparisons
+                                                                        {comparisonAllowed ? "Show all comparisons" : "Upgrade to compare"}
                                                                 </button>
                                                                 {isAIAnswer && (
                                                                         <button

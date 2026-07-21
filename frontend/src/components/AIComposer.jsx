@@ -29,6 +29,7 @@ export default function AIComposer({
         onSubmit,
         onCancel,
         forceMulti = false,
+        comparisonAllowed = true,
 }) {
         const [text, setText] = useState(initialText);
         const [favorite, setFavorite] = useState(FALLBACK_FAVORITE);
@@ -62,7 +63,7 @@ export default function AIComposer({
                                 if (cancelled) return;
                                 const fav = data?.favorite_ai_model || FALLBACK_FAVORITE;
                                 setFavorite(fav);
-                                if (forceMulti && Array.isArray(defaultModels) && defaultModels.length >= 2) {
+                                if (comparisonAllowed && forceMulti && Array.isArray(defaultModels) && defaultModels.length >= 2) {
                                         setSelected(new Set(defaultModels));
                                 } else {
                                         setSelected(new Set([fav]));
@@ -76,6 +77,7 @@ export default function AIComposer({
         }, []);
 
         const toggle = (key) => {
+                if (!comparisonAllowed) return;            // paid-only: single model
                 const next = new Set(selected);
                 if (next.has(key)) {
                         if (next.size <= 1) return;          // keep at least one
@@ -194,6 +196,7 @@ export default function AIComposer({
                                 selected={selected}
                                 favorite={favorite}
                                 onToggle={toggle}
+                                locked={!comparisonAllowed}
                         />
 
                         <div className="flex items-center justify-between gap-2">
