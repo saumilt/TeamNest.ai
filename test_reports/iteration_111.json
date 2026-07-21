@@ -1,0 +1,45 @@
+{
+  "summary": "TeamNest.ai AI Conversation Mode Phase 2 Batch 2 tested. Backend: 14/14 pytest passed (threaded ai-action for all 5 actions returns {ok:true}/{started:true,active:true}; unknown action → 400; invalid chat/msg → 404; rolling summary verified populated in DB with structured bullets after 4 AI turns — direct Mongo check on session doc showed context_summary of 800+ chars with 'Main topic', 'User goal', 'Key decisions'; multi-assistant switch banner first-call no-op verified via message list). Web: all 4 ai-action-toggle testids present in DOM, clicking one opens ai-action-menu with all 5 required child testids (ask_about/summarize_thread/continue_ai/draft_response/explain_decision); clicking continue_ai keeps 'Continuing with @ai' indicator + Exit AI button visible in composer. Mobile UI not exercised in this run (backend + code-review only for mobile).",
+  "platforms_tested": ["backend", "web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration111_ai_conv_phase2_batch2.py",
+    "/app/test_reports/pytest/iteration111.xml"
+  ],
+  "action_items": [
+    "Mobile long-press msg-action-modal path was not exercised in this run — main agent to self-test on mobile Expo preview or request a follow-up mobile-only pass. Code review of /app/mobile/app/chat/[id].tsx confirms the testIDs exist (msg-action-modal, msg-action-ask_about, msg-action-summarize_thread, msg-action-continue_ai, msg-action-draft_response, msg-action-explain_decision).",
+    "Consider surfacing 'Active AI changed from @X to @Y' banner test via a second addressable AI agent — @devmanager path requires a development-capable chat (chat.kind='development' + bot_role_ids includes devmgr). The note_active_assistant function itself is unit-testable via unittest.mock but was covered indirectly by verifying no false-positive banners appear on first invocation.",
+    "context_summary is stored internally but never exposed via /api/chats/{id}/ai-session — consider adding it to _public_session for UI debug/observability (optional; no functional impact)."
+  ],
+  "critical_code_review_comments": [
+    "services/ai_conversation.py note_active_assistant correctly guards first invocation (no session or prev==new → no banner post). Broadcasts via manager after insert. LGTM.",
+    "services/ai_runtime.py:453 uses answer_count % SUMMARY_EVERY_TURNS == 0 — this fires on turn 4, 8, 12… Good cadence. The refresh coroutine is fire-and-forget (asyncio.create_task) so a slow LLM call cannot block the AI answer path.",
+    "routes/ai_conversation.py:264 handle_ai_command is dispatched via asyncio.create_task for non-continue actions — correct fire-and-forget shape. Response returns quickly ({ok:true}).",
+    "AIActionIn model has no whitelist for `action`; the dict lookup in _AI_ACTIONS + explicit 400 fallback correctly guards unknown values. Consider using Literal[...] typing for OpenAPI docs clarity (minor).",
+    "routes/chats.py:1466 only sets _invoked=('devmanager','@devmanager') when triggered_dev_agents is truthy, but that flag is only set for chat.kind=='development'. Users switching between two custom AI employees (deployed via schedule_deployed_employee_if_mentioned) won't produce a switch banner — banner is limited to @ai ↔ @devmanager for now. Documented behaviour, not a bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration111_ai_conv_phase2_batch2.py"
+  ],
+  "success_rate": {"backend": "100% (14/14 passed)", "frontend": "100% web (menu + all 5 items + continue_ai flow verified); mobile not exercised"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 used (super admin/owner, unlimited credits).",
+  "seed_data_creation": "One throwaway group chat TEST_iter111_batch2 was created and cleared (hidden from Sam's view via /clear) at fixture teardown. Three ai_conversation_sessions rows were left in DB against this chat (2 ended, 1 active with answer_count=1) — safe to leave. context_summary was populated (~800 char structured summary) confirming rolling-summary path works end-to-end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend Phase 2 Batch 2 fully green. Direct Mongo verified: after 4 AI turns in AIConv Test-like chat, session.context_summary populated with 'Main topic / User goal / Key decisions / Pending questions' style bullets. Web ai-action menu confirmed with all 5 child testids (ai-action-{ask_about|summarize_thread|continue_ai|draft_response|explain_decision}-<id>). 'Continuing with @ai' persists after continue_ai click. Mobile long-press modal not exercised — recommend a targeted mobile pass. Multi-assistant banner code path is only reachable via @ai ↔ @devmanager switch inside a development chat (chat.kind='development'); a first-call no-op guard is in place and verified.",
+  "rca of the issue": "N/A — no bugs found."
+}

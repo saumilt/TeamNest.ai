@@ -72,6 +72,7 @@ export default function MessageBubble({
         comparisonAllowed = true,
         onFollowUp,
         onRouteChoice,
+        onAiAction,
 }) {
         const isAI =
                 message.sender_id === "ai-system" ||
@@ -87,6 +88,7 @@ export default function MessageBubble({
         const isCallRecord = message.message_type === "call_started" || message.message_type === "call_ended";
         const [editing, setEditing] = useState(false);
         const [draft, setDraft] = useState(message.body);
+        const [aiMenu, setAiMenu] = useState(false);
 
         const submitEdit = async () => {
                 try {
@@ -296,6 +298,36 @@ export default function MessageBubble({
                                                                         <ListChecks className="w-2.5 h-2.5" />
                                                                         Convert to task
                                                                 </button>
+                                                                {onAiAction && (
+                                                                        <button
+                                                                                data-testid={`ai-action-toggle-${message.id}`}
+                                                                                onClick={() => setAiMenu((v) => !v)}
+                                                                                className="ml-1 text-[10px] text-zinc-500 hover:text-ai hover:bg-ai/10 px-2 h-6 rounded-full inline-flex items-center gap-1 font-mono uppercase tracking-widest border border-transparent hover:border-ai/30"
+                                                                                title="AI actions for this message"
+                                                                        >
+                                                                                <Sparkles className="w-2.5 h-2.5" /> Ask AI
+                                                                        </button>
+                                                                )}
+                                                                {aiMenu && onAiAction && (
+                                                                        <div className="mt-1.5 flex flex-wrap gap-1.5" data-testid={`ai-action-menu-${message.id}`}>
+                                                                                {[
+                                                                                        ["ask_about", "Ask AI about this"],
+                                                                                        ["summarize_thread", "Summarize thread"],
+                                                                                        ["continue_ai", "Continue with AI"],
+                                                                                        ["draft_response", "Draft response"],
+                                                                                        ["explain_decision", "Explain decision"],
+                                                                                ].map(([action, label]) => (
+                                                                                        <button
+                                                                                                key={action}
+                                                                                                data-testid={`ai-action-${action}-${message.id}`}
+                                                                                                onClick={() => { setAiMenu(false); onAiAction(action, message); }}
+                                                                                                className="text-[11px] text-ink-mute hover:text-ink border border-hairline hover:border-ai/40 hover:bg-ai/5 px-2.5 h-7 rounded-full"
+                                                                                        >
+                                                                                                {label}
+                                                                                        </button>
+                                                                                ))}
+                                                                        </div>
+                                                                )}
                                                         </div>
                                                 )}
 

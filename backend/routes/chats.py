@@ -1457,6 +1457,21 @@ async def send_message(
         or is_devos_slash
         or triggered_dev_agents
     )
+    # Multi-assistant switch banner — note which assistant this message
+    # addressed; emit "Active AI changed from @X to @Y" when the user switches.
+    _invoked = None
+    if parsed.get("is_ai"):
+        _invoked = ("ai", "@ai")
+    elif triggered_dev_agents:
+        _invoked = ("devmanager", "@devmanager")
+    if _invoked:
+        try:
+            await _aiconv.note_active_assistant(
+                workspace_id=current.get("workspace_id"), chat_id=chat_id,
+                user_id=current["id"], assistant_id=_invoked[0], assistant_label=_invoked[1],
+            )
+        except Exception as e:
+            logger.warning("[ai-conv] note_active_assistant failed: %s", e)
     if (
         payload.message_type == "text"
         and not is_command_like

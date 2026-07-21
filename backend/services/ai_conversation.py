@@ -125,9 +125,10 @@ async def start_or_refresh_session(
         set_fields["topic"] = topic
     if existing:
         await db.ai_conversation_sessions.update_one(
-            {"id": existing["id"]}, {"$set": set_fields}
+            {"id": existing["id"]},
+            {"$set": set_fields, "$inc": {"answer_count": 1}},
         )
-        return {**existing, **set_fields}
+        return {**existing, **set_fields, "answer_count": existing.get("answer_count", 0) + 1}
     doc = {
         "id": new_id(),
         "workspace_id": workspace_id,
@@ -135,6 +136,7 @@ async def start_or_refresh_session(
         "user_id": user_id,
         "start_message_id": start_message_id,
         "context_summary": None,
+        "answer_count": 1,
         "started_at": now.isoformat(),
         "created_at": now.isoformat(),
         "ended_at": None,
@@ -150,6 +152,61 @@ async def end_session(chat_id: str, user_id: str, reason: str) -> None:
         {"chat_id": chat_id, "user_id": user_id, "status": "active"},
         {"$set": {"status": "ended", "ended_at": now_iso(), "end_reason": reason}},
     )
+
+
+# ── Rolling conversation summary / context window ────────────────────────────
+SUMMARY_EVERY_TURNS = 4
+
+
+async def set_session_summary(chat_id: str, user_id: str, summary: str) -> None:
+    await db.ai_conversation_sessions.update_one(
+        {"chat_id": chat_id, "user_id": user_id, "status": "active"},
+        {"$set": {"context_summary": summary, "updated_at": now_iso()}},
+    )
+
+
+def summary_block(session: Optional[dict]) -> str:
+    """Formatted context block for injecting a session's rolling summary into
+    the AI prompt. Empty string when there's no summary yet."""
+    s = (session or {}).get("context_summary")
+    if not s:
+        return ""
+    return (
+        "[Structured summary of this ongoing AI conversation — preserve these "
+        "decisions, facts and pending questions; stay consistent with them.]\n"
+        f"{s}"
+    )
+
+
+# ── Multi-assistant switch banner ────────────────────────────────────────────
+async def note_active_assistant(
+    *, workspace_id: Optional[str], chat_id: str, user_id: str,
+    assistant_id: str, assistant_label: str,
+) -> None:
+    """When the user switches the assistant they're addressing within a chat,
+    post a small system note ("Active AI changed from @X to @Y") and update the
+    session's active assistant. Per-user; no-op on first invocation."""
+    session = await get_active_session(chat_id, user_id)
+    prev = (session or {}).get("assistant_id")
+    prev_label = (session or {}).get("assistant_label") or (f"@{prev}" if prev else None)
+    if session and prev and prev != assistant_id:
+        from deps import manager
+        note = {
+            "id": new_id(), "chat_id": chat_id, "sender_id": "ai-system",
+            "message_type": "system", "body": f"Active AI changed from {prev_label} to {assistant_label}",
+            "parent_message_id": None,
+            "metadata": {"ai_assistant_switch": True, "for_user_id": user_id,
+                         "from": prev_label, "to": assistant_label},
+            "reactions": {}, "created_at": now_iso(), "edited_at": None, "deleted_at": None,
+        }
+        await db.messages.insert_one(note.copy())
+        await manager.broadcast(chat_id, {"event": "message", "data": note})
+    if session:
+        await db.ai_conversation_sessions.update_one(
+            {"id": session["id"]},
+            {"$set": {"assistant_id": assistant_id, "assistant_label": assistant_label,
+                      "updated_at": now_iso()}},
+        )
 
 
 async def log_routing_decision(

@@ -216,3 +216,50 @@ async def save_conversation_to_role(
         })
     await db.enterprise_role_memories.insert_many([d.copy() for d in docs])
     return {"proposed": len(docs), "status": "pending_review"}
+
+
+# ── Threaded AI actions: run AI on any specific message ──────────────────────
+_AI_ACTIONS = {
+    "ask_about": "Explain this message and what it means for us.",
+    "summarize_thread": "Summarize the recent conversation in this chat into clear bullet points.",
+    "draft_response": "Draft a thoughtful response I could send to this message.",
+    "explain_decision": "Explain the decision and the reasoning behind this message.",
+}
+
+
+class AIActionIn(BaseModel):
+    action: str
+
+
+@router.post("/chats/{chat_id}/messages/{message_id}/ai-action")
+async def run_message_ai_action(
+    chat_id: str, message_id: str, payload: AIActionIn, current=Depends(require_user)
+):
+    """Kick off an AI action anchored to a specific message (Ask AI about this,
+    Summarize thread, Continue with AI, Draft response, Explain decision). Starts
+    /continues the user's AI session so subsequent follow-ups keep flowing to AI."""
+    chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
+    if not chat:
+        raise HTTPException(404, "Chat not found or not accessible")
+    msg = await db.messages.find_one({"id": message_id, "chat_id": chat_id}, {"_id": 0})
+    if not msg:
+        raise HTTPException(404, "Message not found")
+
+    if payload.action == "continue_ai":
+        sess = await aiconv.start_or_refresh_session(
+            workspace_id=current.get("workspace_id"), chat_id=chat_id,
+            user_id=current["id"], assistant_id="ai",
+        )
+        return {"started": True, **_public_session(sess)}
+
+    instruction = _AI_ACTIONS.get(payload.action)
+    if not instruction:
+        raise HTTPException(400, f"Unknown action: {payload.action}")
+    quote = (msg.get("body") or "").strip()[:1500]
+    if payload.action == "summarize_thread":
+        question = instruction
+    else:
+        question = f'{instruction}\n\nMessage:\n"{quote}"'
+    from services.ai_runtime import handle_ai_command
+    asyncio.create_task(handle_ai_command(chat_id, current["id"], question, ["gpt-4o-mini"]))
+    return {"ok": True, "action": payload.action}

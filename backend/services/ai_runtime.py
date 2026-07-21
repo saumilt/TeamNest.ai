@@ -3,6 +3,7 @@
 Pulled out of server.py so they can be invoked from multiple routers (chats,
 ai) without circular imports.
 """
+import asyncio
 import re
 from typing import List, Optional
 
@@ -21,7 +22,40 @@ from services.billing import (
     consume_credits,
     credit_cost_for_model,
 )
-from services.ai_conversation import FOLLOW_UP_SUGGESTIONS, start_or_refresh_session
+from services.ai_conversation import (
+    FOLLOW_UP_SUGGESTIONS,
+    SUMMARY_EVERY_TURNS,
+    get_active_session,
+    set_session_summary,
+    start_or_refresh_session,
+    summary_block,
+)
+
+
+_SUMMARY_SYSTEM = (
+    "You maintain a concise, structured running summary of an ongoing "
+    "conversation between a user and an AI assistant. Keep it under 180 words."
+)
+
+
+async def _refresh_conversation_summary(chat_id: str, user_id: str, history_ctx: str) -> None:
+    """Distill the recent conversation into a structured memory carried into
+    future follow-up prompts. Fire-and-forget; best-effort."""
+    try:
+        from ai_service import complete
+        prompt = (
+            "Summarize the conversation below as compact bullet points under "
+            "these headings (omit any that don't apply): Main topic, User goal, "
+            "Key decisions, Pending questions, Requested output format, Active "
+            "files. Preserve user corrections.\n\n"
+            f"{history_ctx}"
+        )
+        summary = await complete(_SUMMARY_SYSTEM, prompt, model_key="gpt-4o-mini")
+        if summary and summary.strip():
+            await set_session_summary(chat_id, user_id, summary.strip()[:1500])
+    except Exception as e:  # pragma: no cover
+        logger.warning("[ai-conv] summary refresh failed: %s", e)
+
 
 
 async def _finalize_research(
@@ -341,9 +375,12 @@ async def handle_ai_command(
     from services import learned_memory as _lm
     mem_block = await _lm.build_memory_profile_block(workspace_id, user_id)
     history_ctx = await build_chat_context(chat_id, placeholder["created_at"])
+    conv_summary = summary_block(await get_active_session(chat_id, user_id))
     prefix = []
     if mem_block:
         prefix.append(mem_block)
+    if conv_summary:
+        prefix.append(conv_summary)
     if history_ctx:
         prefix.append(
             "[Conversation so far in this chat — use it as context to give a coherent, "
@@ -401,7 +438,7 @@ async def handle_ai_command(
     # AI Conversation Mode — keep (or start) this user's AI session so their
     # next follow-up routes to the assistant without another @ai mention.
     try:
-        await start_or_refresh_session(
+        sess = await start_or_refresh_session(
             workspace_id=workspace_id,
             chat_id=chat_id,
             user_id=user_id,
@@ -410,6 +447,10 @@ async def handle_ai_command(
             thread_id=thread["id"],
             topic=(question or "")[:120],
         )
+        # Rolling summary — every few turns, distill the conversation into a
+        # structured memory the assistant carries forward (Phase 2).
+        if sess and sess.get("answer_count", 0) % SUMMARY_EVERY_TURNS == 0 and history_ctx:
+            asyncio.create_task(_refresh_conversation_summary(chat_id, user_id, history_ctx))
     except Exception as e:
         logger.warning("[ai-conv] session refresh failed: %s", e)
 

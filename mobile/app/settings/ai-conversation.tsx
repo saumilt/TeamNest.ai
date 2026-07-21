@@ -188,10 +188,10 @@ export default function AIConversationSettingsScreen() {
                   onChangeText={(t) => setSec({ ...sec, temp_password_expiry_days: Number(t) || 0 })}
                   style={styles.expiryInput} />
                 <Text style={styles.rowLabel}>days</Text>
-                <TouchableOpacity testID="sec-save" onPress={saveSec} style={[styles.saveBtn, { marginTop: 0, marginLeft: "auto" }]}>
-                  <Text style={styles.saveBtnText}>Save</Text>
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity testID="sec-save" onPress={saveSec} style={styles.saveBtn}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
               <Text style={[styles.rowLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>Provisioned accounts</Text>
               {!accounts || accounts.accounts.length === 0 ? (
                 <Text style={styles.rowHint}>No pending provisioned accounts.</Text>

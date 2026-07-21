@@ -54,6 +54,7 @@ export default function ChatScreen() {
   const [aiSession, setAiSession] = useState<any>({ active: false });
   const [saveRoleOpen, setSaveRoleOpen] = useState(false);
   const [roles, setRoles] = useState<any[]>([]);
+  const [msgAction, setMsgAction] = useState<any>(null);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -100,6 +101,21 @@ export default function ChatScreen() {
       } catch {}
     },
     [chatId, refreshAiSession],
+  );
+
+  const runMsgAction = useCallback(
+    async (action: string) => {
+      const m = msgAction;
+      setMsgAction(null);
+      if (!m) return;
+      try {
+        await apiPost(`/api/chats/${chatId}/messages/${m.id}/ai-action`, { action });
+        setTimeout(refreshAiSession, 4500);
+      } catch {
+        Alert.alert("Error", "AI action failed");
+      }
+    },
+    [chatId, msgAction, refreshAiSession],
   );
 
   const openSaveRole = useCallback(async () => {
@@ -366,7 +382,11 @@ export default function ChatScreen() {
           mine ? styles.rowRight : styles.rowLeft,
         ]}
       >
-        <View
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onLongPress={() => {
+            if (item.message_type === "text" && item.body) setMsgAction(item);
+          }}
           style={[
             styles.bubble,
             mine ? styles.bubbleMine : agent ? styles.bubbleAI : styles.bubbleOther,
@@ -424,7 +444,7 @@ export default function ChatScreen() {
               </View>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -622,6 +642,27 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               ))
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={!!msgAction} transparent animationType="fade" onRequestClose={() => setMsgAction(null)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setMsgAction(null)}>
+          <View style={styles.modalCard} testID="msg-action-modal">
+            <Text style={styles.modalTitle}>AI actions</Text>
+            <Text style={styles.modalSub} numberOfLines={2}>{msgAction?.body}</Text>
+            {[
+              ["ask_about", "Ask AI about this"],
+              ["summarize_thread", "Summarize thread"],
+              ["continue_ai", "Continue with AI"],
+              ["draft_response", "Draft response"],
+              ["explain_decision", "Explain decision"],
+            ].map(([action, label]) => (
+              <TouchableOpacity key={action} testID={`msg-action-${action}`} style={styles.roleRow} onPress={() => runMsgAction(action)}>
+                <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+                <Text style={styles.roleName}>{label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </TouchableOpacity>
       </Modal>

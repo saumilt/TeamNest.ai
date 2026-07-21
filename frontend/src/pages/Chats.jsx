@@ -917,6 +917,20 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     }
   };
 
+  // Threaded-AI action anchored to a specific message.
+  const onAiAction = async (action, message) => {
+    if (action === "create_task") { setShowTask(message); return; }
+    try {
+      await api.post(`/chats/${chatId}/messages/${message.id}/ai-action`, { action });
+      onChatChange?.();
+      refreshAiSession();
+      setTimeout(refreshAiSession, 4500);
+      if (action === "continue_ai") toast.success("AI conversation started — ask a follow-up");
+    } catch {
+      toast.error("AI action failed");
+    }
+  };
+
   // One-tap quick action on attached files (Summarize / Extract action items).
   // Sends the message immediately with the preset @ai prompt + current
   // attachments so the AI runs right away.
@@ -1042,6 +1056,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onPickIdea={(text) => setDraft((d) => (d ? `${d} ${text}` : text))}
         onFollowUp={onFollowUp}
         onRouteChoice={onRouteChoice}
+        onAiAction={onAiAction}
         topSlot={
           <>
             <PreviewViewersChip chatId={chatId} />
