@@ -2,6 +2,15 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 113–114 (Jul 2026) — Student Plan ($6.99) + 4-tier AI Credit Governance (web + mobile)
+- **Student plan** (`services/billing.py`): $6.99/mo, 2,500 credits, `solo_ai_seat=true` (only workspace OWNER can use AI; invited collaborators can chat but not fire AI — enforced in `chat_ai_settings.check_ai_allowed`), `requires_edu=true`, multi-model comparison allowed (added to `COMPARISON_PLAN_IDS`). Listed in `all_public_plans` (free→student→pro→team). `public_plan` now exposes `solo_ai_seat`/`requires_edu`.
+- **.edu verification** (`routes/billing.py`): `POST /billing/student/verify/start` (validates `.edu`, emails a 6-digit code via Mailgun; returns `dev_code` in the Stripe-test env for QA), `POST /billing/student/verify/confirm` (sets `users.edu_verified`), `GET /billing/student/status`. Student checkout is gated → 403 `edu_verification_required` until verified. Legacy one-shot checkout path fixed to stringify metadata (was crashing on int `seats`).
+- **Credit Governance** (`services/credit_governance.py`, `routes/credit_governance.py`): hard AI credit caps at 4 scopes — user / chat / workspace / enterprise (org = all workspaces owned by same owner). MOST-RESTRICTIVE-WINS; usage summed from `ai_credit_ledger` since the workspace billing `period_start` (monthly reset). `consume_credits` + `deduct_credits_for_responses` now thread `chat_id` into the ledger. Enforced in `check_ai_allowed` (inline @ai / conversation) and the research route. Admin API: `GET/PUT /credit-governance/caps`, `DELETE /credit-governance/caps/{scope}/{scope_id}` (owner/admin; members 403). Collection: `credit_caps`.
+- **Web**: `/pricing` + `/billing` Student card; `EduVerifyDialog.jsx` (.edu email→code) intercepts Student checkout when unverified; `CreditGovernance.jsx` admin panel on `/billing` (set/list/delete caps with live usage bars).
+- **Mobile**: read-only `CreditLimitsCard.tsx` on the You tab (owner/admin, gated on `useAuth().token`); solo-seat / limit-reached blocks surface as ai-system chat messages. No mobile billing/checkout screen (web-only by design).
+- Tested: backend pytest 3/3 (`tests/test_iteration113_student_credit_governance.py`) + testing_agent web+backend (iteration_113) and mobile retest (iteration_114). Mobile auth-race bug found & fixed. No blockers.
+
+
 ## Iteration 110–111 (Jul 2026) — AI Conversation Mode Phase 2 (both batches) + temp-password expiry
 ### Batch 1 — Settings + Save-to-Role + Temp-password expiry (web + mobile)
 - New `services/workspace_settings.py`: per-user `ai_conversation_preferences` + `workspace_admin_settings` (ai_conversation + security namespaces) + `get_effective_ai_settings` (user overrides workspace; enabled/allow_in_group are master switches) + `temp_password_expired`.

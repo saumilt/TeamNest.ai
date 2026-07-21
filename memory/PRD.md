@@ -208,6 +208,8 @@ invite-your-friends flows.
 - **Send for approval** + **Export PDF** buttons on AI Comparison panel synthesized answer.
 
 ## P1 Backlog / Coming Next
+- **Student plan follow-ups** (P2): auto-apply the plan on paid webhook (already wired via `apply_plan_change`); optional annual Student SKU; re-verify `.edu` on renewal.
+- **Credit governance follow-ups** (P2): per-cap email/in-app alerts at 80%/100%; enforce caps on non-chat AI consumption paths (dev_os, calls, voice) — currently enforced on chat inline @ai + research; scheduled cap digests.
 - **App Store curation tools** (P2): featured section, category management.
 - **Weekly "Your store performance" digest** for sellers (P3, via chat post or Resend email).
 - **Stripe go-live**: live keys stashed in backend/.env as STRIPE_LIVE_*; app runs STRIPE_MODE=test — do NOT flip without explicit user instruction.
