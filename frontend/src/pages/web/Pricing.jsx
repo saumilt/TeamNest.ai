@@ -98,6 +98,7 @@ const MONTHLY_PLANS = [
 
 const ANNUAL_PLANS = MONTHLY_PLANS.map((p) => {
   if (p.id === "free") return p;
+  if (p.id === "student") return { ...p, price: "$69", unit: "/ year", tagline: "Pay yearly · save 17%." };
   if (p.id === "pro") return { ...p, price: "$99", unit: "/ seat / year", tagline: "Pay yearly · save 17%." };
   if (p.id === "team") return { ...p, price: "$199", unit: "/ seat / year", tagline: "Pay yearly · save 17%." };
   if (p.id === "enterprise") return { ...p, price: "$299", unit: "/ seat / year", tagline: "Pay yearly · save 17%. Custom pricing available." };

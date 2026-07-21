@@ -163,12 +163,16 @@ def _validate_checkout_request(payload: CheckoutRequest, current: dict) -> dict:
 
 
 def _resolve_price_id(plan: dict, billing_cycle: str) -> str | None:
-    """Choose the annual or monthly Stripe price ID for the plan."""
+    """Choose the annual or monthly Stripe price ID for the plan. Returns None
+    for fully-legacy plans (no configured Stripe price at all) so checkout
+    falls back to the emergentintegrations one-shot charge."""
     use_annual = billing_cycle == "annual"
     price_id = (
         plan.get("stripe_price_id_annual") if use_annual else plan.get("stripe_price_id")
     )
-    if use_annual and not plan.get("stripe_price_id_annual"):
+    # Only error when this is a real recurring Stripe plan (has a monthly SKU)
+    # that just hasn't had its annual SKU wired up yet.
+    if use_annual and not plan.get("stripe_price_id_annual") and plan.get("stripe_price_id"):
         raise HTTPException(
             400,
             "Annual billing for this plan isn't set up yet. "
@@ -211,7 +215,8 @@ def _create_stripe_subscription_session(
 
 
 async def _create_legacy_one_shot_session(
-    request: Request, plan: dict, success_url: str, cancel_url: str, metadata: dict
+    request: Request, plan: dict, success_url: str, cancel_url: str, metadata: dict,
+    amount: float | None = None,
 ) -> tuple[str, str]:
     """Fallback: emergentintegrations-managed one-shot monthly charge."""
     host_url = str(request.base_url).rstrip("/")
@@ -221,7 +226,7 @@ async def _create_legacy_one_shot_session(
     # to be strings.
     str_metadata = {k: str(v) for k, v in (metadata or {}).items()}
     req = CheckoutSessionRequest(
-        amount=float(plan["price_usd"]),
+        amount=float(amount if amount is not None else plan["price_usd"]),
         currency="usd",
         success_url=success_url,
         cancel_url=cancel_url,
@@ -255,13 +260,16 @@ async def create_checkout(
     }
 
     price_id = _resolve_price_id(plan, payload.billing_cycle)
+    _use_annual = payload.billing_cycle == "annual"
+    _unit = plan["annual_price_usd"] if _use_annual and plan.get("annual_price_usd") else plan["price_usd"]
     if price_id:
         session_url, session_id = _create_stripe_subscription_session(
             price_id, payload, current, success_url, cancel_url, metadata, quantity=seats
         )
     else:
+        _legacy_amount = float(_unit) * (seats if plan.get("per_seat") else 1)
         session_url, session_id = await _create_legacy_one_shot_session(
-            request, plan, success_url, cancel_url, metadata
+            request, plan, success_url, cancel_url, metadata, amount=_legacy_amount
         )
 
     use_annual = payload.billing_cycle == "annual"

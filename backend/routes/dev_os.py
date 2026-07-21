@@ -333,6 +333,8 @@ async def create_project(payload: ProjectCreate, current=Depends(require_user)):
             "milestones": [],
         }
     else:
+        from services.credit_governance import enforce_caps
+        await enforce_caps(current["workspace_id"], current["id"], payload.related_chat_id, 25)
         plan = await generate_product_plan(
             idea=payload.problem or payload.description,
             business_model=payload.business_model,
@@ -416,6 +418,7 @@ async def create_project(payload: ProjectCreate, current=Depends(require_user)):
             await consume_credits(
                 current["workspace_id"], 25,
                 source="dev_os_product_plan", user_id=current["id"],
+                chat_id=payload.related_chat_id,
                 meta={"project_id": project["id"]},
             )
         except Exception as e:
@@ -509,6 +512,7 @@ async def scan_project(project_id: str, payload: ScanRequest, current=Depends(re
                     await consume_credits(
                         current["workspace_id"], proposal["estimated_credits"],
                         source="dev_os_recursive_scan", user_id=current["id"],
+                        chat_id=chat_id,
                         meta={"project_id": project_id, "proposal_id": proposal["id"], "signal_type": s["type"]},
                     )
                 except Exception as e:
@@ -541,6 +545,9 @@ async def trigger_build(project_id: str, current=Depends(require_user)):
     )
     if not project:
         raise HTTPException(404, "Project not found")
+
+    from services.credit_governance import enforce_caps
+    await enforce_caps(current["workspace_id"], current["id"], project.get("related_chat_id"), 40)
 
     build = await start_mock_build(project, requested_by=current["id"])
 
@@ -830,6 +837,8 @@ async def talk_to_build_endpoint(
         raise HTTPException(400, "Instruction is required")
     if len(instruction) > 4000:
         instruction = instruction[:4000]
+    from services.credit_governance import enforce_caps
+    await enforce_caps(project["workspace_id"], current["id"], project.get("related_chat_id"), 10)
 
     from services.dev_build_activity import (
         add_step, attach_screenshot, complete_activity, fail_activity,

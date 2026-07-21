@@ -10,6 +10,12 @@
 - **Mobile**: read-only `CreditLimitsCard.tsx` on the You tab (owner/admin, gated on `useAuth().token`); solo-seat / limit-reached blocks surface as ai-system chat messages. No mobile billing/checkout screen (web-only by design).
 - Tested: backend pytest 3/3 (`tests/test_iteration113_student_credit_governance.py`) + testing_agent web+backend (iteration_113) and mobile retest (iteration_114). Mobile auth-race bug found & fixed. No blockers.
 
+### Iteration 115 (Jul 2026) — Governance follow-ups: annual Student SKU, cap enforcement on Dev OS/calls, 80/100% alerts
+- **Annual Student SKU**: Student plan now has `annual_price_usd=69` (~17% off) + optional `STRIPE_STUDENT_ANNUAL_PRICE_ID`. `_resolve_price_id` only errors on annual for real recurring Stripe plans; fully-legacy plans (no Stripe SKU) fall back to the one-shot session which now charges the correct annual amount. Web `/pricing` annual toggle shows Student at $69/yr.
+- **Cap enforcement extended to non-chat AI spend**: added `credit_governance.enforce_caps()` (raises 402 with the cap reason) at Dev OS `create_project` (LLM plan), `trigger_build`, `talk_to_build`, and call `upload-recording` transcription. `chat_id` now threaded into `consume_credits` on those paths so chat-scope caps attribute correctly (workspace/user/enterprise scopes already counted this spend via the ledger).
+- **80%/100% cap-usage alerts**: `consume_credits` fires `credit_governance.check_and_alert()` (fire-and-forget) → creates an in-app notification (type `credit_cap_alert`) for workspace owners/admins + a best-effort Mailgun email, deduped per (cap, threshold, billing-period) in `credit_cap_alerts`. Verified: alert + notification created at 100%, idempotent on repeat.
+- Tested: backend pytest 4/4 (added annual-checkout test) + direct alert-flow verification (notification created, dedupe holds). Enforcement reuses the already-verified `check_caps`.
+
 
 ## Iteration 110–111 (Jul 2026) — AI Conversation Mode Phase 2 (both batches) + temp-password expiry
 ### Batch 1 — Settings + Save-to-Role + Temp-password expiry (web + mobile)

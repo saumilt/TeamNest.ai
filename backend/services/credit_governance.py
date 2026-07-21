@@ -136,3 +136,91 @@ async def caps_status(workspace_id: str) -> List[Dict[str, Any]]:
         out.append({**c, "used": used, "remaining": max(0, limit - used),
                     "pct": round(used / limit * 100) if limit else 0})
     return out
+
+
+
+async def enforce_caps(workspace_id: str, user_id: Optional[str], chat_id: Optional[str],
+                       cost: int) -> None:
+    """Raise HTTPException(402) when any applicable cap would be exceeded.
+    Use at the entry of non-chat AI spend paths (Dev OS builds, calls)."""
+    from fastapi import HTTPException
+    res = await check_caps(workspace_id, user_id, chat_id, cost)
+    if not res["allowed"]:
+        raise HTTPException(402, res["reason"])
+
+
+async def check_and_alert(workspace_id: str, user_id: Optional[str], chat_id: Optional[str]) -> None:
+    """Fire in-app (+ email) alerts the first time any applicable cap crosses
+    80% or 100% this period. Deduped per (cap, threshold, period). Best-effort."""
+    try:
+        caps = await list_caps(workspace_id)
+        if not caps:
+            return
+        since = await _period_start_iso(workspace_id)
+        period_key = since[:7]
+        applicable = [
+            c for c in caps
+            if not (c["scope"] == "user" and c["scope_id"] != user_id)
+            and not (c["scope"] == "chat" and c["scope_id"] != chat_id)
+        ]
+        for c in applicable:
+            limit = int(c["limit_credits"])
+            if limit <= 0:
+                continue
+            used = await _usage_for(workspace_id, c["scope"], c["scope_id"], since)
+            pct = used / limit
+            for label, thr in (("100%", 1.0), ("80%", 0.8)):
+                if pct < thr:
+                    continue
+                exists = await db.credit_cap_alerts.find_one({
+                    "workspace_id": workspace_id, "scope": c["scope"],
+                    "scope_id": c["scope_id"], "threshold": label, "period": period_key,
+                })
+                if exists:
+                    break
+                await db.credit_cap_alerts.insert_one({
+                    "id": new_id(), "workspace_id": workspace_id, "scope": c["scope"],
+                    "scope_id": c["scope_id"], "threshold": label, "period": period_key,
+                    "used": used, "limit": limit, "created_at": now_iso(),
+                })
+                await _notify_owners(workspace_id, c, label, used, limit)
+                break  # only the highest crossed threshold per cap per run
+    except Exception as e:  # pragma: no cover
+        from deps import logger
+        logger.warning("[credit-gov] alert check failed: %s", e)
+
+
+async def _notify_owners(workspace_id: str, cap: dict, label: str, used: int, limit: int) -> None:
+    scope_label = {"user": "a user's", "chat": "a chat's", "workspace": "the workspace's",
+                   "enterprise": "the enterprise"}.get(cap["scope"], cap["scope"])
+    title = ("AI credit limit reached" if label == "100%"
+             else "AI credit limit almost reached")
+    body = (f"{scope_label} AI credit cap is at {label} ({used}/{limit} credits used "
+            f"this month).")
+    from routes.notifications_feed import create_notification
+    owners = await db.users.find(
+        {"workspace_id": workspace_id, "role": {"$in": ["owner", "admin"]}},
+        {"_id": 0, "id": 1, "email": 1, "name": 1},
+    ).to_list(50)
+    for o in owners:
+        try:
+            await create_notification(
+                o["id"], "credit_cap_alert", title, body,
+                meta={"scope": cap["scope"], "scope_id": cap["scope_id"],
+                      "threshold": label, "used": used, "limit": limit},
+            )
+        except Exception:
+            pass
+    # Best-effort email to workspace owners.
+    try:
+        from services.mailgun_service import send_email
+        emails = [o["email"] for o in owners if o.get("email")]
+        if emails:
+            await send_email(
+                to=emails,
+                subject=f"TeamNest · {title}",
+                html=f"<p>{body}</p><p>Manage limits on the Billing page.</p>",
+                text=body,
+            )
+    except Exception:
+        pass

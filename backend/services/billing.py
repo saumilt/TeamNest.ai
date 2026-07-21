@@ -77,6 +77,8 @@ PLANS = {
         "unlimited_transcription": False,
         "screen_sharing": True,
         "stripe_price_id": os.environ.get("STRIPE_STUDENT_PRICE_ID"),
+        "stripe_price_id_annual": os.environ.get("STRIPE_STUDENT_ANNUAL_PRICE_ID"),
+        "annual_price_usd": 69,  # ≈ 17% off vs $6.99×12
         "description": "For students. Collaborate + compare AI models, solo.",
         "perks": [
             "2,500 AI credits / month",
@@ -574,6 +576,13 @@ async def consume_credits(
         })
     except Exception as e:
         logger.warning("[billing] ledger write failed: %s", e)
+    # Fire cap-usage alerts (80%/100%) without blocking the response.
+    try:
+        from services.bg import fire_and_forget
+        from services import credit_governance as _cg
+        fire_and_forget(_cg.check_and_alert(workspace_id, user_id, chat_id))
+    except Exception:
+        pass
     return await get_usage(workspace_id)
 
 

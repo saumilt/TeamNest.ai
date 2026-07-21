@@ -54,6 +54,22 @@ def test_edu_verification_and_student_checkout():
     assert r.status_code == 200 and r.json().get("url")
 
 
+def test_student_annual_checkout():
+    """Student plan has no Stripe recurring SKU here → annual must fall back to
+    the legacy one-shot session (charging the $69 annual amount), not 400."""
+    s = _login(FREE_EMAIL, FREE_PWD)
+    # ensure verified (idempotent from previous test / prior manual run)
+    st = s.get(f"{API}/billing/student/status", timeout=30).json()
+    if not st.get("edu_verified"):
+        r = s.post(f"{API}/billing/student/verify/start", json={"edu_email": "qa@stanford.edu"}, timeout=30)
+        s.post(f"{API}/billing/student/verify/confirm", json={"code": r.json()["dev_code"]}, timeout=30)
+    plans = {p["id"]: p for p in requests.get(f"{API}/billing/plans", timeout=30).json()["plans"]}
+    assert plans["student"].get("annual_price_usd") == 69
+    r = s.post(f"{API}/billing/checkout",
+               json={"plan_id": "student", "origin_url": "https://x.co", "billing_cycle": "annual"}, timeout=60)
+    assert r.status_code == 200 and r.json().get("url")
+
+
 def test_credit_governance_caps_block_and_reset():
     s = _login(FREE_EMAIL, FREE_PWD)
     chats = s.get(f"{API}/chats", timeout=30).json()

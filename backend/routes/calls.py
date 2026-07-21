@@ -294,6 +294,9 @@ async def upload_call_recording(
     if not call:
         raise HTTPException(404, "Call not found")
     gate = await _gate_transcription_for_workspace(current["workspace_id"], mode="post_call")
+    if not gate["plan"].get("unlimited_transcription"):
+        from services.credit_governance import enforce_caps
+        await enforce_caps(current["workspace_id"], current["id"], call.get("chat_id"), 10)
     data = await file.read()
     if len(data) > 50 * 1024 * 1024:
         raise HTTPException(413, "Recording larger than 50 MB")
@@ -344,6 +347,7 @@ async def upload_call_recording(
                 current["workspace_id"], credits,
                 source="post_call_transcription",
                 user_id=current["id"],
+                chat_id=call.get("chat_id"),
                 meta={"call_id": call_id, "duration_seconds": duration},
             )
             result["credits_charged"] = credits
