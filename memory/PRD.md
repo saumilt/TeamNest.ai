@@ -571,4 +571,5 @@ Resolved by promoting users to a true multi-workspace model (Slack/Discord-style
   `POST/GET/DELETE /api/devices/register` (idempotent upsert verified).
 
 ## Iteration History
-See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-76).
+See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-119).
+- Latest (iter 119, 2026-06): Inline `@ai` model picker on web + mobile (inline + on-send triggers, Recommended badge, Remember-for-this-chat). Backend contract: `metadata.selected_models` / `metadata.remember_models`.

@@ -57,7 +57,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const chatId = String(id);
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [members, setMembers] = useState<Record<string, any>>({});
@@ -217,6 +217,10 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
+    // Wait for the stored JWT to rehydrate before fetching, otherwise a cold
+    // deep-link into a chat fires before setAuthToken() and 401s (leaving the
+    // chat — incl. inline_ai_models — unhydrated).
+    if (authLoading || !token) return;
     let active = true;
     (async () => {
       try {
@@ -241,7 +245,7 @@ export default function ChatScreen() {
     return () => {
       active = false;
     };
-  }, [chatId]);
+  }, [chatId, authLoading, token]);
 
   // Real-time WebSocket
   useEffect(() => {

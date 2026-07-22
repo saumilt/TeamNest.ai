@@ -3330,3 +3330,15 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
   expanded IN-FLOW (persisted), and unpinning returns to the rail. Resize handle only shows when pinned.
 - Verified via DOM + screenshots at 1440px: default width 64 (collapsed=1); hover → collapsed=0 overlay;
   pin → width 240 stays after mouse-away (pinned=1, in-flow); unpin → back to 64.
+
+## 2026-06 — Inline @ai model picker (web + mobile) — DONE
+- Users choosing which AI model(s) answer an `@ai` chat message, with a "Remember for this chat" toggle (default CHECKED). All 9 models shown; flagship `chatgpt` (ChatGPT 4o) carries a "Recommended (REC)" badge and is pre-selected.
+- Two triggers on BOTH surfaces (per user request):
+  1. Inline — appears the moment `@ai` is typed. Web: popover above the composer (`ai-model-inline-popover`). Mobile: tappable banner (`ai-model-inline-suggestion`) that opens the picker modal.
+  2. On-send — hitting Send on an `@ai` message with no prior pick opens a picker (web Dialog `ai-model-dialog`; mobile modal in "send" mode) that sends on confirm.
+- New shared web component `frontend/src/components/chat/AiModelPicker.jsx` (used by both the inline popover and the on-send dialog). Recommended flag added to `ai_composer/constants.js` (`chatgpt`). Mobile mirrors the model list inline in `mobile/app/chat/[id].tsx`.
+- Selection pill shows the current choice; when a chat already has a remembered model it shows "Using: … · remembered" (with Change) instead of re-nagging the popover.
+- Backend unchanged (already shipped in prior iteration): `POST /api/chats/{chat_id}/messages` reads `metadata.selected_models` + `metadata.remember_models`; remembered choice persists to `chat.inline_ai_models` and is reused for follow-ups (`backend/routes/chats.py:1468-1496`).
+- Fixes bundled: (a) web `ai-model-dialog` got an sr-only `<DialogTitle>` (Radix a11y warning); (b) mobile chat-load effect in `[id].tsx` now gates on `useAuth().{token,loading}` so a cold deep-link no longer 401s before the JWT rehydrates (was leaving header "Chat / 0 members" and `inline_ai_models` unhydrated).
+- Verified: testing agent iteration 119 — all web + mobile flows green; DB confirmed persisted `inline_ai_models` and ai_question threads using the chosen models. Main agent re-verified the mobile cold-load hydration fix (header now shows "AIConv Test / 1 members").
+

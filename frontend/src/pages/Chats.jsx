@@ -53,7 +53,7 @@ import SaveToRoleDialog from "@/components/chat/SaveToRoleDialog";
 import MessageList from "@/components/chat/MessageList";
 import ChatComposer from "@/components/chat/ChatComposer";
 import AiModelPicker from "@/components/chat/AiModelPicker";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 function relativeTime(iso) {
   if (!iso) return "";
@@ -1336,6 +1336,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
 
       <Dialog open={showModelDialog} onOpenChange={setShowModelDialog}>
         <DialogContent className="max-w-sm" data-testid="ai-model-dialog">
+          <DialogTitle className="sr-only">Choose AI model</DialogTitle>
           <AiModelPicker
             bare
             initialSelected={aiModels}
