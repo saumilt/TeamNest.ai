@@ -66,33 +66,60 @@ async def list_chats(current=Depends(require_user)):
     cleared_at_by_chat = {r["chat_id"]: r["cleared_at"] for r in cleared_rows if r.get("cleared_at")}
     read_at_by_chat = {r["chat_id"]: r.get("last_read_at") for r in cleared_rows}
 
+    # ── Bulk last-message + unread counts (avoids the old per-chat N+1). ──
+    chat_id_list = [c["id"] for c in chats]
+
+    # Latest non-deleted message per chat in ONE aggregation. Per-user
+    # `cleared_at` is applied in Python below: the latest overall message is
+    # also the latest *visible* one (a message after cleared_at can only be the
+    # newest), so if it predates cleared_at the chat has nothing new → hidden.
+    last_by_chat: dict = {}
+    if chat_id_list:
+        async for row in db.messages.aggregate([
+            {"$match": {"chat_id": {"$in": chat_id_list}, "deleted_at": None}},
+            {"$sort": {"created_at": -1}},
+            {"$group": {"_id": "$chat_id", "last": {"$first": "$$ROOT"}}},
+        ]):
+            lm = row["last"]
+            lm.pop("_id", None)  # ObjectId isn't JSON-serializable
+            last_by_chat[row["_id"]] = lm
+
+    # Unread counts per chat in ONE aggregation. Each chat carries its own
+    # floor (last_read_at, else cleared_at) via an $or clause, so we count only
+    # messages newer than that floor — excluding the user's own + noise events.
+    or_clauses = []
+    for cid in chat_id_list:
+        floor = read_at_by_chat.get(cid) or cleared_at_by_chat.get(cid)
+        clause = {"chat_id": cid}
+        if floor:
+            clause["created_at"] = {"$gt": floor}
+        or_clauses.append(clause)
+    unread_by_chat: dict = {}
+    if or_clauses:
+        async for row in db.messages.aggregate([
+            {"$match": {
+                "$or": or_clauses,
+                "deleted_at": None,
+                "sender_id": {"$ne": current["id"]},
+                "message_type": {"$nin": ["ai_question", "build_progress", "system"]},
+            }},
+            {"$group": {"_id": "$chat_id", "n": {"$sum": 1}}},
+        ]):
+            unread_by_chat[row["_id"]] = row["n"]
+
     out = []
     for c in chats:
         cleared_at = cleared_at_by_chat.get(c["id"])
-        last_query = {"chat_id": c["id"], "deleted_at": None}
-        if cleared_at:
-            last_query["created_at"] = {"$gt": cleared_at}
-        last = await db.messages.find_one(
-            last_query, {"_id": 0}, sort=[("created_at", -1)],
-        )
+        last = last_by_chat.get(c["id"])
+        # Respect per-user clear: only messages newer than cleared_at are visible.
+        if last and cleared_at and (last.get("created_at") or "") <= cleared_at:
+            last = None
         # If user cleared this chat AND no newer message, hide it entirely.
         if cleared_at and not last:
             continue
         c["last_message"] = last
-        # Unread = messages after the user's last_read_at (and after any clear),
-        # excluding the user's own messages and system/noise events.
-        floor = read_at_by_chat.get(c["id"]) or cleared_at
-        if last:
-            unread_q = {
-                "chat_id": c["id"], "deleted_at": None,
-                "sender_id": {"$ne": current["id"]},
-                "message_type": {"$nin": ["ai_question", "build_progress", "system"]},
-            }
-            if floor:
-                unread_q["created_at"] = {"$gt": floor}
-            c["unread_count"] = await db.messages.count_documents(unread_q)
-        else:
-            c["unread_count"] = 0
+        # Unread only matters when the chat has a visible last message.
+        c["unread_count"] = unread_by_chat.get(c["id"], 0) if last else 0
         out.append(c)
     out.sort(
         key=lambda x: (x.get("last_message") or {}).get("created_at") or x["created_at"],
