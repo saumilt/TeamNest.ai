@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -11,12 +11,18 @@ import {
   Brain,
   Users,
   CornerDownRight,
+  Pencil,
   Image as ImageIcon,
 } from "lucide-react";
 import AIComposer from "@/components/AIComposer";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import MentionPopover, { detectMention } from "@/components/chat/MentionPopover";
 import SlashCommandPopover, { detectSlash } from "@/components/chat/SlashCommandPopover";
+import AiModelPicker from "@/components/chat/AiModelPicker";
+import { ALL_MODELS } from "@/components/ai_composer/constants";
+
+// True when the draft is an `@ai` command (so we should offer the model picker).
+const isAiTrigger = (text) => /^\s*@ai\b/i.test(text || "");
 
 /**
  * ChatComposer — bottom composer area for an open chat. Holds attachment
@@ -52,11 +58,41 @@ export default function ChatComposer({
   onCancelReply,
   nextToTeam = false,
   onToggleTarget,
+  aiModels = [],
+  onAiModelsChange,
+  rememberModels = true,
+  onRememberChange,
 }) {
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
   const [caret, setCaret] = useState(-1);
   const [showMemory, setShowMemory] = useState(false);
+  // Inline @ai model picker: opens automatically the moment the user types
+  // "@ai" (until they pick or dismiss it for this compose).
+  const [inlineOpen, setInlineOpen] = useState(false);
+  const [inlineDismissed, setInlineDismissed] = useState(false);
+  const aiTrigger = isAiTrigger(draft);
+  const remembered = chat?.inline_ai_models || [];
+  useEffect(() => {
+    if (!aiTrigger) {
+      setInlineOpen(false);
+      setInlineDismissed(false);
+    } else if (aiModels.length === 0 && remembered.length === 0 && !inlineDismissed) {
+      // Only auto-open when there is no explicit pick and nothing remembered.
+      setInlineOpen(true);
+    }
+  }, [aiTrigger, aiModels.length, remembered.length, inlineDismissed]);
+  // What the pill shows: an explicit pick (this compose) wins; otherwise, when
+  // composing an @ai message in a chat with a remembered model, surface that.
+  const pillModels = aiModels.length
+    ? aiModels
+    : aiTrigger && remembered.length
+      ? remembered
+      : [];
+  const pillIsRemembered = aiModels.length === 0 && remembered.length > 0;
+  const modelNames = pillModels
+    .map((k) => ALL_MODELS.find((m) => m.key === k)?.name || k)
+    .join(", ");
   return (
     <div className="border-t border-hairline px-3 md:px-6 py-3 bg-bg pb-[calc(env(safe-area-inset-bottom)+12px)]">
       {showAI && (
@@ -168,6 +204,44 @@ export default function ChatComposer({
                   </p>
                   <pre className="text-[11px] text-ink whitespace-pre-wrap font-sans leading-relaxed">{aiSession.context_summary}</pre>
                 </div>
+              )}
+            </div>
+          )}
+          {pillModels.length > 0 && (
+            <div
+              className="mb-2 flex items-center gap-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1"
+              data-testid="ai-model-pill"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-ai shrink-0" />
+              <span className="text-[12px] text-ink truncate flex-1">
+                {pillIsRemembered ? "Using " : "Ask AI with "}
+                <span className="text-ai font-semibold">{modelNames}</span>
+                {(rememberModels || pillIsRemembered) && (
+                  <span className="text-ink-mute"> · remembered</span>
+                )}
+              </span>
+              <button
+                type="button"
+                data-testid="ai-model-edit"
+                onClick={() => setInlineOpen(true)}
+                className="w-7 h-7 rounded-full text-ink-mute hover:text-ai hover:bg-white/5 flex items-center justify-center shrink-0"
+                aria-label="Change AI model"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              {!pillIsRemembered && (
+                <button
+                  type="button"
+                  data-testid="ai-model-clear"
+                  onClick={() => {
+                    onAiModelsChange?.([]);
+                    setInlineDismissed(true);
+                  }}
+                  className="w-7 h-7 rounded-full text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center shrink-0"
+                  aria-label="Clear AI model"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
           )}
@@ -288,6 +362,27 @@ export default function ChatComposer({
             )}
           </div>
           <div className="flex items-end gap-2 relative">
+            {inlineOpen && (
+              <div
+                className="absolute bottom-full left-0 mb-2 z-30"
+                data-testid="ai-model-inline-popover"
+              >
+                <AiModelPicker
+                  initialSelected={pillModels}
+                  initialRemember={rememberModels}
+                  onConfirm={(models, remember) => {
+                    onAiModelsChange?.(models);
+                    onRememberChange?.(remember);
+                    setInlineOpen(false);
+                    setInlineDismissed(true);
+                  }}
+                  onCancel={() => {
+                    setInlineOpen(false);
+                    setInlineDismissed(true);
+                  }}
+                />
+              </div>
+            )}
             <MentionPopover
               draft={draft}
               caret={caret}

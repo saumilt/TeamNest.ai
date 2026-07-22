@@ -3,7 +3,7 @@ export const ALL_MODELS = [
         { key: "gpt-4o-mini", name: "ChatGPT mini", fast: true },
         { key: "claude-haiku", name: "Claude Haiku", fast: true },
         { key: "gemini-flash", name: "Gemini Flash", fast: true },
-        { key: "chatgpt", name: "ChatGPT 4o" },
+        { key: "chatgpt", name: "ChatGPT 4o", recommended: true },
         { key: "claude", name: "Claude Sonnet" },
         { key: "gemini", name: "Gemini Pro" },
         { key: "deepseek", name: "DeepSeek" },

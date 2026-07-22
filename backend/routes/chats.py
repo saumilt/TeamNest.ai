@@ -1468,15 +1468,25 @@ async def send_message(
     parsed = parse_ai_command(payload.body)
     msg_attachments = (payload.metadata or {}).get("attachments") or []
     if parsed.get("is_ai"):
-        models = parsed["models"]
-        # Default `@ai` always uses GPT-4o mini for snappy 2-3s replies and
-        # tiny credit cost. The user's "favorite" preference applies to the
-        # AI Compose / Compare workflow, not casual inline questions. To use
-        # a different model inline, type `@ai ask claude ...` explicitly.
-        # When `compare=True` (user typed `@ai compare …` / `@ai show
-        # comparison …`), pass that intent downstream so the answer renders
-        # ALL model responses inline instead of just the synthesis.
-        # `msg_attachments` lets @ai read attached documents/images.
+        # Model selection precedence:
+        #   1. per-message popup choice (metadata.selected_models)
+        #   2. explicit models typed in text (e.g. "@ai ask claude ...")
+        #   3. this chat's remembered inline choice (chat.inline_ai_models)
+        #   4. default fast model
+        override = (payload.metadata or {}).get("selected_models")
+        override_valid = [m for m in override if isinstance(m, str)] if isinstance(override, list) else []
+        if override_valid:
+            models = override_valid
+        elif not parsed.get("default_models", True):
+            models = parsed["models"]
+        elif chat.get("inline_ai_models"):
+            models = chat["inline_ai_models"]
+        else:
+            models = parsed["models"]
+        # "Remember for this chat": persist so we stop asking (and auto-continue
+        # follow-ups reuse it).
+        if override_valid and (payload.metadata or {}).get("remember_models"):
+            await db.chats.update_one({"id": chat_id}, {"$set": {"inline_ai_models": override_valid}})
         asyncio.create_task(
             handle_ai_command(
                 chat_id, current["id"], parsed["question"], models,

@@ -521,6 +521,7 @@ async def handle_ai_command(
             latest_ai_message_id=answer_msg["id"] if answer_msg else None,
             thread_id=thread["id"],
             topic=(question or "")[:120],
+            selected_models=allowed_models,
         )
         # Rolling summary — every few turns, distill the conversation into a
         # structured memory the assistant carries forward (Phase 2).

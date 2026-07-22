@@ -52,6 +52,8 @@ import { LeaveChatDialog, DeleteChatDialog } from "@/components/chat/LeaveDelete
 import SaveToRoleDialog from "@/components/chat/SaveToRoleDialog";
 import MessageList from "@/components/chat/MessageList";
 import ChatComposer from "@/components/chat/ChatComposer";
+import AiModelPicker from "@/components/chat/AiModelPicker";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 function relativeTime(iso) {
   if (!iso) return "";
@@ -753,6 +755,10 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [replyTo, setReplyTo] = useState(null);
   const [stoppedThreads, setStoppedThreads] = useState(() => new Set());
   const [nextToTeam, setNextToTeam] = useState(false);
+  // Inline @ai model picker state (selection + "remember for this chat").
+  const [aiModels, setAiModels] = useState([]);
+  const [rememberAiModels, setRememberAiModels] = useState(true);
+  const [showModelDialog, setShowModelDialog] = useState(false);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -1038,16 +1044,22 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     await uploadFile(file);
   };
 
-  const send = async () => {
-    if (!draft.trim() && attachments.length === 0) return;
+  const doSend = async (models, remember) => {
     const body = draft || (attachments[0]?.is_image ? "[image]" : `[file: ${attachments[0]?.filename}]`);
     const metadata = attachments.length > 0 ? { attachments } : {};
+    if (models && models.length) {
+      metadata.selected_models = models;
+      metadata.remember_models = !!remember;
+    }
     const parentId = replyTo?.id || null;
     const forceRecipient = nextToTeam ? "team" : undefined;
     setDraft("");
     setAttachments([]);
     setReplyTo(null);
     setNextToTeam(false);
+    // One-time choice → ask again next @ai. Remembered choice → reuse silently.
+    if (!remember) setAiModels([]);
+    else if (models && models.length) setAiModels(models);
     try {
       await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata, parent_message_id: parentId, force_recipient: forceRecipient });
       onChatChange?.();
@@ -1056,6 +1068,18 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     } catch {
       toast.error("Failed to send");
     }
+  };
+
+  const send = async () => {
+    if (!draft.trim() && attachments.length === 0) return;
+    const isAiCmd = /^\s*@ai\b/i.test(draft || "");
+    // Ask which model(s) to use the first time an @ai message is sent with no
+    // pending pick and no remembered choice for this chat.
+    if (isAiCmd && aiModels.length === 0 && !(chat?.inline_ai_models?.length)) {
+      setShowModelDialog(true);
+      return;
+    }
+    await doSend(aiModels.length ? aiModels : null, rememberAiModels);
   };
 
   // AI Conversation Mode — follow-up chip under an AI answer. "Create task"
@@ -1301,10 +1325,30 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onCancelReply={() => setReplyTo(null)}
         nextToTeam={nextToTeam}
         onToggleTarget={setNextToTeam}
+        aiModels={aiModels}
+        onAiModelsChange={setAiModels}
+        rememberModels={rememberAiModels}
+        onRememberChange={setRememberAiModels}
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }
       />
+
+      <Dialog open={showModelDialog} onOpenChange={setShowModelDialog}>
+        <DialogContent className="max-w-sm" data-testid="ai-model-dialog">
+          <AiModelPicker
+            bare
+            initialSelected={aiModels}
+            initialRemember={rememberAiModels}
+            onCancel={() => setShowModelDialog(false)}
+            onConfirm={(models, remember) => {
+              setRememberAiModels(remember);
+              setShowModelDialog(false);
+              doSend(models, remember);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <CameraCapture
         open={showCamera}

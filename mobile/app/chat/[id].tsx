@@ -38,6 +38,21 @@ function agentLabel(msg: any) {
   return "AI";
 }
 
+// Shared with the web picker (frontend/src/components/ai_composer/constants.js).
+const AI_MODELS: { key: string; name: string; fast?: boolean; recommended?: boolean }[] = [
+  { key: "gpt-4o-mini", name: "ChatGPT mini", fast: true },
+  { key: "claude-haiku", name: "Claude Haiku", fast: true },
+  { key: "gemini-flash", name: "Gemini Flash", fast: true },
+  { key: "chatgpt", name: "ChatGPT 4o", recommended: true },
+  { key: "claude", name: "Claude Sonnet" },
+  { key: "gemini", name: "Gemini Pro" },
+  { key: "deepseek", name: "DeepSeek" },
+  { key: "perplexity", name: "Perplexity" },
+  { key: "grok", name: "Grok" },
+];
+const RECOMMENDED_MODEL = "chatgpt";
+const isAiTrigger = (t: string) => /^\s*@ai\b/i.test(t || "");
+
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const chatId = String(id);
@@ -59,6 +74,13 @@ export default function ChatScreen() {
   const [replyTo, setReplyTo] = useState<any>(null);
   const [stoppedThreads, setStoppedThreads] = useState<Set<string>>(() => new Set());
   const [nextToTeam, setNextToTeam] = useState(false);
+  // Inline @ai model picker.
+  const [aiModels, setAiModels] = useState<string[]>([]);
+  const [rememberModels, setRememberModels] = useState(true);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"send" | "inline">("inline");
+  const [pickerSel, setPickerSel] = useState<string[]>([RECOMMENDED_MODEL]);
+  const [pickerRemember, setPickerRemember] = useState(true);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -355,24 +377,30 @@ export default function ChatScreen() {
     }
   };
 
-  const send = async () => {
+  const doSend = async (models: string[] | null, remember: boolean) => {
     const body = text.trim();
-    if ((!body && attachments.length === 0) || sending) return;
     const outAttachments = attachments;
     const outBody =
       body || (outAttachments.length ? `Sent ${outAttachments.length} file(s)` : "");
     const parentId = replyTo?.id || null;
     const forceRecipient = nextToTeam ? "team" : undefined;
+    const metadata: any = outAttachments.length ? { attachments: outAttachments } : {};
+    if (models && models.length) {
+      metadata.selected_models = models;
+      metadata.remember_models = !!remember;
+    }
     setText("");
     setAttachments([]);
     setReplyTo(null);
     setNextToTeam(false);
+    if (!remember) setAiModels([]);
+    else if (models && models.length) setAiModels(models);
     setSending(true);
     try {
       const msg = await apiPost(`/api/chats/${chatId}/messages`, {
         body: outBody,
         message_type: "text",
-        metadata: outAttachments.length ? { attachments: outAttachments } : {},
+        metadata,
         parent_message_id: parentId,
         force_recipient: forceRecipient,
       });
@@ -384,6 +412,47 @@ export default function ChatScreen() {
       setSending(false);
     }
     setTimeout(refreshAiSession, 4500);
+  };
+
+  const openModelPicker = (mode: "send" | "inline") => {
+    const seed = aiModels.length
+      ? aiModels
+      : chat?.inline_ai_models?.length
+        ? chat.inline_ai_models
+        : [RECOMMENDED_MODEL];
+    setPickerMode(mode);
+    setPickerSel(seed);
+    setPickerRemember(rememberModels);
+    setShowModelPicker(true);
+  };
+
+  const togglePickerModel = (key: string) => {
+    setPickerSel((prev) => {
+      if (prev.includes(key)) return prev.length > 1 ? prev.filter((k) => k !== key) : prev;
+      return [...prev, key];
+    });
+  };
+
+  const confirmModelPicker = () => {
+    const models = [...pickerSel];
+    setRememberModels(pickerRemember);
+    setShowModelPicker(false);
+    if (pickerMode === "send") {
+      doSend(models, pickerRemember);
+    } else {
+      setAiModels(models);
+    }
+  };
+
+  const send = async () => {
+    const body = text.trim();
+    if ((!body && attachments.length === 0) || sending) return;
+    const aiCmd = isAiTrigger(body);
+    if (aiCmd && aiModels.length === 0 && !(chat?.inline_ai_models?.length)) {
+      openModelPicker("send");
+      return;
+    }
+    await doSend(aiModels.length ? aiModels : null, rememberModels);
   };
 
   // One-tap document action: send immediately with a preset @ai prompt.
@@ -543,6 +612,15 @@ export default function ChatScreen() {
       !answeredThreads.has(m.metadata.thread_id) &&
       !stoppedThreads.has(m.metadata.thread_id),
   );
+
+  const rememberedModels: string[] = chat?.inline_ai_models || [];
+  const aiTriggerOn = isAiTrigger(text);
+  const pillModels = aiModels.length
+    ? aiModels
+    : aiTriggerOn && rememberedModels.length
+      ? rememberedModels
+      : [];
+  const pillIsRemembered = aiModels.length === 0 && rememberedModels.length > 0;
 
   return (
     <View style={styles.container}>
@@ -733,6 +811,48 @@ export default function ChatScreen() {
                 ))}
               </View>
             )}
+            {aiTriggerOn && aiModels.length === 0 && rememberedModels.length === 0 && (
+              <TouchableOpacity
+                testID="ai-model-inline-suggestion"
+                style={styles.aiModelBanner}
+                onPress={() => openModelPicker("inline")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="sparkles" size={13} color={colors.accent} />
+                <Text style={styles.aiModelBannerText}>
+                  Choose which AI model answers · tap to pick
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+            {pillModels.length > 0 && (
+              <View testID="ai-model-pill" style={styles.aiModelPill}>
+                <Ionicons name="sparkles" size={13} color={colors.accent} />
+                <Text style={styles.aiModelPillText} numberOfLines={1}>
+                  {pillIsRemembered ? "Using: " : "AI: "}
+                  {pillModels
+                    .map((k) => AI_MODELS.find((m) => m.key === k)?.name || k)
+                    .join(", ")}
+                  {(rememberModels || pillIsRemembered) ? " · remembered" : ""}
+                </Text>
+                <TouchableOpacity
+                  testID="ai-model-edit"
+                  onPress={() => openModelPicker("inline")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="pencil" size={14} color={colors.textMuted} />
+                </TouchableOpacity>
+                {!pillIsRemembered && (
+                  <TouchableOpacity
+                    testID="ai-model-clear"
+                    onPress={() => setAiModels([])}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close" size={15} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             <View style={styles.composerRow}>
               <TouchableOpacity
                 testID="attach-doc-btn"
@@ -844,6 +964,85 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <Modal
+        visible={showModelPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModelPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowModelPicker(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} testID="ai-model-picker">
+            <Text style={styles.modalTitle}>Ask AI with…</Text>
+            <Text style={styles.modalSub}>Pick one or more models to answer your @ai message.</Text>
+            <View style={styles.modelGrid}>
+              {AI_MODELS.map((m) => {
+                const on = pickerSel.includes(m.key);
+                return (
+                  <TouchableOpacity
+                    key={m.key}
+                    testID={`ai-model-option-${m.key}`}
+                    onPress={() => togglePickerModel(m.key)}
+                    style={[styles.modelChip, on && styles.modelChipOn]}
+                    activeOpacity={0.8}
+                  >
+                    {m.fast && (
+                      <Ionicons name="flash" size={11} color={on ? "#09090b" : colors.accent} />
+                    )}
+                    <Text style={[styles.modelChipText, on && styles.modelChipTextOn]}>
+                      {m.name}
+                    </Text>
+                    {on && <Ionicons name="checkmark" size={12} color="#09090b" />}
+                    {m.recommended && (
+                      <Text
+                        testID={`ai-model-recommended-badge-${m.key}`}
+                        style={[styles.recBadge, on && styles.recBadgeOn]}
+                      >
+                        REC
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              testID="ai-model-remember-toggle"
+              style={styles.rememberRow}
+              onPress={() => setPickerRemember((v) => !v)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={pickerRemember ? "checkbox" : "square-outline"}
+                size={18}
+                color={pickerRemember ? colors.accent : colors.textMuted}
+              />
+              <Text style={styles.rememberText}>Remember for this chat</Text>
+            </TouchableOpacity>
+            <View style={styles.pickerActions}>
+              <TouchableOpacity
+                testID="ai-model-cancel"
+                style={styles.pickerCancel}
+                onPress={() => setShowModelPicker(false)}
+              >
+                <Text style={styles.pickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="ai-model-confirm"
+                style={styles.pickerConfirm}
+                onPress={confirmModelPicker}
+                disabled={pickerSel.length === 0}
+              >
+                <Ionicons name="sparkles" size={14} color="#09090b" />
+                <Text style={styles.pickerConfirmText}>Ask AI</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -868,6 +1067,74 @@ const styles = StyleSheet.create({
   rolesEmpty: { color: colors.textMuted, fontSize: font.small, paddingVertical: spacing.md },
   roleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
   roleName: { color: colors.textPrimary, fontSize: font.small, fontWeight: "600" },
+  aiModelBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: spacing.sm,
+  },
+  aiModelBannerText: { flex: 1, color: colors.textPrimary, fontSize: font.small, fontWeight: "600" },
+  aiModelPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.pill,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  aiModelPillText: { flex: 1, color: colors.textPrimary, fontSize: font.small },
+  modelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: spacing.md },
+  modelChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  modelChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  modelChipText: { color: colors.textSecondary, fontSize: font.small, fontWeight: "600" },
+  modelChipTextOn: { color: "#09090b" },
+  recBadge: {
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    color: colors.accent,
+    backgroundColor: "rgba(251,191,36,0.15)",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  recBadgeOn: { color: "#09090b", backgroundColor: "rgba(0,0,0,0.2)" },
+  rememberRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, marginBottom: spacing.sm },
+  rememberText: { color: colors.textSecondary, fontSize: font.small },
+  pickerActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
+  pickerCancel: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.pill },
+  pickerCancelText: { color: colors.textMuted, fontSize: font.small, fontWeight: "600" },
+  pickerConfirm: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+  },
+  pickerConfirmText: { color: "#09090b", fontSize: font.small, fontWeight: "800" },
   headerTitle: { color: colors.textPrimary, fontSize: font.h3, fontWeight: "700" },
   headerSub: { color: colors.textMuted, fontSize: font.tiny },
   devPill: {

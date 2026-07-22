@@ -117,6 +117,7 @@ async def start_or_refresh_session(
     thread_id: Optional[str] = None,
     topic: Optional[str] = None,
     start_message_id: Optional[str] = None,
+    selected_models: Optional[List[str]] = None,
 ) -> dict:
     """Create or bump the user's AI session for this chat. Idempotent. The
     expiry window comes from the effective (workspace+user) timeout setting;
@@ -144,6 +145,8 @@ async def start_or_refresh_session(
         set_fields["thread_id"] = thread_id
     if topic:
         set_fields["topic"] = topic
+    if selected_models:
+        set_fields["selected_models"] = selected_models
     if existing:
         await db.ai_conversation_sessions.update_one(
             {"id": existing["id"]},
@@ -365,12 +368,15 @@ async def score_follow_up(
 
 
 # ── Orchestration: route a plain (untagged) message ─────────────────────────
-def _trigger_ai(chat_id: str, user_id: str, body: str, attachments=None) -> None:
+def _trigger_ai(chat_id: str, user_id: str, body: str, attachments=None, models=None) -> None:
     """Fire the generic @ai handler in the background (lazy import avoids a
-    circular dependency with services.ai_runtime)."""
+    circular dependency with services.ai_runtime). `models` lets an
+    auto-continued follow-up reuse whatever the user picked for the session."""
     from services.ai_runtime import handle_ai_command
     asyncio.create_task(
-        handle_ai_command(chat_id, user_id, body, ["gpt-4o-mini"], attachments=attachments)
+        handle_ai_command(
+            chat_id, user_id, body, models or ["gpt-4o-mini"], attachments=attachments,
+        )
     )
 
 
@@ -398,7 +404,10 @@ async def _trigger_for_session(session: Optional[dict], chat: dict, user: dict, 
                 await _respond(chat, user, msg, d)
         asyncio.create_task(_go())
     else:
-        _trigger_ai(chat["id"], user["id"], body, attachments)
+        # Reuse the models chosen for this AI session (falls back to the chat's
+        # remembered inline choice, then the default fast model).
+        models = (session or {}).get("selected_models") or chat.get("inline_ai_models")
+        _trigger_ai(chat["id"], user["id"], body, attachments, models=models)
 
 
 async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
@@ -425,7 +434,7 @@ async def route_untagged_message(chat: dict, user: dict, msg: dict) -> dict:
     # Direct AI chat → every message goes to the assistant, no @ai needed.
     # (This is the AI chat itself, so it is not gated by the auto-continue setting.)
     if chat.get("type") == "personal_ai":
-        _trigger_ai(chat_id, user_id, body, attachments)
+        _trigger_ai(chat_id, user_id, body, attachments, models=chat.get("inline_ai_models"))
         await _log("ai", 1.0, True, ["direct_ai_chat"])
         return {"routed": "ai"}
 
