@@ -240,6 +240,13 @@ async def startup():
             await _asyncio.to_thread(init_storage)
         except Exception as e:
             logger.warning("Storage init failed: %s", e)
+        try:
+            # Compound index backs the chat-list aggregations (latest message
+            # per chat + unread counts) and per-chat message pagination.
+            # create_index is idempotent — a no-op once it exists.
+            await db.messages.create_index([("chat_id", 1), ("created_at", -1)])
+        except Exception as e:
+            logger.warning("Message index ensure failed: %s", e)
 
     _asyncio.create_task(_bootstrap())
     logger.info("[startup] bootstrap (seed/migrate/storage) scheduled in background")
