@@ -1572,6 +1572,7 @@ async def send_message(
         and not is_command_like
         and chat.get("kind") != "development"
         and not ((payload.metadata or {}).get("attachments"))
+        and payload.force_recipient != "team"
     ):
         try:
             await _aiconv.route_untagged_message(chat, current, msg)

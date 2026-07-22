@@ -58,6 +58,7 @@ export default function ChatScreen() {
   const [showMemory, setShowMemory] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
   const [stoppedThreads, setStoppedThreads] = useState<Set<string>>(() => new Set());
+  const [nextToTeam, setNextToTeam] = useState(false);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -361,9 +362,11 @@ export default function ChatScreen() {
     const outBody =
       body || (outAttachments.length ? `Sent ${outAttachments.length} file(s)` : "");
     const parentId = replyTo?.id || null;
+    const forceRecipient = nextToTeam ? "team" : undefined;
     setText("");
     setAttachments([]);
     setReplyTo(null);
+    setNextToTeam(false);
     setSending(true);
     try {
       const msg = await apiPost(`/api/chats/${chatId}/messages`, {
@@ -371,6 +374,7 @@ export default function ChatScreen() {
         message_type: "text",
         metadata: outAttachments.length ? { attachments: outAttachments } : {},
         parent_message_id: parentId,
+        force_recipient: forceRecipient,
       });
       upsertMessage(msg);
     } catch (e: any) {
@@ -618,12 +622,47 @@ export default function ChatScreen() {
             )}
             {aiSession?.active && (
               <View>
-                <View style={styles.aiIndicator} testID="ai-conversation-indicator">
+                <View
+                  style={[styles.aiIndicator, nextToTeam && styles.aiIndicatorTeam]}
+                  testID="ai-conversation-indicator"
+                >
                   <View style={styles.aiIndicatorLeft}>
-                    <Ionicons name="sparkles" size={14} color={colors.accent} />
-                    <Text style={styles.aiIndicatorText}>Continuing with {aiSession.assistant_label || "@ai"}</Text>
+                    {nextToTeam ? (
+                      <>
+                        <Ionicons name="people" size={14} color={colors.textMuted} />
+                        <Text style={styles.aiIndicatorText} testID="recipient-label">
+                          Next message → your team
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="arrow-redo" size={14} color={colors.accent} />
+                        <Text style={styles.aiIndicatorText} testID="recipient-label">
+                          Continuing with {aiSession.assistant_label || "@ai"}
+                        </Text>
+                      </>
+                    )}
                   </View>
                   <View style={{ flexDirection: "row", gap: 6 }}>
+                    {nextToTeam ? (
+                      <TouchableOpacity
+                        testID="target-continue-ai"
+                        onPress={() => setNextToTeam(false)}
+                        style={[styles.aiIndicatorExit, styles.targetAiBtn]}
+                      >
+                        <Ionicons name="sparkles" size={13} color={colors.accent} />
+                        <Text style={[styles.aiIndicatorExitText, { color: colors.accent }]}>AI</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        testID="target-send-team"
+                        onPress={() => setNextToTeam(true)}
+                        style={styles.aiIndicatorExit}
+                      >
+                        <Ionicons name="people-outline" size={13} color={colors.textMuted} />
+                        <Text style={styles.aiIndicatorExitText}>Team</Text>
+                      </TouchableOpacity>
+                    )}
                     {aiSession.context_summary ? (
                       <TouchableOpacity testID="ai-memory-toggle" onPress={() => setShowMemory((v) => !v)} style={styles.aiIndicatorExit}>
                         <Ionicons name="bulb-outline" size={13} color={colors.textMuted} />
@@ -721,7 +760,9 @@ export default function ChatScreen() {
                 onChangeText={setText}
                 placeholder={
                   aiSession?.active
-                    ? "Ask a follow-up…"
+                    ? nextToTeam
+                      ? "Message your team…"
+                      : "Ask a follow-up…"
                     : isPersonalAI
                       ? "Attach a file or ask anything…"
                       : "Message · try @ai or @devmanager"
@@ -954,6 +995,8 @@ const styles = StyleSheet.create({
   },
   aiIndicatorLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
   aiIndicatorText: { color: colors.textPrimary, fontSize: 12, fontWeight: "600" },
+  aiIndicatorTeam: { borderColor: colors.border, backgroundColor: colors.bgElevated },
+  targetAiBtn: { borderColor: colors.accentBorder, backgroundColor: colors.accentDim },
   aiIndicatorExit: {
     flexDirection: "row",
     alignItems: "center",

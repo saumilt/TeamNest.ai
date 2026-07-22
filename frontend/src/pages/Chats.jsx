@@ -752,6 +752,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [stoppedThreads, setStoppedThreads] = useState(() => new Set());
+  const [nextToTeam, setNextToTeam] = useState(false);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -917,6 +918,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     setMessages([]);
     setReplyTo(null);
     setStoppedThreads(new Set());
+    setNextToTeam(false);
     setActiveThread(initialThread || null);
     loadChat();
     api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data));
@@ -1041,11 +1043,13 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     const body = draft || (attachments[0]?.is_image ? "[image]" : `[file: ${attachments[0]?.filename}]`);
     const metadata = attachments.length > 0 ? { attachments } : {};
     const parentId = replyTo?.id || null;
+    const forceRecipient = nextToTeam ? "team" : undefined;
     setDraft("");
     setAttachments([]);
     setReplyTo(null);
+    setNextToTeam(false);
     try {
-      await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata, parent_message_id: parentId });
+      await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata, parent_message_id: parentId, force_recipient: forceRecipient });
       onChatChange?.();
       refreshAiSession();
       setTimeout(refreshAiSession, 4500);
@@ -1295,6 +1299,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onExitAi={exitAiSession}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
+        nextToTeam={nextToTeam}
+        onToggleTarget={setNextToTeam}
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }

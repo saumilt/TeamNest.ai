@@ -9,6 +9,8 @@ import {
   X,
   Camera,
   Brain,
+  Users,
+  CornerDownRight,
   Image as ImageIcon,
 } from "lucide-react";
 import AIComposer from "@/components/AIComposer";
@@ -48,6 +50,8 @@ export default function ChatComposer({
   onExitAi,
   replyTo,
   onCancelReply,
+  nextToTeam = false,
+  onToggleTarget,
 }) {
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
@@ -94,15 +98,49 @@ export default function ChatComposer({
           )}
           {aiSession?.active && (
             <div className="mb-2" data-testid="ai-conversation-indicator">
-              <div className="flex items-center justify-between gap-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1">
+              <div
+                className={`flex items-center justify-between gap-2 border rounded-full pl-3 pr-1.5 py-1 ${
+                  nextToTeam ? "border-hairline bg-surface-2" : "border-ai/30 bg-ai/5"
+                }`}
+              >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <Sparkles className="w-3.5 h-3.5 text-ai shrink-0" />
-                  <span className="text-[12px] text-ink truncate">
-                    Continuing with{" "}
-                    <span className="text-ai font-semibold">{aiSession.assistant_label || "@ai"}</span>
-                  </span>
+                  {nextToTeam ? (
+                    <>
+                      <Users className="w-3.5 h-3.5 text-ink-mute shrink-0" />
+                      <span className="text-[12px] text-ink truncate" data-testid="recipient-label">
+                        Next message goes to <span className="font-semibold">your team</span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <CornerDownRight className="w-3.5 h-3.5 text-ai shrink-0" />
+                      <span className="text-[12px] text-ink truncate" data-testid="recipient-label">
+                        Continuing with{" "}
+                        <span className="text-ai font-semibold">{aiSession.assistant_label || "@ai"}</span>
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {nextToTeam ? (
+                    <button
+                      type="button"
+                      data-testid="target-continue-ai"
+                      onClick={() => onToggleTarget?.(false)}
+                      className="text-[10px] font-mono uppercase tracking-widest text-ai hover:text-ai border border-ai/30 hover:bg-ai/10 px-2 h-6 rounded-full inline-flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" /> Continue with AI
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="target-send-team"
+                      onClick={() => onToggleTarget?.(true)}
+                      className="text-[10px] font-mono uppercase tracking-widest text-ink-mute hover:text-ink border border-hairline hover:bg-surface-2 px-2 h-6 rounded-full inline-flex items-center gap-1"
+                    >
+                      <Users className="w-3 h-3" /> Send to team
+                    </button>
+                  )}
                   {aiSession.context_summary && (
                     <button
                       type="button"
@@ -317,9 +355,12 @@ export default function ChatComposer({
                 }
                 onSendTyping?.();
               }}
-              placeholder={aiSession?.active
-                ? "Ask a follow-up… (or type @someone to message the team)"
-                : `Message ${chat.name || "team"} — type @ for AI · @dev for engineers · / for Dev OS`}
+              placeholder={
+                aiSession?.active
+                  ? nextToTeam
+                    ? `Message your team…`
+                    : "Ask a follow-up… (or tap Send to team to message the team)"
+                  : `Message ${chat.name || "team"} — type @ for AI · @dev for engineers · / for Dev OS`}
               className="bg-surface-2 border-hairline rounded-2xl min-h-[44px] max-h-[160px] resize-none text-[14px] px-4 py-2.5"
               rows={1}
             />

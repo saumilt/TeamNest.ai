@@ -2,6 +2,14 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 120 (Jul 2026) — Composer recipient clarity: "Continuing with @ai" ↔ "Send to team" toggle (web + mobile)
+- **Why**: follow-up on the routing fix — make it always obvious where the next message goes when an AI conversation is active, with a one-tap escape hatch to message the team without leaving AI mode.
+- **Backend**: `MessageCreate.force_recipient` (`"team" | "ai" | None`); `send_message` skips auto-continue-with-AI when `force_recipient == "team"` (posts a normal team message) — the AI session stays active so the next default message still continues with AI.
+- **Web** (`ChatComposer.jsx` + `Chats.jsx`): the existing "Continuing with @ai" pill gained a **Send to team** toggle. Tapping it flips the pill to "Next message goes to your team" (+ a "Continue with AI" button) and updates the placeholder; the next send carries `force_recipient:"team"` then auto-reverts to AI. `data-testid`s: `recipient-label`, `target-send-team`, `target-continue-ai`.
+- **Mobile** (`app/chat/[id].tsx`): same toggle mirrored (testIDs `recipient-label`, `target-send-team`, `target-continue-ai`), placeholder + styling parity.
+- **Verified**: API E2E — `force_recipient:"team"` produced no AI answer and left the session active; a subsequent default follow-up routed to AI. Screenshot parity on web + Expo (pill toggles correctly, placeholder switches to "Message your team…").
+
+
 ## Iteration 119 (Jul 2026) — Fix: AI Conversation Mode not continuing on natural follow-ups (web + mobile, shared backend)
 - **Reported issue**: in group/regular chats, follow-ups like *"can you list all the values one by one"* / *"yes list value tract by tract"* were treated as team messages instead of continuing with the AI. Root-caused via `ai_routing_decisions` logs: these scored 0.20–0.40, below the 0.45 cutoff, so they routed to the team and didn't even show the "Continue with AI?" chip. (The personal "My AI Assistant" chat was never affected — it always auto-routes.)
 - **Fix (in `services/ai_conversation.py`)**: split follow-up lead-ins into **strong** (+0.4: `explain/summarize/compare/list/can you/could you/give me/show me/tell me/break down/what about/why/how/…`) and **weak** (+0.2 generic: `yes/ok/sure/please/lets/more/next/then/…`). Lowered the LLM tie-breaker floor to 0.3 so borderline messages get an intelligent yes/no (the LLM also guards against false positives). Added reference cues (`by tract`, `trait by`, `each`, `one by one`).

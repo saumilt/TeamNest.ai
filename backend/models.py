@@ -102,6 +102,10 @@ class MessageCreate(BaseModel):
     message_type: Literal["text", "ai_question", "ai_answer", "task", "file", "system"] = "text"
     parent_message_id: Optional[str] = None
     metadata: dict = {}
+    # Composer recipient override for AI Conversation Mode. "team" forces a
+    # plain team message (skips auto-continue-with-AI) without ending the
+    # session; None = default auto-routing.
+    force_recipient: Optional[Literal["team", "ai"]] = None
 
 
 class MessageEdit(BaseModel):
