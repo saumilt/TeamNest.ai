@@ -57,6 +57,7 @@ export default function ChatScreen() {
   const [msgAction, setMsgAction] = useState<any>(null);
   const [showMemory, setShowMemory] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
+  const [stoppedThreads, setStoppedThreads] = useState<Set<string>>(() => new Set());
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -98,11 +99,17 @@ export default function ChatScreen() {
 
   // Stop an in-progress AI generation and discard the result.
   const stopAI = useCallback(async () => {
+    // Optimistically mark running threads stopped so the indicator clears now.
+    const pendingIds = messages
+      .filter((m) => m.message_type === "ai_question" && !m.deleted_at && m.metadata?.thread_id)
+      .map((m) => m.metadata.thread_id);
+    if (pendingIds.length) {
+      setStoppedThreads((prev) => new Set([...prev, ...pendingIds]));
+    }
     try {
       await apiPost(`/api/chats/${chatId}/ai/stop`, {});
     } catch {}
-    setMessages((prev) => prev.filter((m) => m.message_type !== "ai_question"));
-  }, [chatId]);
+  }, [chatId, messages]);
 
   const onFollowUp = useCallback(
     async (label: string, _msg: any) => {
@@ -406,7 +413,7 @@ export default function ChatScreen() {
 
     if (isSystemEvent) {
       return (
-        <View style={styles.systemWrap}>
+        <View style={styles.systemWrap} testID={`message-${item.id}`}>
           <Text style={styles.systemText}>
             {(item.body || "").replace(/\*\*/g, "")}
           </Text>
@@ -429,6 +436,7 @@ export default function ChatScreen() {
 
     return (
       <View
+        testID={`message-${item.id}`}
         style={[
           styles.bubbleRow,
           mine ? styles.rowRight : styles.rowLeft,
@@ -528,7 +536,8 @@ export default function ChatScreen() {
       m.message_type === "ai_question" &&
       !m.deleted_at &&
       m.metadata?.thread_id &&
-      !answeredThreads.has(m.metadata.thread_id),
+      !answeredThreads.has(m.metadata.thread_id) &&
+      !stoppedThreads.has(m.metadata.thread_id),
   );
 
   return (

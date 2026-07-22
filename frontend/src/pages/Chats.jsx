@@ -751,6 +751,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState(null);
+  const [stoppedThreads, setStoppedThreads] = useState(() => new Set());
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -862,18 +863,26 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         m.message_type === "ai_question" &&
         !m.deleted_at &&
         m.metadata?.thread_id &&
-        !answered.has(m.metadata.thread_id),
+        !answered.has(m.metadata.thread_id) &&
+        !stoppedThreads.has(m.metadata.thread_id),
     );
-  }, [messages]);
+  }, [messages, stoppedThreads]);
 
   const onStopAI = useCallback(async () => {
+    // Optimistically mark every currently-running thread as stopped so the
+    // indicator clears instantly — even if the WS 'deleted' event is blocked
+    // and we're relying on the slower poll to reconcile.
+    const pendingThreadIds = messages
+      .filter((m) => m.message_type === "ai_question" && !m.deleted_at && m.metadata?.thread_id)
+      .map((m) => m.metadata.thread_id);
+    if (pendingThreadIds.length) {
+      setStoppedThreads((prev) => new Set([...prev, ...pendingThreadIds]));
+    }
     try {
       await api.post(`/chats/${chatId}/ai/stop`, {});
     } catch { /* best-effort */ }
-    // Optimistically drop the hidden thinking placeholders so the indicator clears.
-    setMessages((prev) => prev.filter((m) => m.message_type !== "ai_question"));
     toast.info("AI stopped");
-  }, [chatId]);
+  }, [chatId, messages]);
 
   // Whether this workspace can use multi-model AI comparison (paid feature).
   useEffect(() => {
@@ -907,6 +916,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   useEffect(() => {
     setMessages([]);
     setReplyTo(null);
+    setStoppedThreads(new Set());
     setActiveThread(initialThread || null);
     loadChat();
     api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data));

@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 118 RETEST of the 3 UI bugs from iteration_117. All THREE are fixed. BUG1 (web Stop AI): after clicking stop-ai-btn the ai-thinking-indicator disappears in ~438ms and stays hidden 3.5s+ — verified against 'My AI Assistant' chat with a long 1500-word essay prompt. BUG2 (mobile Stop AI): indicator clears in ~260ms after tap and stays hidden 3.5s+. BUG3 (mobile reply testability + flow): message rows now expose data-testid=`message-<id>` (via testID prop), long-press reliably opens msg-action-modal, tapping msg-action-reply shows reply-preview with cancel-reply-btn, typing + send renders the sent message with the quoted parent visible inside it. Sanity re-confirms: web reply flow (message-menu -> reply -> reply-preview -> send -> quoted parent inside reply) works; mobile unread badge clears when the chat is opened (verified with chat that had unread=3, badge removed after open+back).",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "web Chats.jsx (line ~754-885): the local `stoppedThreads` Set + inclusion in the pendingAI useMemo cleanly decouples the indicator from WS/poll — this is the correct fix pattern.",
+    "mobile chat/[id].tsx: symmetric fix via `stoppedThreads` state applied inside stopAI() before the POST — indicator hides optimistically. Correct.",
+    "mobile chat/[id].tsx renderItem now sets testID=`message-${item.id}` on the outer Pressable/View — long-press automation is now deterministic (parity with web).",
+    "Minor testID naming note: on both surfaces `reply-quote-<id>` uses the referenced parent id but resolved through a lookup (fromMap/lookup by reply metadata) — automation should not assume it equals the row's message-<id>. Functionally verified via visual quote content, so no action needed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not-run (per request)", "frontend": "100% (3/3 retest passed + 2 sanity)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (NOT Perfect$2008. — the trailing period in the review_request was wrong; /app/memory/test_credentials.md has the correct value).",
+  "seed_data_creation": "Sent throwaway messages TEST_iter118_reply_target / TEST_iter118_reply_body (web) and TEST_iter118_mobile_reply_target / TEST_iter118_mobile_reply_body (mobile) inside 'My AI Assistant' chat during the reply verification. Non-destructive; no chats created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 UI bugs from iteration_117 are now GREEN in iteration 118. Stop AI clears the thinking indicator in <500ms on both web and mobile (optimistic stoppedThreads set). Mobile message rows have data-testid=message-<id> so long-press-driven flows (reply, ask AI about, summarize thread, etc.) can be automated by targeting that testID directly. Note credential fix: use `Perfect$2008` (no trailing period).",
+  "rca of the issue": "Prior root cause was that the indicator relied only on WS message_updated / periodic poll to disappear after Stop. Fix: main agent added a local `stoppedThreads: Set<string>` on both web (Chats.jsx) and mobile (chat/[id].tsx); on Stop click, pending ai_question thread_ids are added to the set BEFORE the POST /api/chats/{id}/ai/stop fires, and the pendingAI derivation filters those threads out — so the indicator hides instantly and any late WS/poll updates cannot resurrect it. The mobile testID gap was fixed by wiring testID=`message-${item.id}` onto the outer message row in renderItem."
+}
