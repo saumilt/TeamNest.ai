@@ -60,10 +60,11 @@ async def list_chats(current=Depends(require_user)):
     # Build per-user cleared_at map. A chat with cleared_at is hidden until a
     # new message arrives after that timestamp (WhatsApp-style "delete chat").
     cleared_rows = await db.user_chat_states.find(
-        {"user_id": current["id"], "cleared_at": {"$ne": None}},
-        {"_id": 0, "chat_id": 1, "cleared_at": 1},
-    ).to_list(2000)
-    cleared_at_by_chat = {r["chat_id"]: r["cleared_at"] for r in cleared_rows}
+        {"user_id": current["id"]},
+        {"_id": 0, "chat_id": 1, "cleared_at": 1, "last_read_at": 1},
+    ).to_list(4000)
+    cleared_at_by_chat = {r["chat_id"]: r["cleared_at"] for r in cleared_rows if r.get("cleared_at")}
+    read_at_by_chat = {r["chat_id"]: r.get("last_read_at") for r in cleared_rows}
 
     out = []
     for c in chats:
@@ -78,6 +79,20 @@ async def list_chats(current=Depends(require_user)):
         if cleared_at and not last:
             continue
         c["last_message"] = last
+        # Unread = messages after the user's last_read_at (and after any clear),
+        # excluding the user's own messages and system/noise events.
+        floor = read_at_by_chat.get(c["id"]) or cleared_at
+        if last:
+            unread_q = {
+                "chat_id": c["id"], "deleted_at": None,
+                "sender_id": {"$ne": current["id"]},
+                "message_type": {"$nin": ["ai_question", "build_progress", "system"]},
+            }
+            if floor:
+                unread_q["created_at"] = {"$gt": floor}
+            c["unread_count"] = await db.messages.count_documents(unread_q)
+        else:
+            c["unread_count"] = 0
         out.append(c)
     out.sort(
         key=lambda x: (x.get("last_message") or {}).get("created_at") or x["created_at"],
@@ -1232,7 +1247,19 @@ async def list_messages(
     return msgs
 
 
-@router.post("/chats/{chat_id}/leave")
+@router.post("/chats/{chat_id}/read")
+async def mark_chat_read(chat_id: str, current=Depends(require_user)):
+    """Mark a chat as read for the current user (clears its unread badge)."""
+    chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    await db.user_chat_states.update_one(
+        {"user_id": current["id"], "chat_id": chat_id},
+        {"$set": {"last_read_at": now_iso()},
+         "$setOnInsert": {"user_id": current["id"], "chat_id": chat_id}},
+        upsert=True,
+    )
+    return {"ok": True}
 async def leave_chat(chat_id: str, current=Depends(require_user)):
     """Member voluntarily leaves a group chat. Posts a system message so
     other members see they left. Direct/personal-AI chats cannot be left —

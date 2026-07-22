@@ -247,6 +247,32 @@ async def build_chat_context(chat_id: str, before_iso: Optional[str] = None, lim
     return "\n".join(lines)
 
 
+async def gather_recent_attachments(
+    chat_id: str, before_iso: Optional[str] = None, limit_msgs: int = 30, max_files: int = 6,
+) -> List[dict]:
+    """Collect file attachments from recent messages in the chat (newest first,
+    deduped by file id) so `@ai` can answer about documents uploaded in
+    *earlier* messages — not just the one carrying the question."""
+    q: dict = {"chat_id": chat_id, "deleted_at": None,
+               "metadata.attachments": {"$exists": True, "$ne": []}}
+    if before_iso:
+        q["created_at"] = {"$lte": before_iso}
+    rows = await db.messages.find(
+        q, {"_id": 0, "metadata": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(limit_msgs)
+    seen: set = set()
+    out: List[dict] = []
+    for r in rows:
+        for a in (r.get("metadata") or {}).get("attachments") or []:
+            fid = a.get("id") or a.get("file_id")
+            if not fid or fid in seen:
+                continue
+            seen.add(fid)
+            out.append(a)
+            if len(out) >= max_files:
+                return out
+    return out
+
 
 async def handle_ai_command(
     chat_id: str, user_id: str, question: str, models: List[str],
@@ -392,15 +418,31 @@ async def handle_ai_command(
     if prefix:
         prompt_question = "\n\n".join(prefix) + f"\n\n[Current question]\n{question}"
     image_bytes: Optional[list] = None
-    if attachments:
+    # Merge attachments on THIS message with documents uploaded earlier in the
+    # chat, so questions like "what's the expiry date on the doc I sent?" work.
+    merged_attachments: List[dict] = list(attachments or [])
+    _seen_ids = {(a.get("id") or a.get("file_id")) for a in merged_attachments}
+    try:
+        for a in await gather_recent_attachments(chat_id, placeholder["created_at"]):
+            fid = a.get("id") or a.get("file_id")
+            if fid and fid not in _seen_ids:
+                _seen_ids.add(fid)
+                merged_attachments.append(a)
+    except Exception as e:
+        logger.warning("[ai] gather recent attachments failed: %s", e)
+    if merged_attachments:
         try:
             from services.file_extract import extract_attachments
-            extracted = await extract_attachments(attachments, workspace_id)
+            extracted = await extract_attachments(merged_attachments, workspace_id)
             if extracted.get("text"):
+                doc_text = extracted["text"]
+                if len(doc_text) > 24000:   # keep the prompt within budget
+                    doc_text = doc_text[:24000] + "\n…[truncated]"
                 prompt_question = (
                     f"{prompt_question}\n\n"
-                    "[Attached file contents — use these to answer the question]\n"
-                    f"{extracted['text']}"
+                    "[Attached & previously-shared file contents in this chat — use these to "
+                    "answer the question. Cite the file name when relevant.]\n"
+                    f"{doc_text}"
                 )
             if extracted.get("images"):
                 image_bytes = extracted["images"]
