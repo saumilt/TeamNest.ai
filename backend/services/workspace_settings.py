@@ -31,7 +31,9 @@ AI_CONV_USER_DEFAULTS = {
     "session_timeout_minutes": None,  # None = inherit workspace default
     "follow_up_threshold": None,      # None = inherit workspace default
     "show_recipient_indicator": True,
-    "ask_when_ambiguous": True,
+    # Default = auto-continue with AI on borderline follow-ups (no "Continue
+    # with AI?" chip). Set True to be asked before continuing.
+    "ask_when_ambiguous": False,
 }
 
 

@@ -2,6 +2,13 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 119 (Jul 2026) — Fix: AI Conversation Mode not continuing on natural follow-ups (web + mobile, shared backend)
+- **Reported issue**: in group/regular chats, follow-ups like *"can you list all the values one by one"* / *"yes list value tract by tract"* were treated as team messages instead of continuing with the AI. Root-caused via `ai_routing_decisions` logs: these scored 0.20–0.40, below the 0.45 cutoff, so they routed to the team and didn't even show the "Continue with AI?" chip. (The personal "My AI Assistant" chat was never affected — it always auto-routes.)
+- **Fix (in `services/ai_conversation.py`)**: split follow-up lead-ins into **strong** (+0.4: `explain/summarize/compare/list/can you/could you/give me/show me/tell me/break down/what about/why/how/…`) and **weak** (+0.2 generic: `yes/ok/sure/please/lets/more/next/then/…`). Lowered the LLM tie-breaker floor to 0.3 so borderline messages get an intelligent yes/no (the LLM also guards against false positives). Added reference cues (`by tract`, `trait by`, `each`, `one by one`).
+- **Option A (auto-continue)** per user's choice: defaulted per-user `ask_when_ambiguous` to False (`services/workspace_settings.py`) so ambiguous follow-ups continue with AI instead of showing a chip; migrated the tester's stored pref to match.
+- **Verified**: natural follow-ups now score ≥0.75 → auto-AI; *"lets grab lunch tomorrow"* → LLM-refined 0.12 → stays in team chat. Unit scoring + new integration test (`tests/test_ai_conversation_routing.py`) + full API E2E (throwaway group chat: @ai starts session → plain follow-up routed to AI, team chatter not hijacked) all PASS. No frontend change needed — routing is server-side, so web + mobile both benefit.
+
+
 ## Iteration 117–118 (Jul 2026) — Chat UX: reply-to-message, Stop AI, mark-as-read, AI document reading (web + mobile)
 - **Mark-as-read wiring**: web `ChatPanel` and mobile `chat/[id].tsx` now call `POST /api/chats/{id}/read` on chat open + on inbound messages, so WhatsApp-style unread bubbles actually CLEAR (badge already rendered but never reset before). Mobile chat list (`(tabs)/index.tsx`) now shows the `unread_count` badge.
 - **Reply to a specific message** (parity): right-click a bubble (web) / long-press → `msg-action-reply` (mobile) → quoted preview strip in composer (`reply-preview`/`cancel-reply-btn`) → send with `parent_message_id` → the reply renders the quoted parent above the body (`reply-quote-<id>`). Only user text replies show a quote (AI/task internal parents suppressed). Web `MessageBubble` also gained a "Reply" overflow-menu item.

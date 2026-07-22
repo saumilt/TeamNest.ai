@@ -29,6 +29,11 @@ from deps import db, logger, new_id, now_iso
 TIMEOUT_MIN = 30
 THRESHOLD_HIGH = 0.75
 THRESHOLD_LOW = 0.45
+# Below THRESHOLD_LOW but still plausibly a follow-up: hand these to the LLM
+# tie-breaker instead of silently treating them as team chatter. This rescues
+# natural phrasings ("can you list all the values…") that the fast heuristic
+# under-scores.
+AMBIGUOUS_FLOOR = 0.3
 DEFAULT_ASSISTANT_ID = "ai"
 
 EXIT_COMMANDS = {"/exit-ai", "/team", "/exit"}
@@ -41,19 +46,32 @@ FOLLOW_UP_SUGGESTIONS = [
     "Compare options",
 ]
 
-_FOLLOWUP_STARTERS = (
-    "explain", "make it", "make this", "shorter", "longer", "why", "how ",
-    "what ", "summarize", "summarise", "rewrite", "continue", "add ", "remove",
-    "compare", "draft", "create", "convert", "translate", "expand", "simplify",
-    "give me", "another", "change the", "use the", "show me", "list ",
-    "elaborate", "tldr", "tl;dr", "go deeper", "and ", "also ", "who ", "when ",
-    "can this", "can it", "is it", "are they",
+_STRONG_STARTERS = (
+    "explain", "summarize", "summarise", "rewrite", "compare", "draft",
+    "list ", "list all", "can you", "could you", "would you", "will you",
+    "give me", "give ", "show me", "show ", "tell me", "walk me",
+    "break down", "break it", "break this", "elaborate", "go deeper",
+    "expand", "simplify", "translate", "convert", "outline", "describe",
+    "define", "what about", "how about", "why", "how ", "what ", "which ",
+    "who ", "when ", "where ", "map out", "generate", "write ", "provide",
+    "pull up", "make it", "make this", "in detail", "shorter", "longer",
+    "another", "can this", "can it", "is it", "are they", "does ",
+)
+# Generic conversational lead-ins: weaker signal, so they only nudge the score
+# into the LLM tie-breaker band rather than auto-routing (protects team chatter
+# like "lets grab lunch tomorrow" from being sent to the AI).
+_WEAK_STARTERS = (
+    "yes", "yep", "yeah", "yup", "ok", "okay", "sure", "please", "pls ",
+    "and ", "also ", "more", "next", "then", "continue", "keep going",
+    "go ahead", "lets ", "let's ", "do ", "i want", "i need", "i'd like",
+    "add ", "remove", "change the", "use the", "help me", "detail",
 )
 _REFERENCE_WORDS = (
     " this", " that", " it", " those", " these", "above", "previous",
     "last answer", "your answer", "the second", "second option", "earlier",
     "what you said", "what you just", "the first", "the third", "both options",
-    "that pricing", "your last", "the same",
+    "that pricing", "your last", "the same", " each", "by tract", "trait by",
+    " them", " each one", "one by one",
 )
 
 
@@ -270,9 +288,12 @@ def _heuristic_score(
     lower = (body or "").strip().lower()
     reasons: List[str] = []
     score = 0.0
-    if any(lower.startswith(s) for s in _FOLLOWUP_STARTERS):
+    if any(lower.startswith(s) for s in _STRONG_STARTERS):
         score += 0.4
         reasons.append("followup_starter")
+    elif any(lower.startswith(s) for s in _WEAK_STARTERS):
+        score += 0.2
+        reasons.append("weak_starter")
     if any(w in f" {lower}" for w in _REFERENCE_WORDS):
         score += 0.25
         reasons.append("reference_word")
@@ -332,7 +353,10 @@ async def score_follow_up(
     last = _parse_iso(session.get("last_activity_at"))
     seconds = (_now() - last).total_seconds() if last else 9999
     score, reasons = _heuristic_score(body, seconds)
-    if THRESHOLD_LOW <= score < high_threshold:
+    # Ambiguous band → let a fast LLM decide. Floor lowered to AMBIGUOUS_FLOOR so
+    # under-scored-but-plausible follow-ups still get an intelligent read
+    # (the LLM also guards against false positives by returning a low score).
+    if AMBIGUOUS_FLOOR <= score < high_threshold:
         llm = await _llm_refine(body, session.get("topic"))
         if llm is not None:
             reasons.append(f"llm_refined:{round(llm, 2)}")
