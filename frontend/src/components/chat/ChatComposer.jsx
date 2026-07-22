@@ -46,6 +46,8 @@ export default function ChatComposer({
   comparisonAllowed = true,
   aiSession = { active: false },
   onExitAi,
+  replyTo,
+  onCancelReply,
 }) {
   const hasImageAttachment = attachments.some((a) => a.is_image);
   const textareaRef = useRef(null);
@@ -66,6 +68,30 @@ export default function ChatComposer({
       )}
       {!showAI && (
         <>
+          {replyTo && (
+            <div
+              className="mb-2 flex items-center gap-2 border-l-2 border-brand pl-2.5 pr-1.5 py-1.5 bg-surface-2 rounded-r-xl"
+              data-testid="reply-preview"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-brand">
+                  Replying to {replyTo.name || "message"}
+                </div>
+                <div className="text-[12px] text-ink-dim truncate" data-testid="reply-preview-body">
+                  {replyTo.body || "…"}
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid="cancel-reply-btn"
+                onClick={onCancelReply}
+                className="w-7 h-7 rounded-full text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center shrink-0"
+                aria-label="Cancel reply"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           {aiSession?.active && (
             <div className="mb-2" data-testid="ai-conversation-indicator">
               <div className="flex items-center justify-between gap-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1">

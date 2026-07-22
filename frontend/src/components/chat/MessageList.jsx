@@ -26,12 +26,16 @@ function labelForDay(d) {
  * and day separators. Pure presentational; receives the full ordered list.
  */
 const MessageList = forwardRef(function MessageList(
-        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction },
+        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction, onReply, pendingAI = false, onStopAI },
         scrollRef,
 ) {
         // The "AI question" bubble echoes the user's own message verbatim (redundant —
         // the AI answer bubble already links to "Show all comparisons"), so hide it.
         const visible = messages.filter((m) => m.message_type !== "ai_question");
+        // Index every message by id so replies can render a quoted preview of
+        // their parent (resolved client-side from the loaded list).
+        const msgById = {};
+        for (const m of messages) msgById[m.id] = m;
         const out = [];
         let lastDayKey = null;
         let prevSender = null;
@@ -57,6 +61,24 @@ const MessageList = forwardRef(function MessageList(
                 const showTimestamp = !sameNextSender;
                 prevSender = m.sender_id;
 
+                // Quoted-reply preview: only user text replies carry a visible
+                // quote (AI answers / task confirmations use parent_message_id
+                // internally and shouldn't render a quote bubble).
+                let parentPreview = null;
+                if (m.message_type === "text" && m.parent_message_id && msgById[m.parent_message_id]) {
+                        const p = msgById[m.parent_message_id];
+                        const pName =
+                                p.sender_id === userId
+                                        ? "You"
+                                        : (typeof p.sender_id === "string" && p.sender_id.startsWith("ai"))
+                                                ? "AI"
+                                                : memberMap[p.sender_id]?.name || "Member";
+                        parentPreview = {
+                                name: pName,
+                                body: (p.body || "").replace(/[*#`>]/g, "").slice(0, 120),
+                        };
+                }
+
                 out.push(
                         <MessageBubble
                                 key={m.id}
@@ -78,6 +100,8 @@ const MessageList = forwardRef(function MessageList(
                                 onFollowUp={onFollowUp}
                                 onRouteChoice={onRouteChoice}
                                 onAiAction={onAiAction}
+                                onReply={onReply}
+                                parentPreview={parentPreview}
                         />,
                 );
         }
@@ -130,6 +154,28 @@ const MessageList = forwardRef(function MessageList(
                                         </div>
                                 );
                         })()}
+                        {pendingAI && (
+                                <div
+                                        data-testid="ai-thinking-indicator"
+                                        className="inline-flex items-center gap-2 mx-3 px-3 py-1.5 rounded-2xl rounded-bl-md text-xs bg-ai-tint text-ai ring-1 ring-ai/25"
+                                >
+                                        <span className="flex gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
+                                        </span>
+                                        <span className="font-medium">AI is thinking…</span>
+                                        <button
+                                                type="button"
+                                                data-testid="stop-ai-btn"
+                                                onClick={onStopAI}
+                                                className="ml-1 inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-tn-red/15 text-tn-red hover:bg-tn-red/25 font-semibold"
+                                        >
+                                                <span className="w-2 h-2 rounded-[2px] bg-current" />
+                                                Stop
+                                        </button>
+                                </div>
+                        )}
                         {bottomSlot}
                 </div>
         );

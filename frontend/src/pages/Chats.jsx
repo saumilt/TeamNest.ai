@@ -750,6 +750,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
 
   // When opening via ?compose=@priya, prefill the textarea once and strip the param.
   useEffect(() => {
@@ -830,6 +831,50 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     [chatId],
   );
 
+  // Mark this chat as read for the current user (clears its unread badge) and
+  // refresh the chat list so the badge updates in the sidebar.
+  const markRead = useCallback(() => {
+    if (!chatId) return;
+    api.post(`/chats/${chatId}/read`).then(() => onChatChange?.()).catch(() => {});
+  }, [chatId, onChatChange]);
+
+  // Reply to a specific message — capture a lightweight preview (sender + snippet).
+  const handleReply = useCallback((m) => {
+    const name =
+      m.sender_id === user.id
+        ? "yourself"
+        : (typeof m.sender_id === "string" && m.sender_id.startsWith("ai"))
+          ? "AI"
+          : (chat?.members || []).find((mm) => mm.id === m.sender_id)?.name || "teammate";
+    setReplyTo({ id: m.id, name, body: (m.body || "").replace(/[*#`>]/g, "").slice(0, 140) });
+  }, [user.id, chat]);
+
+  // An AI answer is still "thinking" while its running question placeholder has
+  // no matching ai_answer for the same thread yet.
+  const pendingAI = useMemo(() => {
+    const answered = new Set(
+      messages
+        .filter((m) => m.message_type === "ai_answer" && m.metadata?.thread_id)
+        .map((m) => m.metadata.thread_id),
+    );
+    return messages.some(
+      (m) =>
+        m.message_type === "ai_question" &&
+        !m.deleted_at &&
+        m.metadata?.thread_id &&
+        !answered.has(m.metadata.thread_id),
+    );
+  }, [messages]);
+
+  const onStopAI = useCallback(async () => {
+    try {
+      await api.post(`/chats/${chatId}/ai/stop`, {});
+    } catch { /* best-effort */ }
+    // Optimistically drop the hidden thinking placeholders so the indicator clears.
+    setMessages((prev) => prev.filter((m) => m.message_type !== "ai_question"));
+    toast.info("AI stopped");
+  }, [chatId]);
+
   // Whether this workspace can use multi-model AI comparison (paid feature).
   useEffect(() => {
     let cancelled = false;
@@ -861,10 +906,19 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
 
   useEffect(() => {
     setMessages([]);
+    setReplyTo(null);
     setActiveThread(initialThread || null);
     loadChat();
     api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data));
   }, [chatId, initialThread, loadChat]);
+
+  // Clear the unread badge when the chat is open and whenever a new message
+  // lands while it's focused.
+  useEffect(() => {
+    if (!chatId || messages.length === 0) return;
+    if (document.hidden) return;
+    markRead();
+  }, [chatId, messages.length, markRead]);
 
   // WebSocket with auto-reconnect
   useEffect(() => {
@@ -976,10 +1030,12 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     if (!draft.trim() && attachments.length === 0) return;
     const body = draft || (attachments[0]?.is_image ? "[image]" : `[file: ${attachments[0]?.filename}]`);
     const metadata = attachments.length > 0 ? { attachments } : {};
+    const parentId = replyTo?.id || null;
     setDraft("");
     setAttachments([]);
+    setReplyTo(null);
     try {
-      await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata });
+      await api.post(`/chats/${chatId}/messages`, { body, message_type: "text", metadata, parent_message_id: parentId });
       onChatChange?.();
       refreshAiSession();
       setTimeout(refreshAiSession, 4500);
@@ -1156,6 +1212,9 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onFollowUp={onFollowUp}
         onRouteChoice={onRouteChoice}
         onAiAction={onAiAction}
+        onReply={handleReply}
+        pendingAI={pendingAI}
+        onStopAI={onStopAI}
         topSlot={
           <>
             <PreviewViewersChip chatId={chatId} />
@@ -1224,6 +1283,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         comparisonAllowed={comparisonAllowed}
         aiSession={aiSession}
         onExitAi={exitAiSession}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
         onRefreshMessages={() =>
           api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data))
         }

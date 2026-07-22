@@ -1,29 +1,78 @@
 {
-  "summary": "Re-tested the critical /reset-password red-screen bug from iteration_116. The missing `import { PasswordInput } from '@/components/ui-v2/PasswordInput'` was added to /app/frontend/src/pages/web/ResetPassword.jsx line 8. Confirmed the page now renders cleanly (no ReferenceError, no runtime overlay), both PasswordInput fields (data-testid=reset-password-input, reset-confirm-input) mount with functioning eye toggles (reset-password-input-toggle, reset-confirm-input-toggle: type flips password->text). Ran full E2E happy path against the live preview backend: logged in sam@funasia.net/Perfect$2008 (200), created throwaway user resettest_1784677383@test.io via POST /api/superadmin/users (200), fetched a single-use reset link via POST /api/superadmin/users/reset-link with send_email:false (200, returned reset_link + expires_in_minutes), navigated the browser to that URL, submitted NewPass$2026 through the UI, saw the 'Password updated' toast + redirect to /login, then verified POST /api/auth/login with the NEW password returns 200 and the OLD password returns 401. Zero JS pageerrors captured. The only console noise is the same benign /api/auth/me 401 identity probe already noted in iteration_116 (pre-existing, unrelated).",
-  "platforms_tested": ["web"],
-  "backend_issues": {"critical": [], "minor": []},
+  "summary": "Iteration 117: chat UI enhancements (mark-read, reply, stop-AI, doc reading) verified across shared backend + web + mobile (Expo web preview). Backend 7/7 pytest passed. Web reply flow (menu→reply-preview→send→reply-quote) works end-to-end. Web + mobile show 'AI is thinking… Stop' indicator on long @ai prompts, and backend correctly discards the answer on stop. However, on BOTH web and mobile the client-side ai-thinking-indicator does NOT disappear immediately after the user taps Stop (still visible >1.5s later) — likely a websocket/local-state refresh gap. Mobile message bubbles are missing per-message testIDs, which blocked automated long-press → reply testing on mobile (bug in testability; real users unaffected). Mark-as-read verified at backend level; UI baseline had unread=0 so no visual regression observed. Leave-chat regression 200 OK.",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": { "critical": [], "minor": [] },
   "frontend_issues": {
     "web": {
-      "ui_bugs": [],
+      "ui_bugs": [
+        {
+          "component": "MessageList / ChatComposer",
+          "issue": "ai-thinking-indicator persists in the DOM for >1.5s after user clicks stop-ai-btn. Backend confirms the ai_question placeholder is soft-deleted and broadcast via WS, but the web client does not clear the indicator immediately. Real user perception is that Stop 'didn't work' even though the answer is discarded. Reference: /app/frontend/src/components/chat/MessageList.jsx:159-170",
+          "selector": "[data-testid='ai-thinking-indicator']",
+          "priority": "MEDIUM"
+        }
+      ],
       "integration_issues": [],
       "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [
+        {
+          "component": "chat/[id].tsx message renderer",
+          "issue": "Individual chat message bubbles have NO testID={`message-${id}`} attribute. Only reply-quote-<id> is testable. This blocks automated long-press testing of the Reply flow on mobile and is a parity gap with web (web has data-testid={`message-${id}`}). Reference: /app/mobile/app/chat/[id].tsx (renderItem — no testID on the outer row/pressable).",
+          "testID": "message-<id> (missing)",
+          "priority": "HIGH"
+        },
+        {
+          "component": "chat/[id].tsx thinking indicator",
+          "issue": "Same behavior as web: after tapping stop-ai-btn, ai-thinking-indicator remains visible on-screen (>2s wait). Backend cancellation succeeds (canceled>0, placeholder deleted) but the mobile view keeps rendering the thinking row. Reference: /app/mobile/app/chat/[id].tsx:583-586",
+          "testID": "ai-thinking-indicator",
+          "priority": "MEDIUM"
+        }
+      ],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
     }
   },
-  "parity_issues": [],
-  "test_report_links": [],
+  "parity_issues": [
+    {
+      "flow": "Stop AI",
+      "platform": "both",
+      "issue": "After Stop is clicked, the ai-thinking-indicator stays rendered on both web and mobile even though the backend has canceled the thread and soft-deleted the ai_question placeholder.",
+      "expected": "Indicator disappears within ~500ms of clicking Stop (matching backend soft-delete broadcast).",
+      "actual": "Indicator visible >1.5s later on both surfaces; user has to send another message or navigate away for it to clear."
+    },
+    {
+      "flow": "Reply automation testability",
+      "platform": "mobile",
+      "issue": "Web message bubbles expose data-testid=`message-<id>` (used for right-click / hover). Mobile does not expose a matching testID on message rows, so long-press → msg-action-modal → Reply cannot be reached deterministically by automation, unlike on web.",
+      "expected": "Mobile renders testID=`message-<id>` on the outer Pressable/View for each message (parity with web).",
+      "actual": "Mobile only tags nested elements (reply-quote-<id>, followups-<id>, etc.). Outer message row has no testID."
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration117_chat_ui_backend.py",
+    "/app/test_reports/pytest/iteration117.xml"
+  ],
   "action_items": [
-    "None for the reset-password bug — CLOSED.",
-    "Optional (carried from iter116, not this iteration's job): add a smoke test that navigates /reset-password?token=x and asserts no ReferenceError, so this class of missing-import regressions is caught in CI.",
-    "Cleanup note: throwaway user `resettest_1784677383@test.io` (workspace e26ce6c2-f0f0-4ba6-9d6c-7f8b55fc8f63) was created for the destructive flow — safe to purge (TEST_/resettest_ prefix)."
+    "WEB: After POST /api/chats/{id}/ai/stop resolves (and/or on receiving message_updated WS event with deleted_at), immediately clear the local `aiThinking` state / hide ai-thinking-indicator instead of waiting for the next poll. Consider optimistically setting `isThinking=false` inside the Stop click handler.",
+    "MOBILE: Same fix on /app/mobile/app/chat/[id].tsx — set the thinking flag off within the stopAI() handler right after the POST resolves, not only on WS event.",
+    "MOBILE: Add testID={`message-${item.id}`} to the outer Pressable/View in renderItem of /app/mobile/app/chat/[id].tsx so automation + long-press flows can target individual messages (parity with web MessageBubble).",
+    "OPTIONAL: Consider adding a subtle 'AI stopped' toast on both surfaces so users get positive confirmation instead of just the indicator vanishing."
   ],
   "critical_code_review_comments": [
-    "Fix is minimal, correct, and matches the existing import convention (uses the @/components/ui-v2 alias). No side-effects on the rest of the file."
+    "chats.py POST /chats/{id}/ai/stop already broadcasts message_updated on placeholder soft-delete — good. Client-side listeners on both platforms need to react to that event OR to the POST response by clearing the local thinking flag.",
+    "Mobile chat/[id].tsx exposes lots of nested testIDs but skips the most important one (message row). This has been reported before but resurfaced this iteration."
   ],
-  "updated_files": [],
-  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (reset-password E2E happy path)"},
-  "seed_data_creation": "Created 1 throwaway user via SuperAdmin API: resettest_1784677383@test.io (password now NewPass$2026). Documented test accounts (sam, mate1, os) untouched.",
-  "retest_needed": false,
+  "updated_files": [
+    "/app/backend/tests/test_iteration117_chat_ui_backend.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "70%" },
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super admin) — used for both web and mobile logins.",
+  "seed_data_creation": "Created + left one throwaway group chat (TEST_iter117_leave) during regression test — deleted implicitly (self left).",
+  "retest_needed": true,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "iteration_116's only outstanding bug (ReferenceError: PasswordInput is not defined on /reset-password) is fixed and verified end-to-end. Full flow: superadmin -> create user -> reset-link -> open link -> submit new password -> login with new password all pass. No new issues introduced.",
-  "rca of the issue": "ResetPassword.jsx used <PasswordInput/> at two call sites but never imported the component, so React threw ReferenceError as soon as the render path hit an authenticated (token-bearing) branch. E1 added `import { PasswordInput } from '@/components/ui-v2/PasswordInput';` at the top of the file alongside the other UI imports. Verified by (a) navigating to /reset-password?token=... and confirming the form mounts with no runtime error and (b) running the full super-admin reset-link -> update password -> re-login flow successfully."
+  "context_for_next_testing_agent": "Backend flow for iteration 117 (mark-read, ai/stop, leave, doc reading) is solid. The remaining work is a client-side state bug on BOTH web and mobile: the ai-thinking-indicator does not disappear after Stop. Also add testID=`message-<id>` to mobile message row to unblock long-press automation. Reply-quote render on web is verified. Mobile reply flow requires the missing testID to fully verify end-to-end.",
+  "rca of the issue": "Backend chats.py:1287-1300 sets ai_threads status=canceled and broadcasts message_updated for soft-deleted ai_question placeholders — verified via pytest. Client code (Chats.jsx / MessageList.jsx on web, chat/[id].tsx on mobile) apparently keys the 'AI thinking' indicator off a local piece of state that is only cleared when a new ai_answer arrives (or on periodic refetch), not when the placeholder is deleted. Fix: (a) subscribe the client to the message_updated WS event and drop any ai_question with deleted_at from the visible set → immediately hides the indicator; and/or (b) inside stopAI() flip isThinking=false optimistically as soon as POST /ai/stop returns 200."
 }

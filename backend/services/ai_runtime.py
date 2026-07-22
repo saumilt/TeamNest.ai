@@ -121,8 +121,10 @@ async def _finalize_research(
     else:
         final = final_synthesis
 
+    # Don't clobber a "canceled" status — if the user hit Stop while this was
+    # running, leave it canceled so the guard below discards the answer.
     await db.ai_threads.update_one(
-        {"id": thread["id"]},
+        {"id": thread["id"], "status": {"$ne": "canceled"}},
         {"$set": {
             "status": "complete",
             "final_answer": final_synthesis,
@@ -170,6 +172,10 @@ async def _finalize_research(
         "edited_at": None,
         "deleted_at": None,
     }
+    # Final "Stop AI" guard — re-check right before posting so a cancel that
+    # landed during generation reliably discards the answer.
+    if await _thread_canceled(thread["id"]):
+        return None
     await db.messages.insert_one(answer_msg.copy())
     await _broadcast_message(chat_id, answer_msg)
     return answer_msg
@@ -272,6 +278,12 @@ async def gather_recent_attachments(
             if len(out) >= max_files:
                 return out
     return out
+
+
+async def _thread_canceled(thread_id: str) -> bool:
+    """True if the user hit 'Stop AI' for this thread while it was running."""
+    t = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0, "status": 1})
+    return bool(t and t.get("status") == "canceled")
 
 
 async def handle_ai_command(
@@ -452,6 +464,17 @@ async def handle_ai_command(
     responses = await ask_models_parallel(
         prompt_question, allowed_models, thread["id"], image_bytes_list=image_bytes,
     )
+    # ── "Stop AI" checkpoint ─────────────────────────────────────────────
+    # If the user hit Stop while the models were running, discard the result:
+    # don't store responses, don't charge credits, don't post an answer. The
+    # placeholder is already soft-deleted by the /ai/stop endpoint.
+    if await _thread_canceled(thread["id"]):
+        logger.info("[ai] thread %s canceled by user — discarding result", thread["id"])
+        await db.messages.update_one(
+            {"id": placeholder["id"], "deleted_at": None},
+            {"$set": {"deleted_at": now_iso()}},
+        )
+        return
     for r in responses:
         r["id"] = new_id()
         r["research_thread_id"] = thread["id"]
@@ -478,6 +501,14 @@ async def handle_ai_command(
         thread, responses, chat_id, placeholder["id"],
         favorite_model=favorite, compare=compare,
     )
+
+    # Canceled during finalize — answer was discarded; skip session/learning.
+    if answer_msg is None:
+        await db.messages.update_one(
+            {"id": placeholder["id"], "deleted_at": None},
+            {"$set": {"deleted_at": now_iso()}},
+        )
+        return
 
     # AI Conversation Mode — keep (or start) this user's AI session so their
     # next follow-up routes to the assistant without another @ai mention.

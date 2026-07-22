@@ -56,6 +56,7 @@ export default function ChatScreen() {
   const [roles, setRoles] = useState<any[]>([]);
   const [msgAction, setMsgAction] = useState<any>(null);
   const [showMemory, setShowMemory] = useState(false);
+  const [replyTo, setReplyTo] = useState<any>(null);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
@@ -74,6 +75,33 @@ export default function ChatScreen() {
       await apiPost(`/api/chats/${chatId}/ai-session/exit`, {});
     } catch {}
     setAiSession({ active: false });
+  }, [chatId]);
+
+  // Clear the unread badge for this chat (chat list reloads on focus).
+  const markRead = useCallback(() => {
+    apiPost(`/api/chats/${chatId}/read`, {}).catch(() => {});
+  }, [chatId]);
+
+  // Reply to a specific message — capture a lightweight preview.
+  const startReply = useCallback(
+    (m: any) => {
+      const name =
+        m.sender_id === user?.id
+          ? "yourself"
+          : typeof m.sender_id === "string" && m.sender_id.startsWith("ai")
+            ? "AI"
+            : members[m.sender_id]?.name || "teammate";
+      setReplyTo({ id: m.id, name, body: (m.body || "").replace(/[*#`>]/g, "").slice(0, 140) });
+    },
+    [user?.id, members],
+  );
+
+  // Stop an in-progress AI generation and discard the result.
+  const stopAI = useCallback(async () => {
+    try {
+      await apiPost(`/api/chats/${chatId}/ai/stop`, {});
+    } catch {}
+    setMessages((prev) => prev.filter((m) => m.message_type !== "ai_question"));
   }, [chatId]);
 
   const onFollowUp = useCallback(
@@ -173,6 +201,7 @@ export default function ChatScreen() {
         setMembers(map);
         setMessages(Array.isArray(msgs) ? msgs.filter((m) => !m.deleted_at) : []);
         refreshAiSession();
+        markRead();
       } catch {
         // leave empty
       } finally {
@@ -203,6 +232,9 @@ export default function ChatScreen() {
                   setMessages((prev) => prev.filter((m) => m.id !== payload.data.id));
                 } else {
                   upsertMessage(payload.data);
+                  if (payload.event === "message" && payload.data.sender_id !== user?.id) {
+                    markRead();
+                  }
                 }
               }
             }
@@ -217,7 +249,7 @@ export default function ChatScreen() {
       } catch {}
       wsRef.current = null;
     };
-  }, [chatId, upsertMessage]);
+  }, [chatId, upsertMessage, markRead, user?.id]);
 
   // Polling safety-net (mirrors web): WebSocket delivery can be blocked in some
   // deployed environments, so poll the open chat and reconcile so new/edited
@@ -321,14 +353,17 @@ export default function ChatScreen() {
     const outAttachments = attachments;
     const outBody =
       body || (outAttachments.length ? `Sent ${outAttachments.length} file(s)` : "");
+    const parentId = replyTo?.id || null;
     setText("");
     setAttachments([]);
+    setReplyTo(null);
     setSending(true);
     try {
       const msg = await apiPost(`/api/chats/${chatId}/messages`, {
         body: outBody,
         message_type: "text",
         metadata: outAttachments.length ? { attachments: outAttachments } : {},
+        parent_message_id: parentId,
       });
       upsertMessage(msg);
     } catch (e: any) {
@@ -360,6 +395,9 @@ export default function ChatScreen() {
     }
   };
 
+  const msgById: Record<string, any> = {};
+  for (const m of messages) msgById[m.id] = m;
+
   const renderItem = ({ item }: { item: any }) => {
     const agent = isAgent(item.sender_id);
     const mine = item.sender_id === user?.id;
@@ -376,6 +414,19 @@ export default function ChatScreen() {
       );
     }
 
+    // Quoted-reply preview (only user text replies render a quote).
+    const parent =
+      item.message_type === "text" && item.parent_message_id
+        ? msgById[item.parent_message_id]
+        : null;
+    const parentName = parent
+      ? parent.sender_id === user?.id
+        ? "You"
+        : typeof parent.sender_id === "string" && parent.sender_id.startsWith("ai")
+          ? "AI"
+          : members[parent.sender_id]?.name || "Member"
+      : "";
+
     return (
       <View
         style={[
@@ -386,7 +437,7 @@ export default function ChatScreen() {
         <TouchableOpacity
           activeOpacity={0.9}
           onLongPress={() => {
-            if (item.message_type === "text" && item.body) setMsgAction(item);
+            if (item.body || item.metadata?.attachments?.length) setMsgAction(item);
           }}
           style={[
             styles.bubble,
@@ -397,6 +448,16 @@ export default function ChatScreen() {
             <Text style={[styles.senderName, agent && { color: colors.accent }]}>
               {agent ? agentLabel(item) : sender?.name || "Member"}
             </Text>
+          )}
+          {parent && (
+            <View style={styles.replyQuote} testID={`reply-quote-${item.id}`}>
+              <Text style={styles.replyQuoteName} numberOfLines={1}>
+                {parentName}
+              </Text>
+              <Text style={styles.replyQuoteBody} numberOfLines={2}>
+                {(parent.body || "").replace(/[*#`>]/g, "") || "…"}
+              </Text>
+            </View>
           )}
           <MessageAttachments attachments={item.metadata?.attachments} />
           <Markdown
@@ -456,6 +517,20 @@ export default function ChatScreen() {
       ? "Ask me anything with @ai"
       : `${(chat?.members || []).length} members`;
 
+  // "AI is thinking" = a running question placeholder with no matching answer yet.
+  const answeredThreads = new Set(
+    messages
+      .filter((m) => m.message_type === "ai_answer" && m.metadata?.thread_id)
+      .map((m) => m.metadata.thread_id),
+  );
+  const pendingAI = messages.some(
+    (m) =>
+      m.message_type === "ai_question" &&
+      !m.deleted_at &&
+      m.metadata?.thread_id &&
+      !answeredThreads.has(m.metadata.thread_id),
+  );
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
@@ -504,7 +579,34 @@ export default function ChatScreen() {
             contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.lg }}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           />
+          {pendingAI && (
+            <View style={styles.thinkingRow} testID="ai-thinking-indicator">
+              <ActivityIndicator color={colors.accent} size="small" />
+              <Text style={styles.thinkingText}>AI is thinking…</Text>
+              <TouchableOpacity testID="stop-ai-btn" style={styles.stopBtn} onPress={stopAI}>
+                <Ionicons name="stop" size={12} color="#f87171" />
+                <Text style={styles.stopText}>Stop</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
+            {replyTo && (
+              <View style={styles.replyBar} testID="reply-preview">
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.replyBarName}>Replying to {replyTo.name}</Text>
+                  <Text style={styles.replyBarBody} numberOfLines={1}>
+                    {replyTo.body || "…"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  testID="cancel-reply-btn"
+                  onPress={() => setReplyTo(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            )}
             {aiSession?.active && (
               <View>
                 <View style={styles.aiIndicator} testID="ai-conversation-indicator">
@@ -662,20 +764,33 @@ export default function ChatScreen() {
       <Modal visible={!!msgAction} transparent animationType="fade" onRequestClose={() => setMsgAction(null)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setMsgAction(null)}>
           <View style={styles.modalCard} testID="msg-action-modal">
-            <Text style={styles.modalTitle}>AI actions</Text>
+            <Text style={styles.modalTitle}>Message actions</Text>
             <Text style={styles.modalSub} numberOfLines={2}>{msgAction?.body}</Text>
-            {[
-              ["ask_about", "Ask AI about this"],
-              ["summarize_thread", "Summarize thread"],
-              ["continue_ai", "Continue with AI"],
-              ["draft_response", "Draft response"],
-              ["explain_decision", "Explain decision"],
-            ].map(([action, label]) => (
-              <TouchableOpacity key={action} testID={`msg-action-${action}`} style={styles.roleRow} onPress={() => runMsgAction(action)}>
-                <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
-                <Text style={styles.roleName}>{label}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              testID="msg-action-reply"
+              style={styles.roleRow}
+              onPress={() => {
+                const m = msgAction;
+                setMsgAction(null);
+                if (m) startReply(m);
+              }}
+            >
+              <Ionicons name="arrow-undo-outline" size={16} color={colors.accent} />
+              <Text style={styles.roleName}>Reply</Text>
+            </TouchableOpacity>
+            {msgAction?.message_type === "text" &&
+              [
+                ["ask_about", "Ask AI about this"],
+                ["summarize_thread", "Summarize thread"],
+                ["continue_ai", "Continue with AI"],
+                ["draft_response", "Draft response"],
+                ["explain_decision", "Explain decision"],
+              ].map(([action, label]) => (
+                <TouchableOpacity key={action} testID={`msg-action-${action}`} style={styles.roleRow} onPress={() => runMsgAction(action)}>
+                  <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+                  <Text style={styles.roleName}>{label}</Text>
+                </TouchableOpacity>
+              ))}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -725,6 +840,59 @@ const styles = StyleSheet.create({
   bubbleMine: { backgroundColor: colors.bubbleMine, borderTopRightRadius: 4 },
   bubbleAI: { backgroundColor: colors.bubbleAI, borderWidth: 1, borderColor: colors.accentBorder, borderTopLeftRadius: 4 },
   bubbleOther: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderTopLeftRadius: 4 },
+  replyQuote: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    borderRadius: 6,
+    paddingLeft: 8,
+    paddingRight: 8,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  replyQuoteName: { color: colors.accent, fontSize: 11, fontWeight: "700" },
+  replyQuoteBody: { color: colors.textSecondary, fontSize: 11 },
+  replyBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
+    backgroundColor: colors.bg,
+    borderRadius: radius.sm,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  replyBarName: { color: colors.accent, fontSize: 11, fontWeight: "700" },
+  replyBarBody: { color: colors.textSecondary, fontSize: 12 },
+  thinkingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    alignSelf: "flex-start",
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.pill,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  thinkingText: { color: colors.accent, fontSize: 12, fontWeight: "600" },
+  stopBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(248,113,113,0.15)",
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  stopText: { color: "#f87171", fontSize: 11, fontWeight: "800" },
   senderName: { fontSize: font.tiny, fontWeight: "700", color: colors.textSecondary, marginBottom: 3 },
   msgTime: { fontSize: 10, color: colors.textMuted, alignSelf: "flex-end", marginTop: 4 },
   followRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },

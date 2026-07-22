@@ -73,6 +73,8 @@ export default function MessageBubble({
         onFollowUp,
         onRouteChoice,
         onAiAction,
+        onReply,
+        parentPreview,
 }) {
         const isAI =
                 message.sender_id === "ai-system" ||
@@ -161,6 +163,12 @@ export default function MessageBubble({
                 <div
                         className={`group flex gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}
                         data-testid={`message-${message.id}`}
+                        onContextMenu={(e) => {
+                                if (onReply) {
+                                        e.preventDefault();
+                                        onReply(message);
+                                }
+                        }}
                 >
                         {/* Avatar (suppressed during clustering) */}
                         <div className="w-8 shrink-0">
@@ -195,6 +203,20 @@ export default function MessageBubble({
                                 {/* The actual bubble */}
                                 <div className="relative">
                                         <Bubble variant={variant} isGroupStart={showAvatar} isGroupEnd={showTimestamp}>
+                                                {/* Quoted parent (reply) */}
+                                                {parentPreview && (
+                                                        <div
+                                                                data-testid={`reply-quote-${message.id}`}
+                                                                className="mb-1.5 border-l-2 border-brand/60 pl-2 pr-2 py-1 bg-black/10 rounded-r-md"
+                                                        >
+                                                                <div className="text-[11px] font-semibold text-brand/90 truncate">
+                                                                        {parentPreview.name}
+                                                                </div>
+                                                                <div className="text-[11px] text-ink-dim/90 line-clamp-2 break-words">
+                                                                        {parentPreview.body || "…"}
+                                                                </div>
+                                                        </div>
+                                                )}
                                                 {/* AI metadata header */}
                                                 {(isAIQuestion || isAIAnswer) && (
                                                         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
@@ -496,6 +518,16 @@ export default function MessageBubble({
                                                                                 ))}
                                                                         </div>
                                                                         <DropdownMenuSeparator className="bg-hairline" />
+                                                                        {onReply && (
+                                                                                <DropdownMenuItem
+                                                                                        data-testid={`reply-${message.id}`}
+                                                                                        onClick={() => onReply(message)}
+                                                                                        className="rounded-xl text-[14px] cursor-pointer"
+                                                                                >
+                                                                                        <Reply className="w-4 h-4 mr-2 text-ink-dim" />
+                                                                                        Reply
+                                                                                </DropdownMenuItem>
+                                                                        )}
                                                                         <DropdownMenuItem
                                                                                 data-testid={`task-${message.id}`}
                                                                                 onClick={() => onCreateTask(message)}

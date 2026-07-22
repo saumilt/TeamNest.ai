@@ -1260,6 +1260,47 @@ async def mark_chat_read(chat_id: str, current=Depends(require_user)):
         upsert=True,
     )
     return {"ok": True}
+
+
+class AIStopRequest(BaseModel):
+    thread_id: Optional[str] = None
+
+
+@router.post("/chats/{chat_id}/ai/stop")
+async def stop_ai(
+    chat_id: str,
+    payload: Optional[AIStopRequest] = None,
+    current=Depends(require_user),
+):
+    """Stop an in-progress AI generation for THIS user in the chat. Marks the
+    running thread(s) canceled and removes the "thinking" placeholder so the
+    in-progress answer is discarded (see handle_ai_command cancel checkpoint)."""
+    chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    tq: dict = {"chat_id": chat_id, "created_by": current["id"], "status": "running"}
+    if payload and payload.thread_id:
+        tq["id"] = payload.thread_id
+    thread_ids = [t["id"] for t in await db.ai_threads.find(tq, {"_id": 0, "id": 1}).to_list(20)]
+    if not thread_ids:
+        return {"ok": True, "canceled": 0}
+    await db.ai_threads.update_many({"id": {"$in": thread_ids}}, {"$set": {"status": "canceled"}})
+    # Soft-delete the running placeholder question(s) so every client drops the
+    # "AI is thinking" indicator immediately.
+    placeholders = await db.messages.find(
+        {"chat_id": chat_id, "message_type": "ai_question",
+         "metadata.thread_id": {"$in": thread_ids}, "deleted_at": None},
+        {"_id": 0},
+    ).to_list(50)
+    stamp = now_iso()
+    for ph in placeholders:
+        await db.messages.update_one({"id": ph["id"]}, {"$set": {"deleted_at": stamp}})
+        ph["deleted_at"] = stamp
+        await manager.broadcast(chat_id, {"event": "message_updated", "data": ph})
+    return {"ok": True, "canceled": len(thread_ids)}
+
+
+@router.post("/chats/{chat_id}/leave")
 async def leave_chat(chat_id: str, current=Depends(require_user)):
     """Member voluntarily leaves a group chat. Posts a system message so
     other members see they left. Direct/personal-AI chats cannot be left —

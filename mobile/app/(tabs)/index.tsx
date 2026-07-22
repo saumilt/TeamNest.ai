@@ -108,6 +108,13 @@ export default function ChatsScreen() {
             {item.linked_dev_project ? (
               <Ionicons name="hammer" size={13} color={colors.accent} />
             ) : null}
+            {item.unread_count > 0 ? (
+              <View style={styles.unreadBadge} testID={`chat-unread-${item.id}`}>
+                <Text style={styles.unreadText}>
+                  {item.unread_count > 99 ? "99+" : item.unread_count}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </TouchableOpacity>
@@ -211,6 +218,16 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: font.h3, fontWeight: "700", flex: 1 },
   time: { color: colors.textMuted, fontSize: font.tiny },
   preview: { color: colors.textSecondary, fontSize: font.small, flex: 1 },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadText: { color: "#09090b", fontSize: 11, fontWeight: "800" },
   sep: { height: 1, backgroundColor: colors.borderSubtle, marginLeft: 62 },
   nudge: {
     flexDirection: "row",
