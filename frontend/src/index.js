@@ -9,3 +9,11 @@ root.render(
     <App />
   </React.StrictMode>,
 );
+
+// Register the PWA service worker (app-shell cache + OneSignal push).
+// Enables "Install app" on desktop (Chrome/Edge) and mobile.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}

@@ -47,6 +47,7 @@ export default function InstallPrompt({ inline = false }) {
   const promptShownRef = useRef(false);
 
   const device = getDevice();
+  const desktop = !device.ios && !device.android;
   const canTriggerNative = !!deferredPrompt;
   const canShowIosInstructions = device.ios && !installed;
 
@@ -123,7 +124,7 @@ export default function InstallPrompt({ inline = false }) {
         className="inline-flex items-center gap-2 px-4 py-2 rounded-sm border border-yellow-400/40 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-200 font-mono uppercase tracking-widest text-[10px] transition-colors"
       >
         <Download className="w-3.5 h-3.5" />
-        Install on phone
+        {desktop ? "Install desktop app" : "Install app"}
       </button>
     );
   }
@@ -141,10 +142,12 @@ export default function InstallPrompt({ inline = false }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-sm leading-tight mb-1">
-            Install TeamNest.ai
+            {desktop ? "Install the desktop app" : "Install TeamNest.ai"}
           </div>
           <div className="text-[11px] text-zinc-400 leading-relaxed mb-3">
-            Add to your home screen for instant access, full-screen mode, and faster opens.
+            {desktop
+              ? "Add TeamNest.ai to your desktop — its own window, a Dock/Taskbar icon, and desktop notifications."
+              : "Add to your home screen for instant access, full-screen mode, and faster opens."}
           </div>
           <div className="flex gap-2">
             <button

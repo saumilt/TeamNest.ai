@@ -55,7 +55,7 @@ export async function ensureOneSignal() {
                                                 appId: APP_ID,
                                                 allowLocalhostAsSecureOrigin: true,
                                                 serviceWorkerParam: { scope: "/" },
-                                                serviceWorkerPath: "OneSignalSDKWorker.js",
+                                                serviceWorkerPath: "service-worker.js",
                                                 notifyButton: { enable: false },
                                         });
                                         resolve(OneSignal);

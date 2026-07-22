@@ -2,6 +2,21 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+## Iteration 121 (Jul 2026) — Desktop app: installable PWA (A) + native Electron shell (B)
+**A) Installable PWA (built + verified in this env):**
+- Generated real PNG app icons (regular + maskable, 48–512) + favicon + apple-touch-icon from the TN brand mark (`public/icons/`), replacing the broken `../icons/*.webp` references.
+- Rewrote `public/manifest.json` (standalone display, `start_url:/dashboard`, maskable icons, app shortcuts for Chats/Tasks/AI).
+- Added a combined **service worker** (`public/service-worker.js`): imports the OneSignal SW SDK (push keeps working) + network-first app-shell cache (installable + offline shell, safe for dev HMR). Registered from `src/index.js`; pointed OneSignal `serviceWorkerPath` at it to avoid scope-`/` conflicts. Verified: 1 SW registered at scope `/`, controlling the page.
+- `useUnreadTitle` hook (mounted in `AppShell`) sets `document.title` to `(N) TeamNest.ai` from summed chat unread — powers the PWA tab/taskbar AND the Electron badge (single source of truth). Verified live: title showed `(27) TeamNest.ai`.
+- Made `InstallPrompt` device-aware (desktop copy: "Install the desktop app").
+**B) Native Electron shell (`/app/desktop/`, scaffolded — build off-box):**
+- `main.js` loads production `https://teamnest.ai` with: **system tray** (Open / Mini window / Launch-at-login / Quit), **unread badge** (parses window title → dock badge on mac/linux, taskbar overlay + flash on Windows), **desktop notifications** (native via Electron), **launch-at-login** toggle, **always-on-top mini window** (400×640, `/chats`), close-to-tray, external links → default browser, mic/camera permission for calls.
+- `preload.js` exposes a minimal `window.desktop` bridge; `package.json` electron-builder config targets **dmg (mac)** + **nsis .exe (win)** + AppImage/deb; mac `entitlements` + hardened runtime configured.
+- `DESKTOP.md`: full dev/build instructions + **step-by-step guide to obtain an Apple Developer account (~$99/yr) and a Windows code-signing cert** for notarized/signed installers.
+- Constraint (documented): this cloud env cannot compile/sign native binaries — `.dmg` must build on a Mac, `.exe` on Windows (or CI). Electron 33 + electron-builder 25 installed; `node --check` passes on main/preload.
+- Backend points at **production** per user's choice.
+
+
 ## Iteration 120 (Jul 2026) — Composer recipient clarity: "Continuing with @ai" ↔ "Send to team" toggle (web + mobile)
 - **Why**: follow-up on the routing fix — make it always obvious where the next message goes when an AI conversation is active, with a one-tap escape hatch to message the team without leaving AI mode.
 - **Backend**: `MessageCreate.force_recipient` (`"team" | "ai" | None`); `send_message` skips auto-continue-with-AI when `force_recipient == "team"` (posts a normal team message) — the AI session stays active so the next default message still continues with AI.

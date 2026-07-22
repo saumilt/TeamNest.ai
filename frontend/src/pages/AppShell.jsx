@@ -8,6 +8,7 @@ import EmployeeCrossSell from "@/components/EmployeeCrossSell";
 import CreditSplash from "@/components/CreditSplash";
 import CreditsBadge from "@/components/CreditsBadge";
 import ForcePasswordChange from "@/components/ForcePasswordChange";
+import useUnreadTitle from "@/hooks/useUnreadTitle";
 
 /** App shell for authenticated routes.
  *
@@ -22,6 +23,9 @@ export default function AppShell() {
   // Post-login redirect (e.g. "Use this template" while logged out).
   // useState initializer: read+clear localStorage exactly once per mount.
   const [nextPath] = useState(() => safeNextPath());
+
+  // Sync unread count into the title / PWA / desktop badge (no-op pre-auth).
+  useUnreadTitle(!!user && !user?.must_change_password);
 
   if (loading) {
     return (
