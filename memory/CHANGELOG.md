@@ -2,6 +2,23 @@
 
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
+
+## Iteration 122 (Jul 2026) — Dual Human/AI Views: Phase 3 (web admin) + Phase 4 (mobile parity) — COMPLETE
+**A) WEB Phase 3 — Admin AI-Usage analytics (AdminDashboard.jsx → AI Usage tab):**
+- New **AI CREDIT USAGE** simple table wired to the (already-tested) `GET /api/admin/ai-usage?group_by=&days=`.
+- Group-by selector (By User / By Model / By Chat / By Date) + date-range filter (Last 7/30/90/365 days), both reload the table on change. Shows Total credits used + rows (label · credits · calls). Kept the all-time "Model Call Volume" bar chart below.
+- testIDs: admin-ai-credit-usage, admin-usage-groupby, admin-usage-range, admin-usage-total, admin-usage-table.
+**B) MOBILE Phase 4 — brought the Expo app to full parity with the web Dual Views:**
+- Top view selector **Human / Combined / AI** (default Human, per-user/per-chat pref in SecureStore/localStorage). Hidden on personal_ai chats. AI chip shows discussion count.
+- **Human view** collapses each AI answer into a compact `AiDiscussionCard`; renders "AI Research: N" under the human message that started a linked discussion + "Open Full Research" under published summaries.
+- **AI view** = `AiDiscussionsDashboard` (search + grouped by creator).
+- **Full-screen discussion detail** (`AiDiscussionDetail`): Back-to-chat, QUESTION + per-model answers (Markdown), creator actions — visibility (private/chat/shared + member picker), Publish (all 6 templates + custom), Save to Knowledge.
+- **Ask AI from a message**: long-press → "Ask AI about this" → `AiComposeModal` (seeds context + model chips) → `POST /api/ai/research` with linked_message_id → opens the new (private) discussion.
+- Composer **destination pill** ("To: Everyone · human chat" + "Ask AI" prepends @ai).
+- New files: mobile/src/aiModels.ts, mobile/src/components/{AiDiscussionCard,AiDiscussionsDashboard,AiComposeModal,AiDiscussionDetail}.tsx. Chat screen now imports the shared model catalogue.
+- Tested e2e (iteration_122.json): all flows PASS on web + mobile, no bugs. Known non-blocking: mobile "AI is thinking…" pill can linger (pre-existing stale streaming flag); RN-Web `pointerEvents` deprecation warning.
+
+
 ## Iteration 121 (Jul 2026) — Desktop app: installable PWA (A) + native Electron shell (B)
 **A) Installable PWA (built + verified in this env):**
 - Generated real PNG app icons (regular + maskable, 48–512) + favicon + apple-touch-icon from the TN brand mark (`public/icons/`), replacing the broken `../icons/*.webp` references.
