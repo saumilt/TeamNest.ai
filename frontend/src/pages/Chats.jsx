@@ -58,6 +58,7 @@ import AiModelPicker from "@/components/chat/AiModelPicker";
 import AiDiscussionsDashboard from "@/components/chat/AiDiscussionsDashboard";
 import AiComposeDiscussion from "@/components/chat/AiComposeDiscussion";
 import AiDiscussionActions from "@/components/chat/AiDiscussionActions";
+import ChatSearch from "@/components/chat/ChatSearch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 function relativeTime(iso) {
@@ -839,6 +840,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   // "Ask AI" from a specific message → compose a new linked discussion.
   const [composeContext, setComposeContext] = useState(null);
   const [composing, setComposing] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [aiSession, setAiSession] = useState({ active: false });
   const [showSaveRole, setShowSaveRole] = useState(false);
@@ -1328,6 +1330,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         view={view}
         onViewChange={changeView}
         aiCount={discussions.length}
+        onOpenSearch={() => setSearchOpen(true)}
       />
 
       {view === "ai" ? (
@@ -1403,6 +1406,15 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             onClose={() => setFullScreenThread(null)}
           />
         </div>
+      )}
+
+      {searchOpen && (
+        <ChatSearch
+          chatId={chatId}
+          memberMap={memberMap}
+          onClose={() => setSearchOpen(false)}
+          onOpenDiscussion={openDiscussion}
+        />
       )}
 
       {/* Right-side AI discussion panel (desktop docked / mobile full-screen). */}

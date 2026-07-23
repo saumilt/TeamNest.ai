@@ -120,6 +120,12 @@ export default function NotificationsPrefs() {
           onChange={(v) => patch({ mute_ai_answers: v })}
           testid="mute-ai"
         />
+        <ToggleRow
+          label="Mute AI notifications (research done, shared, credit limits)"
+          checked={!!prefs.mute_ai_notifications}
+          onChange={(v) => patch({ mute_ai_notifications: v })}
+          testid="mute-ai-notifications"
+        />
       </Section>
 
       {/* Email digest */}

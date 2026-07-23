@@ -1,4 +1,4 @@
-import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket, Landmark } from "lucide-react";
+import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket, Landmark, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Avatar from "@/components/ui-v2/Avatar";
@@ -32,6 +32,7 @@ export default function ChatHeader({
   view,
   onViewChange,
   aiCount = 0,
+  onOpenSearch,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -195,6 +196,17 @@ export default function ChatHeader({
       </div>
 
       <div className="flex items-center gap-1 md:gap-1.5">
+        {onOpenSearch && (
+          <button
+            data-testid="chat-search-btn"
+            onClick={onOpenSearch}
+            title="Search this chat"
+            aria-label="Search this chat"
+            className="w-9 h-9 flex items-center justify-center rounded-full text-ink hover:bg-white/5 active:scale-95"
+          >
+            <Search className="w-[18px] h-[18px]" strokeWidth={1.8} />
+          </button>
+        )}
         {!isAIChat && (
           <>
             <button

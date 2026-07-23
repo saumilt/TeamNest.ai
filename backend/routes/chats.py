@@ -5,6 +5,7 @@ contains `@AI ...` or `@task ...` shortcuts.
 """
 import asyncio
 import os
+import re
 
 from typing import Optional
 
@@ -389,6 +390,78 @@ async def list_chat_ai_discussions(chat_id: str, current=Depends(require_user)):
         })
     out.sort(key=lambda d: d["updated_at"] or "", reverse=True)
     return {"discussions": out}
+
+
+@router.get("/chats/{chat_id}/search")
+async def search_chat(
+    chat_id: str,
+    q: str = Query(""),
+    scope: str = Query("both", regex="^(human|ai|both)$"),
+    current=Depends(require_user),
+):
+    """Unified in-chat search across Human messages and AI research/publications."""
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    term = (q or "").strip()
+    if not term:
+        return {"results": [], "query": "", "scope": scope}
+    rx = {"$regex": re.escape(term), "$options": "i"}
+    uid = current["id"]
+    results = []
+
+    if scope in ("human", "both"):
+        cur = db.messages.find(
+            {
+                "chat_id": chat_id,
+                "deleted_at": None,
+                "message_type": {"$in": ["text", "task", "file", "system"]},
+                "body": rx,
+            },
+            {"_id": 0, "id": 1, "body": 1, "sender_id": 1, "created_at": 1, "metadata": 1},
+        ).sort("created_at", -1).limit(25)
+        async for m in cur:
+            pub = (m.get("metadata") or {}).get("ai_publication")
+            results.append({
+                "source_type": "publication" if pub else "human_message",
+                "id": m["id"],
+                "snippet": (m.get("body") or "")[:180],
+                "sender_id": m.get("sender_id"),
+                "created_at": m.get("created_at"),
+                "thread_id": (pub or {}).get("thread_id"),
+            })
+
+    if scope in ("ai", "both"):
+        threads = await db.ai_threads.find(
+            {
+                "chat_id": chat_id,
+                "$or": [{"title": rx}, {"question": rx}, {"final_answer": rx}],
+            },
+            {"_id": 0},
+        ).sort("created_at", -1).limit(25).to_list(25)
+        for t in threads:
+            if t.get("created_by") != uid:
+                vis = t.get("visibility") or "chat"
+                if vis == "private":
+                    continue
+                if vis == "shared":
+                    perm = await db.ai_discussion_permissions.find_one(
+                        {"discussion_id": t["id"], "user_id": uid}, {"_id": 0, "id": 1}
+                    )
+                    if not perm:
+                        continue
+            results.append({
+                "source_type": "ai_discussion",
+                "id": t["id"],
+                "thread_id": t["id"],
+                "snippet": (t.get("title") or t.get("question") or "")[:180],
+                "created_by": t.get("created_by"),
+                "created_at": t.get("created_at"),
+            })
+
+    return {"results": results, "query": term, "scope": scope}
 
 
 def _ensure_chat_admin(chat: dict, user_id: str) -> None:

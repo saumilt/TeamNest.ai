@@ -12,12 +12,20 @@ router = APIRouter()
 
 
 @router.get("/notifications")
-async def list_notifications(current=Depends(require_user)):
+async def list_notifications(category: str = "all", current=Depends(require_user)):
+    q = {"user_id": current["id"]}
+    if category == "ai":
+        q["category"] = "ai"
+    elif category == "human":
+        q["category"] = {"$ne": "ai"}  # legacy notifs (no category) count as human
     items = await db.notifications.find(
-        {"user_id": current["id"]}, {"_id": 0}
+        q, {"_id": 0}
     ).sort("created_at", -1).limit(50).to_list(50)
     unread = await db.notifications.count_documents({"user_id": current["id"], "read": False})
-    return {"items": items, "unread_count": unread}
+    ai_unread = await db.notifications.count_documents(
+        {"user_id": current["id"], "read": False, "category": "ai"}
+    )
+    return {"items": items, "unread_count": unread, "ai_unread_count": ai_unread}
 
 
 @router.post("/notifications/{notif_id}/read")
@@ -38,9 +46,17 @@ async def mark_all_read(current=Depends(require_user)):
     return {"ok": True, "updated": r.modified_count}
 
 
-async def create_notification(user_id: str, ntype: str, title: str, body: str, meta: dict | None = None):
+async def create_notification(
+    user_id: str, ntype: str, title: str, body: str,
+    meta: dict | None = None, category: str = "human",
+):
+    # Respect per-user "mute AI notifications" for AI-category events.
+    if category == "ai":
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "notification_prefs": 1})
+        if ((u or {}).get("notification_prefs") or {}).get("mute_ai_notifications"):
+            return
     await db.notifications.insert_one({
-        "id": new_id(), "user_id": user_id, "type": ntype,
+        "id": new_id(), "user_id": user_id, "type": ntype, "category": category,
         "title": title, "body": body, "read": False, "meta": meta or {},
         "created_at": now_iso(),
     })

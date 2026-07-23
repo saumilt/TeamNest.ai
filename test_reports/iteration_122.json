@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 122 — Deep functional e2e on MOBILE (Expo web preview) for Dual Human/AI Views Phase 4 + a smoke re-check of the WEB admin AI Usage table (Phase 3). Everything requested is green. WEB: /admin → 'AI Usage' tab shows 'AI CREDIT USAGE' block with data-testids admin-ai-credit-usage, admin-usage-groupby (button-style dropdown), admin-usage-range (button-style dropdown), admin-usage-total (renders '5588' for By User / Last 30 days), admin-usage-table (2 rows Unknown 5000/1 and Sam T 588/99 for By User; per-model breakdown chart also rendered). MOBILE (sam@funasia.net on chat d77a7d2a…c6a6 'AIConv Test'): chat-view-switch with chat-view-human/combined/ai all present, HUMAN is default (highlighted), AI chip shows 'AI 11'. Human view collapses AI answers into 9 ai-research-card-<id> compact cards, shows 1 ai-linked-indicator-<msgId> under the human message that started a linked private discussion, and 7 ai-publication-open-<msgId> 'Open Full Research' chips under published summary messages. AI view renders ai-discussions-dashboard + ai-discussions-search (filter 'TEST_ITER121' narrows to 1 item), 11 ai-discussion-item-<id> entries grouped by 'You'. Tapping an item opens ai-discussion-panel with back-to-chat-btn + ai-panel-close + ai-visibility-btn/ai-publish-btn/ai-save-knowledge-btn + QUESTION block + per-model answer card (GPT-5.4 mini / ChatGPT 5.5). Publish dialog (ai-publish-dialog) exposes all 6 templates (ai-publish-type-executive_summary/recommendation/key_findings/action_items/risks/custom) + ai-publish-confirm; publishing 'Key Findings' posted a real 'AI Research — Key Findings' text message into the chat (visible in Human view screenshot 'It asks whether the company should begin targeting U.S. West Coast customers next quarter.'). Visibility menu (ai-visibility-menu) shows private/chat/shared; flipping private→shared surfaces ai-visibility-apply-shared, then flipped back to private without error. Long-press a human text bubble opens msg-action-modal with Reply, Ask AI about this (msg-action-ask_about), Summarize thread, Continue with AI, Draft response, Explain decision; tapping msg-action-ask_about opens ai-compose-discussion with ai-compose-input + ai-compose-submit; submitting fires POST /api/ai/research (200) that creates a NEW thread 33a5bc0a-ffb9-4676-bc85-2595a2c9a268 with visibility='private' and linked_human_message_id=27be762c-… (the target message) — exactly per spec — then opens the new discussion detail. composer-destination pill is present; tapping composer-switch-ai correctly prepends '@ai ' to the draft; regression: typing '@ai ' also still surfaces the inline 'Choose which AI model answers · tap to pick' popover on the composer (parity with iterations 119–121).",
+  "platforms_tested": ["web", "mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    },
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "Chat header", "issues": ["Persistent 'AI is thinking… Stop' pill remains visible on the chat screen even after a research discussion has completed and its answer is rendered. Likely a stale isThinking/streaming flag that isn't cleared on completion. Cosmetic but confusing — see /app/mobile/app/chat/[id].tsx (search for 'AI is thinking')."]}
+      ],
+      "react_native_issues": [
+        {"component": "TouchableOpacity/View pointerEvents prop", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Fires twice on chat screen load. Non-blocking but should be migrated. Reference: search /app/mobile for `pointerEvents=` prop usage."}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration121_dual_views_phase2.py"
+  ],
+  "action_items": [
+    "(Minor / cosmetic) Clear the 'AI is thinking…' banner on the mobile chat screen once the streaming/research completes — currently it lingers after answers arrive (/app/mobile/app/chat/[id].tsx).",
+    "(RN warning) Migrate any `pointerEvents=` prop usage to `style={{ pointerEvents: … }}` in /app/mobile to silence the deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "/app/mobile/app/chat/[id].tsx L621-625: onLongPress is on the inner TouchableOpacity of the bubble and correctly gated by `item.body || item.metadata?.attachments?.length` — meta-only rows don't open the action sheet. Good.",
+    "/app/mobile/app/chat/[id].tsx L1108-1143: msg-action-modal renders msg-action-reply + msg-action-ask_about + role-driven actions via `.map(action => testID={`msg-action-${action}`})` — matches spec test IDs exactly.",
+    "/app/mobile compose flow → POST /api/ai/research: backend response (verified live) returns visibility='private' and linked_human_message_id set when linked_message_id is passed, and does NOT post an ai_answer message into the chat timeline for the newly created private thread (verified by listing chat messages: no thread_id=33a5bc0a message appears in chat). Matches Phase 2 backend invariant.",
+    "AiDiscussionDetail (mobile) exposes ai-visibility-menu with three options; flipping to 'shared' surfaces ai-visibility-apply-shared (people-picker apply). Round-trip private↔shared works.",
+    "Publish dialog on mobile is a full-screen sheet — the six ai-publish-type-* chips all render with the same slugs as web; ai-publish-confirm triggers backend summarize→post_to_chat correctly (new 'AI Research — Key Findings' bubble appears in Human view immediately after).",
+    "Admin AI Usage web (Phase 3): admin-usage-groupby and admin-usage-range are custom BUTTON-driven dropdowns (not <select>) — testIDs correct, click-to-open works, options 'By User / By Model / By Chat / By Date' and 'Last 7/30/90/365 days' present. Total re-calcs on change (verified visually in iteration 121 by main agent smoke). Consider adding aria-haspopup=listbox for a11y."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (piggybacking on iteration_121 pytest 15/15; live smoke via POST /api/ai/research passed)", "frontend": "100% (all requested mobile testIDs + web admin testIDs verified end-to-end)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 on both preview URLs.",
+  "seed_data_creation": "MOBILE test created 1 real AI thread: id=33a5bc0a-ffb9-4676-bc85-2595a2c9a268, title 'TEST_ITER122_MOBILE_ASK: what does this mean in one line?', visibility='private', linked_human_message_id=27be762c-…-88ef7d74680a, model=chatgpt (default). Because visibility='private', no ai_answer chat message was created. Also posted ONE published 'AI Research — Key Findings' summary bubble into chat d77a7d2a…c6a6 from thread d7fb90cd via the Publish dialog. Safe to leave — both are labeled with TEST_ITER122 / already-known research entries.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature is fully green backend+web+mobile for Phase 3 (WEB admin AI Usage) and Phase 4 (MOBILE dual views + Ask-AI-from-message + composer switch). Long-press on mobile via Playwright works using page.mouse.move → mouse.down → wait 700-800ms → mouse.up on a message bubble that is visible in the viewport (bounding_box.y between ~100 and ~700). Backend GET /api/ai/threads/{id} returns 404 for the creator via curl (probably session/JWT mismatch or the endpoint requires the token from the specific web session); use GET /api/chats/{chat_id}/ai-discussions to inspect thread visibility/linked_human_message_id instead (verified). Deprecation warning 'props.pointerEvents is deprecated' and lingering 'AI is thinking…' banner are pre-existing minor issues, not blockers.",
+  "rca of the issue": "n/a — no bugs found. Only two minor observations: lingering 'AI is thinking…' banner on mobile chat header and a react-native-web pointerEvents deprecation warning."
+}

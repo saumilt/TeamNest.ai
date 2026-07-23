@@ -24,6 +24,12 @@ import { Markdown } from "@/src/markdown";
 import { MessageAttachments } from "@/src/components/MessageAttachments";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
+import { getItem, setItem } from "@/src/storage";
+import { AI_MODELS, RECOMMENDED_MODEL } from "@/src/aiModels";
+import { AiDiscussionCard } from "@/src/components/AiDiscussionCard";
+import { AiDiscussionsDashboard } from "@/src/components/AiDiscussionsDashboard";
+import { AiComposeModal } from "@/src/components/AiComposeModal";
+import { AiDiscussionDetail } from "@/src/components/AiDiscussionDetail";
 
 function isAgent(senderId: string) {
   return senderId?.startsWith("ai-");
@@ -38,19 +44,6 @@ function agentLabel(msg: any) {
   return "AI";
 }
 
-// Shared with the web picker (frontend/src/components/ai_composer/constants.js).
-const AI_MODELS: { key: string; name: string; fast?: boolean; recommended?: boolean }[] = [
-  { key: "gpt-4o-mini", name: "ChatGPT mini", fast: true },
-  { key: "claude-haiku", name: "Claude Haiku", fast: true },
-  { key: "gemini-flash", name: "Gemini Flash", fast: true },
-  { key: "chatgpt", name: "ChatGPT 4o", recommended: true },
-  { key: "claude", name: "Claude Sonnet" },
-  { key: "gemini", name: "Gemini Pro" },
-  { key: "deepseek", name: "DeepSeek" },
-  { key: "perplexity", name: "Perplexity" },
-  { key: "grok", name: "Grok" },
-];
-const RECOMMENDED_MODEL = "chatgpt";
 const isAiTrigger = (t: string) => /^\s*@ai\b/i.test(t || "");
 
 export default function ChatScreen() {
@@ -74,6 +67,12 @@ export default function ChatScreen() {
   const [replyTo, setReplyTo] = useState<any>(null);
   const [stoppedThreads, setStoppedThreads] = useState<Set<string>>(() => new Set());
   const [nextToTeam, setNextToTeam] = useState(false);
+  // Dual views (Human | Combined | AI) + AI discussions.
+  const [view, setView] = useState<"human" | "combined" | "ai">("human");
+  const [discussions, setDiscussions] = useState<any[]>([]);
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  const [composeCtx, setComposeCtx] = useState<any>(null);
+  const [composing, setComposing] = useState(false);
   // Inline @ai model picker.
   const [aiModels, setAiModels] = useState<string[]>([]);
   const [rememberModels, setRememberModels] = useState(true);
@@ -105,6 +104,68 @@ export default function ChatScreen() {
   const markRead = useCallback(() => {
     apiPost(`/api/chats/${chatId}/read`, {}).catch(() => {});
   }, [chatId]);
+
+  // AI discussions (research threads) linked to this chat — powers the AI view
+  // + the compact research cards shown in the Human view.
+  const reloadDiscussions = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const data = await apiGet(`/api/chats/${chatId}/ai-discussions`);
+      setDiscussions(data.discussions || []);
+    } catch {
+      /* best-effort */
+    }
+  }, [chatId]);
+
+  const changeView = useCallback(
+    (v: "human" | "combined" | "ai") => {
+      setView(v);
+      if (user?.id && chatId) setItem(`tn:chatview:${user.id}:${chatId}`, v).catch(() => {});
+    },
+    [user?.id, chatId],
+  );
+
+  // Restore the per-user, per-chat view preference (Human is the default).
+  useEffect(() => {
+    setOpenThread(null);
+    setComposeCtx(null);
+    if (!chatId || !user?.id) return;
+    (async () => {
+      const saved = await getItem(`tn:chatview:${user.id}:${chatId}`);
+      setView(saved === "combined" || saved === "ai" ? (saved as any) : "human");
+    })();
+  }, [chatId, user?.id]);
+
+  // Submit a new AI discussion started from a specific human message.
+  const submitCompose = useCallback(
+    async (question: string, models: string[]) => {
+      if (!composeCtx || !question) return;
+      setComposing(true);
+      try {
+        const data = await apiPost("/api/ai/research", {
+          chat_id: chatId,
+          question,
+          selected_models: models,
+          memory_mode: "chat",
+          linked_message_id: composeCtx.id,
+        });
+        setComposeCtx(null);
+        reloadDiscussions();
+        if (data?.thread?.id) setOpenThread(data.thread.id);
+      } catch {
+        Alert.alert("Error", "AI research failed");
+      } finally {
+        setComposing(false);
+      }
+    },
+    [composeCtx, chatId, reloadDiscussions],
+  );
+
+  // Reload discussions on open + whenever a new AI answer lands.
+  const aiAnswerCount = messages.filter((m) => m.message_type === "ai_answer").length;
+  useEffect(() => {
+    reloadDiscussions();
+  }, [reloadDiscussions, aiAnswerCount]);
 
   // Reply to a specific message — capture a lightweight preview.
   const startReply = useCallback(
@@ -482,7 +543,42 @@ export default function ChatScreen() {
   const msgById: Record<string, any> = {};
   for (const m of messages) msgById[m.id] = m;
 
+  // Dual-view: index discussions by id + by linked human message, then build
+  // the visible item list (Human view collapses each AI answer into one card).
+  const threadById: Record<string, any> = {};
+  for (const d of discussions) threadById[d.id] = d;
+  const linkedByMsg: Record<string, any[]> = {};
+  for (const d of discussions) {
+    if (d.linked_human_message_id) {
+      if (!linkedByMsg[d.linked_human_message_id]) linkedByMsg[d.linked_human_message_id] = [];
+      linkedByMsg[d.linked_human_message_id].push(d);
+    }
+  }
+  const visibleItems = (() => {
+    const isHuman = view === "human";
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const m of messages) {
+      if (m.deleted_at) continue;
+      if (m.message_type === "ai_question") continue;
+      if (isHuman && m.message_type === "ai_answer") {
+        const tid = m.metadata?.thread_id;
+        if (tid && !seen.has(tid)) {
+          seen.add(tid);
+          out.push({ __card: true, id: `card-${tid}`, thread_id: tid });
+        }
+        continue;
+      }
+      out.push(m);
+    }
+    return out;
+  })();
+
   const renderItem = ({ item }: { item: any }) => {
+    if (item.__card) {
+      const d = threadById[item.thread_id] || { id: item.thread_id, title: "AI research" };
+      return <AiDiscussionCard discussion={d} onPress={() => setOpenThread(item.thread_id)} />;
+    }
     const agent = isAgent(item.sender_id);
     const mine = item.sender_id === user?.id;
     const sender = members[item.sender_id];
@@ -511,14 +607,17 @@ export default function ChatScreen() {
           : members[parent.sender_id]?.name || "Member"
       : "";
 
+    const linked = linkedByMsg[item.id];
+    const pubThread = item.metadata?.ai_publication?.thread_id;
     return (
-      <View
-        testID={`message-${item.id}`}
-        style={[
-          styles.bubbleRow,
-          mine ? styles.rowRight : styles.rowLeft,
-        ]}
-      >
+      <View>
+        <View
+          testID={`message-${item.id}`}
+          style={[
+            styles.bubbleRow,
+            mine ? styles.rowRight : styles.rowLeft,
+          ]}
+        >
         <TouchableOpacity
           activeOpacity={0.9}
           onLongPress={() => {
@@ -592,6 +691,27 @@ export default function ChatScreen() {
             </View>
           )}
         </TouchableOpacity>
+        </View>
+        {linked ? (
+          <TouchableOpacity
+            testID={`ai-linked-indicator-${item.id}`}
+            onPress={() => setOpenThread(linked[0].id)}
+            style={[styles.aiLinkChip, mine ? { alignSelf: "flex-end" } : { alignSelf: "flex-start" }]}
+          >
+            <Ionicons name="sparkles" size={11} color={colors.accent} />
+            <Text style={styles.aiLinkChipText}>AI Research: {linked.length}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {pubThread ? (
+          <TouchableOpacity
+            testID={`ai-publication-open-${item.id}`}
+            onPress={() => setOpenThread(pubThread)}
+            style={[styles.aiLinkChip, mine ? { alignSelf: "flex-end" } : { alignSelf: "flex-start" }]}
+          >
+            <Ionicons name="sparkles" size={11} color={colors.accent} />
+            <Text style={styles.aiLinkChipText}>Open Full Research</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   };
@@ -656,6 +776,26 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
+      {chat && chat.type !== "personal_ai" && (
+        <View style={styles.viewSwitchBar}>
+          <View style={styles.viewSwitch} testID="chat-view-switch">
+            {(["human", "combined", "ai"] as const).map((v) => (
+              <TouchableOpacity
+                key={v}
+                testID={`chat-view-${v}`}
+                onPress={() => changeView(v)}
+                style={[styles.viewChip, view === v && styles.viewChipOn]}
+              >
+                <Text style={[styles.viewChipText, view === v && styles.viewChipTextOn]}>
+                  {v === "human" ? "Human" : v === "combined" ? "Combined" : "AI"}
+                  {v === "ai" && discussions.length ? ` ${discussions.length}` : ""}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} size="large" />
@@ -666,14 +806,22 @@ export default function ChatScreen() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={0}
         >
-          <FlatList
-            ref={listRef}
-            data={messages.filter((m) => m.message_type !== "ai_question")}
-            keyExtractor={(m) => m.id}
-            renderItem={renderItem}
-            contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.lg }}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          />
+          {view === "ai" ? (
+            <AiDiscussionsDashboard
+              discussions={discussions}
+              userId={user?.id}
+              onOpen={(tid) => setOpenThread(tid)}
+            />
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={visibleItems}
+              keyExtractor={(m) => m.id}
+              renderItem={renderItem}
+              contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.lg }}
+              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            />
+          )}
           {pendingAI && (
             <View style={styles.thinkingRow} testID="ai-thinking-indicator">
               <ActivityIndicator color={colors.accent} size="small" />
@@ -763,6 +911,22 @@ export default function ChatScreen() {
                     <Text style={styles.memoryText}>{aiSession.context_summary}</Text>
                   </View>
                 ) : null}
+              </View>
+            )}
+            {!aiSession?.active && !aiTriggerOn && pillModels.length === 0 && (
+              <View style={styles.destPill} testID="composer-destination">
+                <Ionicons name="people-outline" size={13} color={colors.textMuted} />
+                <Text style={styles.destText}>
+                  To: <Text style={styles.destStrong}>Everyone</Text> · human chat
+                </Text>
+                <TouchableOpacity
+                  testID="composer-switch-ai"
+                  style={styles.destAskAi}
+                  onPress={() => setText(text ? `@ai ${text}` : "@ai ")}
+                >
+                  <Ionicons name="sparkles" size={12} color={colors.accent} />
+                  <Text style={styles.destAskAiText}>Ask AI</Text>
+                </TouchableOpacity>
               </View>
             )}
             {attachments.length > 0 && (
@@ -952,9 +1116,25 @@ export default function ChatScreen() {
               <Ionicons name="arrow-undo-outline" size={16} color={colors.accent} />
               <Text style={styles.roleName}>Reply</Text>
             </TouchableOpacity>
+            {msgAction?.message_type === "text" && (
+              <TouchableOpacity
+                testID="msg-action-ask_about"
+                style={styles.roleRow}
+                onPress={() => {
+                  const m = msgAction;
+                  setMsgAction(null);
+                  if (m) {
+                    setOpenThread(null);
+                    setComposeCtx(m);
+                  }
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+                <Text style={styles.roleName}>Ask AI about this</Text>
+              </TouchableOpacity>
+            )}
             {msgAction?.message_type === "text" &&
               [
-                ["ask_about", "Ask AI about this"],
                 ["summarize_thread", "Summarize thread"],
                 ["continue_ai", "Continue with AI"],
                 ["draft_response", "Draft response"],
@@ -1047,6 +1227,35 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <AiComposeModal
+        visible={!!composeCtx}
+        contextMessage={composeCtx}
+        senderName={
+          composeCtx?.sender_id === user?.id
+            ? "You"
+            : members[composeCtx?.sender_id]?.name || "Teammate"
+        }
+        defaultModels={chat?.inline_ai_models || []}
+        submitting={composing}
+        onSubmit={submitCompose}
+        onCancel={() => setComposeCtx(null)}
+      />
+
+      <AiDiscussionDetail
+        visible={!!openThread}
+        threadId={openThread}
+        currentUserId={user?.id}
+        members={Object.values(members)
+          .filter((m: any) => m.id !== user?.id)
+          .map((m: any) => ({ id: m.id, name: m.name }))}
+        onClose={() => setOpenThread(null)}
+        onChanged={reloadDiscussions}
+        onPublished={() => {
+          reloadDiscussions();
+          setOpenThread(null);
+        }}
+      />
     </View>
   );
 }
@@ -1371,4 +1580,63 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { opacity: 0.4 },
+  viewSwitchBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.bgElevated,
+    alignItems: "flex-start",
+  },
+  viewSwitch: {
+    flexDirection: "row",
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    padding: 2,
+    gap: 2,
+  },
+  viewChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill },
+  viewChipOn: { backgroundColor: colors.accent },
+  viewChipText: { color: colors.textSecondary, fontSize: font.tiny, fontWeight: "700" },
+  viewChipTextOn: { color: "#09090b" },
+  aiLinkChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: -4,
+    marginBottom: spacing.sm,
+  },
+  aiLinkChipText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
+  destPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 5,
+    marginBottom: spacing.sm,
+  },
+  destText: { color: colors.textSecondary, fontSize: font.tiny },
+  destStrong: { color: colors.textPrimary, fontWeight: "700" },
+  destAskAi: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  destAskAiText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
 });

@@ -31,6 +31,20 @@ const ROLES = ["owner", "admin", "member", "viewer", "guest"];
 const STATUSES = ["active", "disabled"];
 const ACTIVE_STATUSES = new Set(STATUSES);
 
+const USAGE_GROUPS = [
+  { value: "user", label: "By User" },
+  { value: "model", label: "By Model" },
+  { value: "chat", label: "By Chat" },
+  { value: "date", label: "By Date" },
+];
+const USAGE_RANGES = [
+  { value: 7, label: "Last 7 days" },
+  { value: 30, label: "Last 30 days" },
+  { value: 90, label: "Last 90 days" },
+  { value: 365, label: "Last 365 days" },
+];
+const USAGE_COL_LABEL = { user: "USER", model: "MODEL", chat: "CHAT", date: "DATE" };
+
 function bytesFmt(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -45,6 +59,10 @@ export default function AdminDashboard() {
   const [taskAnalytics, setTaskAnalytics] = useState(null);
   const [approvalsAnalytics, setApprovalsAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [aiUsage, setAiUsage] = useState(null);
+  const [usageGroupBy, setUsageGroupBy] = useState("user");
+  const [usageDays, setUsageDays] = useState(30);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   const isAdmin = ["owner", "admin"].includes(user?.role);
 
@@ -69,6 +87,22 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin]);
+
+  const loadUsage = async () => {
+    setUsageLoading(true);
+    try {
+      const { data } = await api.get("/admin/ai-usage", {
+        params: { group_by: usageGroupBy, days: usageDays },
+      });
+      setAiUsage(data);
+    } catch (e) {
+      console.warn("[admin ai-usage]", e);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  useEffect(() => { if (isAdmin) loadUsage(); }, [isAdmin, usageGroupBy, usageDays]);
 
   if (!isAdmin) {
     return (
@@ -198,8 +232,62 @@ export default function AdminDashboard() {
             </TabsContent>
 
             <TabsContent value="ai">
+              <div className="border border-white/10 bg-[#121214] rounded-sm p-5 mb-4" data-testid="admin-ai-credit-usage">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="label-mono">AI CREDIT USAGE</div>
+                  <div className="flex items-center gap-2">
+                    <Select value={usageGroupBy} onValueChange={setUsageGroupBy}>
+                      <SelectTrigger data-testid="admin-usage-groupby" className="h-8 w-[130px] bg-[#0a0a0a] border-white/10 rounded-sm text-xs font-mono uppercase tracking-widest"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#121214] border-white/10">
+                        {USAGE_GROUPS.map((g) => <SelectItem key={g.value} value={g.value} className="text-xs font-mono uppercase tracking-widest">{g.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={String(usageDays)} onValueChange={(v) => setUsageDays(Number(v))}>
+                      <SelectTrigger data-testid="admin-usage-range" className="h-8 w-[140px] bg-[#0a0a0a] border-white/10 rounded-sm text-xs font-mono uppercase tracking-widest"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#121214] border-white/10">
+                        {USAGE_RANGES.map((r) => <SelectItem key={r.value} value={String(r.value)} className="text-xs font-mono uppercase tracking-widest">{r.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mb-3 text-sm">
+                  <span className="text-zinc-400">Total credits used:</span>
+                  <span className="font-display text-lg font-bold text-yellow-400 tabular-nums" data-testid="admin-usage-total">{aiUsage?.total_credits ?? 0}</span>
+                </div>
+
+                {usageLoading ? (
+                  <div className="space-y-2">{[1, 2, 3, 4].map((i) => <div key={i} className="h-9 shimmer rounded-sm" />)}</div>
+                ) : aiUsage?.rows?.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full" data-testid="admin-usage-table">
+                      <thead>
+                        <tr className="border-b border-white/10">
+                          <th className="text-left label-mono px-3 py-2 w-8">#</th>
+                          <th className="text-left label-mono px-3 py-2">{USAGE_COL_LABEL[usageGroupBy]}</th>
+                          <th className="text-right label-mono px-3 py-2">CREDITS</th>
+                          <th className="text-right label-mono px-3 py-2">CALLS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiUsage.rows.map((r, i) => (
+                          <tr key={r.key} className="border-b border-white/5 hover:bg-white/[0.03]" data-testid={`admin-usage-row-${r.key}`}>
+                            <td className="px-3 py-2 text-xs font-mono text-zinc-500 tabular-nums">{i + 1}</td>
+                            <td className="px-3 py-2 text-sm text-zinc-200">{usageGroupBy === "model" ? (r.label || "").toUpperCase() : r.label}</td>
+                            <td className="px-3 py-2 text-right font-display font-bold tabular-nums text-yellow-400">{r.credits}</td>
+                            <td className="px-3 py-2 text-right text-sm font-mono text-zinc-400 tabular-nums">{r.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-zinc-500 py-6 text-center" data-testid="admin-usage-empty">No AI credit usage recorded in this period.</div>
+                )}
+              </div>
+
               <div className="border border-white/10 bg-[#121214] rounded-sm p-5" data-testid="admin-ai-usage">
-                <div className="label-mono mb-3">AI MODEL USAGE</div>
+                <div className="label-mono mb-3">MODEL CALL VOLUME (ALL-TIME)</div>
                 <div className="space-y-2">
                   {overview.ai_model_usage.map((m) => {
                     const max = Math.max(...overview.ai_model_usage.map((x) => x.count));
@@ -214,6 +302,9 @@ export default function AdminDashboard() {
                       </div>
                     );
                   })}
+                  {overview.ai_model_usage.length === 0 && (
+                    <div className="text-xs text-zinc-500">No model calls recorded yet.</div>
+                  )}
                 </div>
               </div>
             </TabsContent>

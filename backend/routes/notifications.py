@@ -26,6 +26,7 @@ class NotifPrefs(BaseModel):
     mute_groups: Optional[bool] = None
     mute_dms: Optional[bool] = None
     mute_ai_answers: Optional[bool] = None
+    mute_ai_notifications: Optional[bool] = None
     email_digest: Optional[Literal["off", "daily", "weekly"]] = None
 
 
@@ -41,6 +42,7 @@ def _default_prefs() -> dict:
         "mute_groups": False,
         "mute_dms": False,
         "mute_ai_answers": False,
+        "mute_ai_notifications": False,
         "email_digest": "daily",
     }
 

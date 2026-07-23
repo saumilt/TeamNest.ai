@@ -383,6 +383,7 @@ async def set_thread_visibility(
     )
     await db.ai_discussion_permissions.delete_many({"discussion_id": thread_id})
     if payload.visibility == "shared":
+        from routes.notifications_feed import create_notification
         for uid in payload.shared_user_ids or []:
             await db.ai_discussion_permissions.insert_one({
                 "id": new_id(),
@@ -392,6 +393,14 @@ async def set_thread_visibility(
                 "granted_by": current["id"],
                 "created_at": now_iso(),
             })
+            await create_notification(
+                uid,
+                "ai_discussion_shared",
+                "AI discussion shared with you",
+                f'{current.get("name", "A teammate")} shared "{thread.get("title") or "an AI discussion"}"',
+                meta={"thread_id": thread_id, "chat_id": thread.get("chat_id")},
+                category="ai",
+            )
     return {"ok": True, "visibility": payload.visibility}
 
 

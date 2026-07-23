@@ -32,6 +32,57 @@ async def admin_audit_logs(
     return {"logs": logs, "count": len(logs)}
 
 
+@router.get("/admin/ai-usage")
+async def admin_ai_usage(
+    group_by: str = Query("user", regex="^(user|chat|model|date)$"),
+    days: int = Query(30, ge=1, le=365),
+    current=Depends(require_user),
+):
+    """Owner/Admin only — AI credit usage broken down by user / chat / model / date."""
+    if current["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Admin only")
+    ws_id = current["workspace_id"]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    rows: dict = {}
+    total = 0
+    async for e in db.ai_credit_ledger.find(
+        {"workspace_id": ws_id, "at": {"$gte": cutoff}},
+        {"_id": 0, "user_id": 1, "chat_id": 1, "model_key": 1, "amount": 1,
+         "billed_amount": 1, "at": 1},
+    ):
+        amt = int(e.get("amount") or e.get("billed_amount") or 0)
+        total += amt
+        if group_by == "user":
+            key = e.get("user_id") or "unknown"
+        elif group_by == "chat":
+            key = e.get("chat_id") or "unknown"
+        elif group_by == "model":
+            key = e.get("model_key") or "unknown"
+        else:
+            key = (e.get("at") or "")[:10]
+        r = rows.setdefault(key, {"key": key, "credits": 0, "count": 0})
+        r["credits"] += amt
+        r["count"] += 1
+    out = list(rows.values())
+    if group_by == "user":
+        ids = [r["key"] for r in out if r["key"] != "unknown"]
+        users = await db.users.find({"id": {"$in": ids}}, PROJ).to_list(1000)
+        umap = {u["id"]: (u.get("name") or u.get("email") or "Unknown") for u in users}
+        for r in out:
+            r["label"] = umap.get(r["key"], "Unknown")
+    elif group_by == "chat":
+        ids = [r["key"] for r in out if r["key"] != "unknown"]
+        chats = await db.chats.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        cmap = {c["id"]: (c.get("name") or "Chat") for c in chats}
+        for r in out:
+            r["label"] = cmap.get(r["key"], "Direct / Unknown")
+    else:
+        for r in out:
+            r["label"] = r["key"] or "Unknown"
+    out.sort(key=lambda r: r["credits"], reverse=True)
+    return {"group_by": group_by, "days": days, "total_credits": total, "rows": out}
+
+
 async def _member_user_ids(workspace_id: str) -> list:
     """Return all user ids that are members of this workspace via workspace_members."""
     return [

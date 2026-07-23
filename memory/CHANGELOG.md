@@ -3360,3 +3360,16 @@ Goal: stop long AI research from pushing human messages down the timeline. Per-c
 - **Phase 3**: split human vs AI notifications (mute AI), search across Human/AI/Both, admin AI-usage analytics (by user/chat/model/date).
 - **Phase 4**: full **mobile** parity for the three views + panel + destination selector.
 
+
+## 2026-06 — Dual views Phase 1-tail + Phase 2 (WEB) — DONE
+**Phase 1 tail — Ask AI from a message:** message action "Ask AI about this" opens the right panel in compose mode (`AiComposeDiscussion.jsx`) with the source message seeded as context; submitting creates a discussion with `linked_human_message_id`. The source message then shows an **"AI Research: N"** indicator (`ai-linked-indicator-{id}`) that reopens the linked discussion. Backend: `AIResearchCreate.linked_message_id/title`; `create_research` seeds the linked message as model context.
+**Phase 2 — visibility, publishing, permissions:**
+- `visibility` on discussions: `private | chat | shared`. Discussions started from a message default to **private**; in-chat @ai / AIComposer research stays **chat**. Existing threads treated as `chat`.
+- **Private discussions do NOT post their answer to the shared chat** — `_finalize_research(post_to_chat=not is_private)`; the answer lives only on the thread (panel). Private research is also kept out of chat memory/RAG.
+- **Access enforcement**: `_thread_access` guards `GET /ai/research/{id}` (403 for non-authorized) and `GET /chats/{id}/ai-discussions` filters out others' private/unshared discussions. `ai_discussion_permissions` backs `shared`.
+- **Change visibility**: `PATCH /api/ai/threads/{id}/visibility` (creator-only) with member picker for `shared`.
+- **Publish to chat**: `POST /api/ai/threads/{id}/publish` — 6 templates (executive_summary/recommendation/key_findings/action_items/risks/custom); LLM-condenses the answer (gpt-4o-mini) into a compact `text` message with `metadata.ai_publication`; records `ai_publications`. Published message shows an "Open Full Research" link. Behaves like a normal message.
+- **Save to Knowledge**: `POST /api/ai/threads/{id}/save-knowledge` → workspace-visible institutional memory.
+- Frontend: `AiDiscussionActions.jsx` panel toolbar (visibility / publish / save); `ThreadVisibilityUpdate` + `ThreadPublishRequest` models.
+- Verified: testing agent iteration 121 — backend 15/15 pytest + all web flows, no bugs.
+
