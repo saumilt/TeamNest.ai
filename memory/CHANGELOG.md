@@ -3342,3 +3342,21 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - Fixes bundled: (a) web `ai-model-dialog` got an sr-only `<DialogTitle>` (Radix a11y warning); (b) mobile chat-load effect in `[id].tsx` now gates on `useAuth().{token,loading}` so a cold deep-link no longer 401s before the JWT rehydrates (was leaving header "Chat / 0 members" and `inline_ai_models` unhydrated).
 - Verified: testing agent iteration 119 — all web + mobile flows green; DB confirmed persisted `inline_ai_models` and ai_question threads using the chosen models. Main agent re-verified the mobile cold-load hydration fix (header now shows "AIConv Test / 1 members").
 
+
+## 2026-06 — Dual Human/Combined/AI chat views — PHASE 1 (WEB) — DONE
+Goal: stop long AI research from pushing human messages down the timeline. Per-chat view switch in the chat header (default **Human**), persisted per user+chat.
+- **Human view**: hides raw AI question/answer bubbles; each AI discussion shows as a compact `AiResearchCard` (title · creator · #questions · credits). Human messages (incl. the user's own `@ai …` prompts) still render. → `components/chat/AiResearchCard.jsx`, `MessageList.jsx` (view transform).
+- **Combined view**: unchanged full timeline (AI answers with Synthesized/model/credits badges + Show all comparisons).
+- **AI view**: research dashboard grouped by participant, with search + empty state → `components/chat/AiDiscussionsDashboard.jsx`.
+- **Right-side AI discussion panel** (desktop docked + drag-resize + expand-to-fullscreen; mobile full-screen overlay) reuses the existing `AIComparison` viewer → wired in `Chats.jsx`.
+- **Composer destination indicator** `To: Everyone · human chat` with an `Ask AI` shortcut that prepends `@ai ` (opens the inline model picker) → `ChatComposer.jsx`. Human messages never bill AI credits (verified).
+- **Backend**: `GET /api/chats/{chat_id}/ai-discussions` (extends existing `ai_threads`; derives counts + credits from ai_answer message metadata; visibility defaults to `chat`; 404 for non-members). NO migration — reuses `ai_threads`.
+- **Persistence**: view choice stored in `localStorage` key `tn:chatview:{userId}:{chatId}` (server-side sync deferred to a later phase).
+- Verified: testing agent iteration 120 — backend 4/4, all 8 web flows + regression (inline @ai picker) green.
+
+### Deferred (remaining spec phases)
+- **Phase 1 tail**: per-message "Ask AI" → new discussion linked to that message + a small "AI Research: N" indicator on the source message (needs `linked_human_message_id` plumbing; pairs with Phase 2).
+- **Phase 2**: visibility levels (private / shared-with-selected / shared-with-chat / published / saved-to-knowledge), "Publish summary to chat" workflow, per-discussion permissions.
+- **Phase 3**: split human vs AI notifications (mute AI), search across Human/AI/Both, admin AI-usage analytics (by user/chat/model/date).
+- **Phase 4**: full **mobile** parity for the three views + panel + destination selector.
+

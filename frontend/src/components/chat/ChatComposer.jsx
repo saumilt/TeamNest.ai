@@ -214,7 +214,7 @@ export default function ChatComposer({
                 <span className="text-[12px] text-ink-dim">
                   To: <span className="text-ink font-semibold">Everyone</span>
                 </span>
-                <span className="text-[11px] text-ink-mute hidden sm:inline">· human chat</span>
+                <span className="text-[11px] text-ink-mute hidden sm:inline">{" "}· human chat</span>
                 <button
                   type="button"
                   data-testid="composer-switch-ai"

@@ -571,5 +571,6 @@ Resolved by promoting users to a true multi-workspace model (Slack/Discord-style
   `POST/GET/DELETE /api/devices/register` (idempotent upsert verified).
 
 ## Iteration History
-See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-119).
-- Latest (iter 119, 2026-06): Inline `@ai` model picker on web + mobile (inline + on-send triggers, Recommended badge, Remember-for-this-chat). Backend contract: `metadata.selected_models` / `metadata.remember_models`.
+See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-120).
+- iter 120 (2026-06): Dual Human/Combined/AI chat views — **Phase 1 (web)**. Header view switch (default Human), Human-view research cards, AI-view dashboard grouped by participant, right-side AI discussion panel, composer "To: Everyone" destination pill. Backend `GET /api/chats/{id}/ai-discussions` (extends `ai_threads`). Phases 2–4 (visibility/publish, notifications/search/analytics, mobile parity) pending.
+- iter 119 (2026-06): Inline `@ai` model picker (web + mobile).
