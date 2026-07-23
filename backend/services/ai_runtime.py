@@ -65,9 +65,15 @@ async def _finalize_research(
     parent_msg_id: Optional[str],
     favorite_model: Optional[str] = None,
     compare: bool = False,
+    post_to_chat: bool = True,
 ) -> dict:
-    """After all models have responded: auto-pick best, auto-synthesize, post the
-    synthesized answer to chat. Returns the posted message dict.
+    """After all models have responded: auto-pick best, auto-synthesize, and
+    (when `post_to_chat`) post the synthesized answer to the shared chat.
+    Returns the posted message dict, or None when nothing was posted.
+
+    `post_to_chat=False` is used for PRIVATE discussions: the synthesized answer
+    is still stored on the thread (readable via the discussion panel) but is NOT
+    broadcast into the shared human timeline.
 
     If only one model responded, skip synthesis and post that single answer
     directly. Auto-best tie-breaks toward the user's favorite model.
@@ -175,6 +181,9 @@ async def _finalize_research(
     # Final "Stop AI" guard — re-check right before posting so a cancel that
     # landed during generation reliably discards the answer.
     if await _thread_canceled(thread["id"]):
+        return None
+    if not post_to_chat:
+        # Private discussion — answer stays on the thread, not in the chat.
         return None
     await db.messages.insert_one(answer_msg.copy())
     await _broadcast_message(chat_id, answer_msg)

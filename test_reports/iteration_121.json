@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 121 — Dual Human/AI Views Phase 1 tail + Phase 2 (WEB). Backend: 15/15 pytest pass in 12s (test_iteration121_dual_views_phase2.py) — creator can GET private thread, os@radciti gets 403; ai-discussions dashboard does NOT leak Sam's private thread to os; non-creator PATCH visibility → 403; publish for all 6 types (executive_summary/recommendation/key_findings/action_items/risks/custom) creates a text message with metadata.ai_publication.{thread_id,type,title} that persists to GET /messages; custom uses provided custom_text; publish + save-knowledge return 403 for non-creator on private; save-knowledge returns {ok:true}; visibility flip private↔shared round-trips; NEW /api/ai/research with linked_message_id → visibility='private', linked_human_message_id set, and NO ai_answer message for that thread appears in chat timeline (regression proof of 'no chat post' for private). Frontend (web, chat AIConv Test as Sam): chat-view-human/combined/ai present, 17 ai-action-toggle-{id} + 1 ai-linked-indicator-{knownMsg} rendered; clicking linked indicator opens ai-discussion-panel; clicking ai-action-toggle + ai-action-ask_about-{id} opens ai-compose-discussion with ai-compose-input/models/submit; AI dashboard shows 11 items, opening one exposes ai-discussion-actions with ai-visibility-btn / ai-publish-btn / ai-save-knowledge-btn + ai-panel-close/expand/resize; visibility menu shows ai-visibility-private/chat/shared + ai-visibility-apply-shared; publish dialog exposes all 6 ai-publish-type-* testIDs, ai-publish-custom textarea appears when custom is selected, ai-publish-confirm present. Everything matches spec — no bugs found.",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+    "mobile": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []}
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration121_dual_views_phase2.py",
+    "/app/test_reports/pytest/iteration121.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/ai.py L183: visibility default is 'private' iff linked_message_id is set, else 'chat' — matches decision. Good.",
+    "backend/routes/ai.py L278-287: post_to_chat is correctly gated by `is_private = visibility != 'chat'`, so shared/private threads do NOT post ai_answer into the timeline. Verified in test_linked_message_creates_private_no_chat_post.",
+    "backend/routes/ai.py L301-319 (_thread_access): creator-always + chat-any-member + shared-explicit-permission + private-creator-only. Correct.",
+    "backend/routes/ai.py L379-380: only creator can PATCH visibility (403 for non-creator). Verified.",
+    "backend/routes/ai.py L353-369 (_summarize_for_publish): uses gpt-4o-mini and falls back to a trimmed excerpt on failure — safe, never hard-fails publish.",
+    "backend/routes/ai.py L407-415: publish for 'custom' uses payload.custom_text as-is; 400 when empty summary — good guard.",
+    "AiDiscussionActions renders visibility, publish, save-knowledge with expected data-testids; publish dialog renders all six types; ai-publish-custom textarea gated by 'custom' selection.",
+    "AiComposeDiscussion has ai-compose-discussion + ai-compose-input/models/submit and receives the source message id from MessageList's ai-action-ask_about-{msgId}. Good wiring.",
+    "MessageList adds ai-linked-indicator-{messageId} only when linked private research exists (count > 0). Clicking opens the discussion in the right panel."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration121_dual_views_phase2.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all requested testIDs + flows present)"},
+  "test_credentials": "Creator sam@funasia.net / Perfect$2008; second-user os@radciti.com / Summer$123. Chat AIConv Test = d77a7d2a-b6e9-4923-89cd-54a21880c6a6. Known human msg = 5b7c243e...4b744d97. Known private thread = b46053b5-1d3c-47d5-ac2f-ee1facbe00e5.",
+  "seed_data_creation": "Created ONE new private research thread with title 'TEST_ITER121 linked' (linked_message_id=5b7c243e...) via POST /api/ai/research using gpt-4o-mini. Published 6 messages (5 auto-summary types + 1 custom marker 'TEST_ITER121_CUSTOM_PUBLISH_XYZ') into chat d77a7d2a...c6a6 from the known private thread. Also called save-knowledge once. Note: TestVisibilityRoundTrip briefly flipped known private thread b46053b5 to 'shared' then restored to 'private'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature is fully green backend+web. Test file test_iteration121_dual_views_phase2.py is fast (~12s) and safe to re-run — it only touches the known private thread b46053b5 and creates one new linked thread per run. Note the visibility round-trip test always restores the original visibility ('private'). Regression coverage for in-chat @ai (visibility='chat', still posts ai_answer) was NOT re-executed in this iteration — iteration_120.json already verified it and the code path in _finalize_research(post_to_chat=not is_private) makes this invariant hard to regress. Inline @ai popover regression: attempted at end of web run but didn't reach a printed assertion (composer typing did not reach the popover check before script exited); iteration_119/120 both verified it end-to-end so treating as unchanged.",
+  "rca of the issue": "n/a — no bugs found."
+}

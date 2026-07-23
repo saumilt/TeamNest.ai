@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from ai_service import (
     MODEL_CONFIG,
     ask_models_parallel,
+    complete,
     extract_task,
     improve_message,
     suggest_tasks,
@@ -28,6 +29,8 @@ from models import (
     AISuggestTasksRequest,
     AIVote,
     RunModelsRequest,
+    ThreadPublishRequest,
+    ThreadVisibilityUpdate,
 )
 from services.ai_runtime import (
     _finalize_research,
@@ -165,6 +168,7 @@ async def _persist_research_question(
         "id": new_id(),
         "chat_id": payload.chat_id,
         "question": payload.question,
+        "title": (getattr(payload, "title", None) or payload.question).strip()[:80],
         "created_by": current["id"],
         "selected_models": allowed_models,
         "final_answer": None,
@@ -173,6 +177,10 @@ async def _persist_research_question(
         "public_token": None,
         "memory_mode": memory_mode,
         "memory_source_ids": [m["id"] for m in memory_items],
+        "linked_human_message_id": getattr(payload, "linked_message_id", None),
+        # New individual research (started from a message) is Private by default;
+        # in-chat research keeps sharing with the chat. Creator can change later.
+        "visibility": "private" if getattr(payload, "linked_message_id", None) else "chat",
         "created_at": now_iso(),
     }
     await db.ai_threads.insert_one(thread.copy())
@@ -229,6 +237,18 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
     memory_mode, memory_items, image_bytes_list, enriched_question = (
         await _build_research_context(payload, chat, current)
     )
+    # When the discussion is started from a specific human message, seed that
+    # message as context for the models (kept out of the stored question).
+    if payload.linked_message_id:
+        src = await db.messages.find_one(
+            {"id": payload.linked_message_id, "chat_id": payload.chat_id},
+            {"_id": 0, "body": 1},
+        )
+        if src and src.get("body"):
+            enriched_question = (
+                f'Context — a teammate wrote:\n"{src["body"]}"\n\n'
+                f"Question: {enriched_question}"
+            )
     q_msg, thread = await _persist_research_question(
         payload, current, allowed_models, blocked,
         memory_mode, memory_items, image_bytes_list,
@@ -255,15 +275,20 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
 
     await _record_research_usage(payload, current, chat, responses)
 
+    is_private = bool(thread.get("visibility") and thread["visibility"] != "chat")
+
     await _finalize_research(
         thread,
         responses,
         payload.chat_id,
         q_msg["id"],
         favorite_model=(current.get("preferences") or {}).get("favorite_ai_model"),
+        post_to_chat=not is_private,
     )
 
-    await _record_research_memory(payload, current, chat, thread)
+    # Only feed shared (chat-visible) research into chat memory/RAG.
+    if not is_private:
+        await _record_research_memory(payload, current, chat, thread)
 
     out = await get_research(thread["id"], current)
     out["usage"] = await get_usage(current["workspace_id"])
@@ -273,15 +298,174 @@ async def create_research(payload: AIResearchCreate, current=Depends(require_use
     return out
 
 
+async def _thread_access(thread: dict, user: dict) -> bool:
+    """Can `user` view this discussion? Creator always; 'chat' → any chat
+    member; 'shared' → explicit permission; 'private' → creator only."""
+    if not thread:
+        return False
+    if thread.get("created_by") == user["id"]:
+        return True
+    vis = thread.get("visibility") or "chat"
+    if vis == "chat":
+        chat = await db.chats.find_one(
+            {"id": thread["chat_id"], "member_ids": user["id"]}, {"_id": 0, "id": 1}
+        )
+        return bool(chat)
+    if vis == "shared":
+        perm = await db.ai_discussion_permissions.find_one(
+            {"discussion_id": thread["id"], "user_id": user["id"]}, {"_id": 0, "id": 1}
+        )
+        return bool(perm)
+    return False  # private
+
+
 @router.get("/ai/research/{thread_id}")
 async def get_research(thread_id: str, current=Depends(require_user)):
     thread = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0})
     if not thread:
         raise HTTPException(404, "Thread not found")
+    if not await _thread_access(thread, current):
+        raise HTTPException(403, "You don't have access to this discussion")
     responses = await db.ai_responses.find(
         {"research_thread_id": thread_id}, {"_id": 0}
     ).to_list(20)
     return {"thread": thread, "responses": responses}
+
+
+PUBLISH_HEADERS = {
+    "executive_summary": "AI Research — Executive Summary",
+    "recommendation": "AI Research — Recommendation",
+    "key_findings": "AI Research — Key Findings",
+    "action_items": "AI Research — Action Items",
+    "risks": "AI Research — Risks",
+    "custom": "AI Research Summary",
+}
+
+_PUBLISH_PROMPTS = {
+    "executive_summary": "Write a tight executive summary (3-5 sentences).",
+    "recommendation": "State the single clearest recommendation, then 2-4 bullet reasons.",
+    "key_findings": "List the 3-6 most important findings as concise bullets.",
+    "action_items": "List concrete next-step action items as a checklist (- [ ] …).",
+    "risks": "List the key risks / caveats as concise bullets.",
+}
+
+
+async def _summarize_for_publish(ptype: str, question: str, answer: str) -> str:
+    """Condense an AI discussion's final answer into the chosen publish format."""
+    instruction = _PUBLISH_PROMPTS.get(ptype, _PUBLISH_PROMPTS["executive_summary"])
+    prompt = (
+        f"{instruction}\n\nKeep it short, skimmable and in Markdown. Do not add a "
+        f"title/header (the app adds one). Base it ONLY on the research below.\n\n"
+        f"Question: {question}\n\nResearch answer:\n{answer}"
+    )
+    try:
+        return (await complete(
+            "You turn AI research into a concise, publishable team update.",
+            prompt,
+            model_key="gpt-4o-mini",
+        )).strip()
+    except Exception:
+        # Fall back to a trimmed excerpt so publish never hard-fails.
+        return (answer or "").strip()[:800]
+
+
+@router.patch("/ai/threads/{thread_id}/visibility")
+async def set_thread_visibility(
+    thread_id: str, payload: ThreadVisibilityUpdate, current=Depends(require_user)
+):
+    thread = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    if thread.get("created_by") != current["id"]:
+        raise HTTPException(403, "Only the creator can change visibility")
+    await db.ai_threads.update_one(
+        {"id": thread_id}, {"$set": {"visibility": payload.visibility}}
+    )
+    await db.ai_discussion_permissions.delete_many({"discussion_id": thread_id})
+    if payload.visibility == "shared":
+        for uid in payload.shared_user_ids or []:
+            await db.ai_discussion_permissions.insert_one({
+                "id": new_id(),
+                "discussion_id": thread_id,
+                "user_id": uid,
+                "access_level": "read",
+                "granted_by": current["id"],
+                "created_at": now_iso(),
+            })
+    return {"ok": True, "visibility": payload.visibility}
+
+
+@router.post("/ai/threads/{thread_id}/publish")
+async def publish_thread(
+    thread_id: str, payload: ThreadPublishRequest, current=Depends(require_user)
+):
+    thread = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    if not await _thread_access(thread, current):
+        raise HTTPException(403, "You don't have access to this discussion")
+    answer = thread.get("final_answer") or ""
+    if payload.publication_type == "custom":
+        summary = (payload.custom_text or "").strip()
+    else:
+        summary = await _summarize_for_publish(
+            payload.publication_type, thread.get("question", ""), answer
+        )
+    if not summary:
+        raise HTTPException(400, "Nothing to publish yet")
+    header = PUBLISH_HEADERS.get(payload.publication_type, "AI Research Summary")
+    msg = {
+        "id": new_id(),
+        "chat_id": thread["chat_id"],
+        "sender_id": current["id"],
+        "message_type": "text",
+        "body": f"**{header}**\n\n{summary}",
+        "parent_message_id": None,
+        "metadata": {
+            "ai_publication": {
+                "thread_id": thread_id,
+                "type": payload.publication_type,
+                "title": thread.get("title"),
+            }
+        },
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(msg.copy())
+    await _broadcast_message(thread["chat_id"], msg)
+    await db.ai_publications.insert_one({
+        "id": new_id(),
+        "discussion_id": thread_id,
+        "chat_message_id": msg["id"],
+        "published_by": current["id"],
+        "publication_type": payload.publication_type,
+        "selected_content": summary,
+        "created_at": now_iso(),
+    })
+    return msg
+
+
+@router.post("/ai/threads/{thread_id}/save-knowledge")
+async def save_thread_knowledge(thread_id: str, current=Depends(require_user)):
+    thread = await db.ai_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    if not await _thread_access(thread, current):
+        raise HTTPException(403, "You don't have access to this discussion")
+    item = await record_memory(
+        workspace_id=current["workspace_id"],
+        source_type="ai_thread_knowledge",
+        source_id=thread_id,
+        raw_content=f"Q: {thread.get('question','')}\n\nA: {thread.get('final_answer','')}",
+        created_by=current["id"],
+        chat_id=thread.get("chat_id"),
+        title=thread.get("title"),
+        memory_type="insight",
+        visibility="workspace",
+    )
+    return {"ok": True, "saved": bool(item)}
 
 
 async def _run_extra_models(thread_id, question, models, workspace_id, user_id, chat):

@@ -313,6 +313,32 @@ async def list_chat_ai_discussions(chat_id: str, current=Depends(require_user)):
     if not threads:
         return {"discussions": []}
     thread_ids = [t["id"] for t in threads]
+    # Access filter: creator + chat-visible always; 'shared' via permission;
+    # 'private' hidden from everyone but the creator.
+    uid = current["id"]
+    shared_ids = [t["id"] for t in threads if (t.get("visibility") == "shared")]
+    perm_ids = set()
+    if shared_ids:
+        async for p in db.ai_discussion_permissions.find(
+            {"discussion_id": {"$in": shared_ids}, "user_id": uid},
+            {"_id": 0, "discussion_id": 1},
+        ):
+            perm_ids.add(p["discussion_id"])
+
+    def _acc(t):
+        if t.get("created_by") == uid:
+            return True
+        vis = t.get("visibility") or "chat"
+        if vis == "chat":
+            return True  # requester is already a verified chat member
+        if vis == "shared":
+            return t["id"] in perm_ids
+        return False  # private
+
+    threads = [t for t in threads if _acc(t)]
+    if not threads:
+        return {"discussions": []}
+    thread_ids = [t["id"] for t in threads]
     qa = await db.messages.find(
         {
             "chat_id": chat_id,

@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { Sparkles } from "lucide-react";
 import MessageBubble from "@/components/MessageBubble";
 import AiResearchCard from "@/components/chat/AiResearchCard";
 
@@ -33,6 +34,14 @@ const MessageList = forwardRef(function MessageList(
         const isHuman = view === "human";
         const threadById = {};
         for (const d of discussions) threadById[d.id] = d;
+        // Discussions started from a specific human message → "AI Research: N".
+        const linkedByMsg = {};
+        for (const d of discussions) {
+                if (d.linked_human_message_id) {
+                        (linkedByMsg[d.linked_human_message_id] =
+                                linkedByMsg[d.linked_human_message_id] || []).push(d);
+                }
+        }
         // Human view: drop AI question/answer bubbles and surface each AI
         // discussion as a single compact card (in place, so chronology holds).
         // Combined view: current behaviour (hide only the echoed ai_question).
@@ -134,6 +143,44 @@ const MessageList = forwardRef(function MessageList(
                                 parentPreview={parentPreview}
                         />,
                 );
+
+                if (linkedByMsg[m.id]) {
+                        const list = linkedByMsg[m.id];
+                        out.push(
+                                <div
+                                        key={`ai-linked-${m.id}`}
+                                        className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"} -mt-1`}
+                                >
+                                        <button
+                                                type="button"
+                                                data-testid={`ai-linked-indicator-${m.id}`}
+                                                onClick={() => onOpenDiscussion?.(list[0].id)}
+                                                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ai hover:bg-ai/15 bg-ai/10 px-2 py-0.5 rounded-full transition-colors"
+                                        >
+                                                <Sparkles className="w-3 h-3" /> AI Research: {list.length}
+                                        </button>
+                                </div>,
+                        );
+                }
+
+                if (m.metadata?.ai_publication?.thread_id) {
+                        const tid = m.metadata.ai_publication.thread_id;
+                        out.push(
+                                <div
+                                        key={`ai-pub-${m.id}`}
+                                        className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"} -mt-1`}
+                                >
+                                        <button
+                                                type="button"
+                                                data-testid={`ai-publication-open-${m.id}`}
+                                                onClick={() => onOpenDiscussion?.(tid)}
+                                                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ai hover:bg-ai/15 bg-ai/10 px-2 py-0.5 rounded-full transition-colors"
+                                        >
+                                                <Sparkles className="w-3 h-3" /> Open Full Research
+                                        </button>
+                                </div>,
+                        );
+                }
         }
 
         return (

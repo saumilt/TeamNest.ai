@@ -126,6 +126,23 @@ class AIResearchCreate(BaseModel):
     selected_memory_ids: Optional[List[str]] = None  # only when memory_mode == "custom"
     # Vision — file IDs of uploaded images to include in the question
     image_file_ids: Optional[List[str]] = None
+    # Dual-view: when a discussion is started from a specific human message,
+    # link it back to that message (powers the "AI Research: N" indicator).
+    linked_message_id: Optional[str] = None
+    title: Optional[str] = None
+
+
+class ThreadVisibilityUpdate(BaseModel):
+    visibility: Literal["private", "chat", "shared"]
+    shared_user_ids: Optional[List[str]] = None
+
+
+class ThreadPublishRequest(BaseModel):
+    publication_type: Literal[
+        "executive_summary", "recommendation", "key_findings",
+        "action_items", "risks", "custom",
+    ]
+    custom_text: Optional[str] = None
 
 
 class AIThreadContinue(BaseModel):

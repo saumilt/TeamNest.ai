@@ -56,6 +56,8 @@ import MessageList from "@/components/chat/MessageList";
 import ChatComposer from "@/components/chat/ChatComposer";
 import AiModelPicker from "@/components/chat/AiModelPicker";
 import AiDiscussionsDashboard from "@/components/chat/AiDiscussionsDashboard";
+import AiComposeDiscussion from "@/components/chat/AiComposeDiscussion";
+import AiDiscussionActions from "@/components/chat/AiDiscussionActions";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 function relativeTime(iso) {
@@ -834,6 +836,9 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [discussions, setDiscussions] = useState([]);
   const [panelThread, setPanelThread] = useState(null);
   const [panelWidth, setPanelWidth] = useState(460);
+  // "Ask AI" from a specific message → compose a new linked discussion.
+  const [composeContext, setComposeContext] = useState(null);
+  const [composing, setComposing] = useState(false);
   const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [aiSession, setAiSession] = useState({ active: false });
   const [showSaveRole, setShowSaveRole] = useState(false);
@@ -860,6 +865,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   // Per-user, per-chat view preference (Human is the recommended default).
   useEffect(() => {
     setPanelThread(null);
+    setComposeContext(null);
     if (!chatId || !user?.id) return;
     const saved = localStorage.getItem(`tn:chatview:${user.id}:${chatId}`);
     setView(saved === "combined" || saved === "ai" ? saved : "human");
@@ -874,8 +880,37 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   );
 
   const openDiscussion = useCallback((tid) => {
-    if (tid) setPanelThread(tid);
+    if (tid) {
+      setComposeContext(null);
+      setPanelThread(tid);
+    }
   }, []);
+
+  // Submit a new discussion started from a specific human message.
+  const submitCompose = useCallback(
+    async (question, models) => {
+      if (!composeContext || !question) return;
+      setComposing(true);
+      try {
+        const { data } = await api.post("/ai/research", {
+          chat_id: chatId,
+          question,
+          selected_models: models,
+          memory_mode: "chat",
+          linked_message_id: composeContext.id,
+        });
+        setComposeContext(null);
+        reloadDiscussions();
+        onChatChange?.();
+        if (data?.thread?.id) setPanelThread(data.thread.id);
+      } catch {
+        toast.error("AI research failed");
+      } finally {
+        setComposing(false);
+      }
+    },
+    [composeContext, chatId, reloadDiscussions, onChatChange],
+  );
 
   // Drag-to-resize the right-side AI discussion panel (desktop only).
   const startPanelResize = useCallback((e) => {
@@ -1176,6 +1211,9 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   // Threaded-AI action anchored to a specific message.
   const onAiAction = async (action, message) => {
     if (action === "create_task") { setShowTask(message); return; }
+    // "Ask AI about this" opens a NEW discussion linked to this message
+    // (composed in the right-side panel), instead of posting into the timeline.
+    if (action === "ask_about") { setPanelThread(null); setComposeContext(message); return; }
     try {
       await api.post(`/chats/${chatId}/messages/${message.id}/ai-action`, { action });
       onChatChange?.();
@@ -1368,11 +1406,14 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
       )}
 
       {/* Right-side AI discussion panel (desktop docked / mobile full-screen). */}
-      {panelThread && (
+      {(panelThread || composeContext) && (
         <>
           <div
             className="fixed inset-0 z-[54] bg-black/50 md:hidden"
-            onClick={() => setPanelThread(null)}
+            onClick={() => {
+              setPanelThread(null);
+              setComposeContext(null);
+            }}
           />
           <div
             data-testid="ai-discussion-panel"
@@ -1387,25 +1428,32 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-hairline shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <Sparkles className="w-4 h-4 text-ai shrink-0" />
-                <span className="text-[13px] font-semibold text-ink truncate">AI Discussion</span>
+                <span className="text-[13px] font-semibold text-ink truncate">
+                  {composeContext && !panelThread ? "Ask AI" : "AI Discussion"}
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  data-testid="ai-panel-expand"
-                  onClick={() => {
-                    setFullScreenThread(panelThread);
-                    setPanelThread(null);
-                  }}
-                  className="w-8 h-8 rounded-lg text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center"
-                  aria-label="Expand to full screen"
-                >
-                  <Maximize2 className="w-4 h-4" />
-                </button>
+                {panelThread && (
+                  <button
+                    type="button"
+                    data-testid="ai-panel-expand"
+                    onClick={() => {
+                      setFullScreenThread(panelThread);
+                      setPanelThread(null);
+                    }}
+                    className="w-8 h-8 rounded-lg text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center"
+                    aria-label="Expand to full screen"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   data-testid="ai-panel-close"
-                  onClick={() => setPanelThread(null)}
+                  onClick={() => {
+                    setPanelThread(null);
+                    setComposeContext(null);
+                  }}
                   className="w-8 h-8 rounded-lg text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center"
                   aria-label="Close AI discussion"
                 >
@@ -1414,11 +1462,42 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
-              <AIComparison
-                threadId={panelThread}
-                chatId={chatId}
-                onClose={() => setPanelThread(null)}
-              />
+              {panelThread ? (
+                <>
+                  <AiDiscussionActions
+                    threadId={panelThread}
+                    discussion={discussions.find((d) => d.id === panelThread)}
+                    isCreator={
+                      !discussions.find((d) => d.id === panelThread) ||
+                      discussions.find((d) => d.id === panelThread)?.created_by === user.id
+                    }
+                    members={Object.values(memberMap).filter((m) => m.id !== user.id)}
+                    onChanged={reloadDiscussions}
+                    onPublished={() => {
+                      reloadDiscussions();
+                      onChatChange?.();
+                    }}
+                  />
+                  <AIComparison
+                    threadId={panelThread}
+                    chatId={chatId}
+                    onClose={() => setPanelThread(null)}
+                  />
+                </>
+              ) : (
+                <AiComposeDiscussion
+                  contextMessage={composeContext}
+                  senderName={
+                    composeContext?.sender_id === user.id
+                      ? "You"
+                      : memberMap[composeContext?.sender_id]?.name || "Teammate"
+                  }
+                  defaultModels={chat.default_models || []}
+                  submitting={composing}
+                  onSubmit={submitCompose}
+                  onCancel={() => setComposeContext(null)}
+                />
+              )}
             </div>
           </div>
         </>
