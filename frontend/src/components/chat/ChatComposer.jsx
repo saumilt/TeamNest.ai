@@ -207,6 +207,26 @@ export default function ChatComposer({
               )}
             </div>
           )}
+          {!aiSession?.active && !aiTrigger && pillModels.length === 0 && (
+            <div className="mb-2 flex items-center gap-2" data-testid="composer-destination">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 border border-hairline pl-2.5 pr-1 py-1">
+                <Users className="w-3.5 h-3.5 text-ink-mute" />
+                <span className="text-[12px] text-ink-dim">
+                  To: <span className="text-ink font-semibold">Everyone</span>
+                </span>
+                <span className="text-[11px] text-ink-mute hidden sm:inline">· human chat</span>
+                <button
+                  type="button"
+                  data-testid="composer-switch-ai"
+                  onClick={() => onDraftChange(draft ? `@ai ${draft}` : "@ai ")}
+                  className="ml-1 h-6 px-2 rounded-full text-[11px] font-semibold text-ai hover:bg-ai/10 inline-flex items-center gap-1"
+                  title="Send to AI instead"
+                >
+                  <Sparkles className="w-3 h-3" /> Ask AI
+                </button>
+              </span>
+            </div>
+          )}
           {pillModels.length > 0 && (
             <div
               className="mb-2 flex items-center gap-2 border border-ai/30 bg-ai/5 rounded-full pl-3 pr-1.5 py-1"

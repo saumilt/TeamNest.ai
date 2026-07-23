@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import MessageBubble from "@/components/MessageBubble";
+import AiResearchCard from "@/components/chat/AiResearchCard";
 
 /** Centered Today/Yesterday/date pill between message clusters. */
 function DaySeparator({ label }) {
@@ -26,12 +27,29 @@ function labelForDay(d) {
  * and day separators. Pure presentational; receives the full ordered list.
  */
 const MessageList = forwardRef(function MessageList(
-        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction, onReply, pendingAI = false, onStopAI },
+        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction, onReply, pendingAI = false, onStopAI, view = "combined", discussions = [], onOpenDiscussion },
         scrollRef,
 ) {
-        // The "AI question" bubble echoes the user's own message verbatim (redundant —
-        // the AI answer bubble already links to "Show all comparisons"), so hide it.
-        const visible = messages.filter((m) => m.message_type !== "ai_question");
+        const isHuman = view === "human";
+        const threadById = {};
+        for (const d of discussions) threadById[d.id] = d;
+        // Human view: drop AI question/answer bubbles and surface each AI
+        // discussion as a single compact card (in place, so chronology holds).
+        // Combined view: current behaviour (hide only the echoed ai_question).
+        const seenThreads = new Set();
+        const visible = [];
+        for (const m of messages) {
+                if (m.message_type === "ai_question") continue;
+                if (isHuman && m.message_type === "ai_answer") {
+                        const tid = m.metadata?.thread_id;
+                        if (tid && !seenThreads.has(tid)) {
+                                seenThreads.add(tid);
+                                visible.push({ __card: true, id: `card-${tid}`, thread_id: tid, created_at: m.created_at, sender_id: `card-${tid}` });
+                        }
+                        continue;
+                }
+                visible.push(m);
+        }
         // Index every message by id so replies can render a quoted preview of
         // their parent (resolved client-side from the loaded list).
         const msgById = {};
@@ -60,6 +78,18 @@ const MessageList = forwardRef(function MessageList(
                 const showAvatar = prevSender !== m.sender_id;
                 const showTimestamp = !sameNextSender;
                 prevSender = m.sender_id;
+
+                if (m.__card) {
+                        out.push(
+                                <AiResearchCard
+                                        key={m.id}
+                                        discussion={threadById[m.thread_id] || { id: m.thread_id, title: "AI research" }}
+                                        onOpen={onOpenDiscussion}
+                                />,
+                        );
+                        prevSender = null;
+                        continue;
+                }
 
                 // Quoted-reply preview: only user text replies carry a visible
                 // quote (AI answers / task confirmations use parent_message_id

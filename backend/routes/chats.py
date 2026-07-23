@@ -296,6 +296,75 @@ async def get_chat(chat_id: str, current=Depends(require_user)):
     return chat
 
 
+@router.get("/chats/{chat_id}/ai-discussions")
+async def list_chat_ai_discussions(chat_id: str, current=Depends(require_user)):
+    """AI research 'discussions' (ai_threads) linked to this chat, with derived
+    counts + credits so the AI view / Human-view cards can render without extra
+    round-trips. Phase 1: visible to all chat members (visibility default 'chat').
+    """
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    threads = await db.ai_threads.find(
+        {"chat_id": chat_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    if not threads:
+        return {"discussions": []}
+    thread_ids = [t["id"] for t in threads]
+    qa = await db.messages.find(
+        {
+            "chat_id": chat_id,
+            "message_type": {"$in": ["ai_question", "ai_answer"]},
+            "metadata.thread_id": {"$in": thread_ids},
+            "deleted_at": None,
+        },
+        {"_id": 0, "metadata": 1, "message_type": 1, "created_at": 1},
+    ).to_list(5000)
+    agg: dict = {}
+    for m in qa:
+        tid = (m.get("metadata") or {}).get("thread_id")
+        if not tid:
+            continue
+        a = agg.setdefault(tid, {"q": 0, "a": 0, "credits": 0, "last": None})
+        if m["message_type"] == "ai_question":
+            a["q"] += 1
+        else:
+            a["a"] += 1
+            a["credits"] += int((m.get("metadata") or {}).get("credits_total") or 0)
+        ca = m.get("created_at")
+        if ca and (a["last"] is None or ca > a["last"]):
+            a["last"] = ca
+    creator_ids = list({t.get("created_by") for t in threads if t.get("created_by")})
+    users = await db.users.find({"id": {"$in": creator_ids}}, PROJ).to_list(1000)
+    umap = {u["id"]: u for u in users}
+    out = []
+    for t in threads:
+        a = agg.get(t["id"], {"q": 0, "a": 0, "credits": 0, "last": None})
+        title = (t.get("title") or (t.get("question") or "AI research")).strip()[:80]
+        cu = umap.get(t.get("created_by")) or {}
+        out.append({
+            "id": t["id"],
+            "title": title,
+            "created_by": t.get("created_by"),
+            "creator_name": cu.get("name") or cu.get("email") or "Someone",
+            "creator_avatar": cu.get("avatar"),
+            "models": t.get("selected_models") or [],
+            "question_count": max(a["q"], 1),
+            "answer_count": a["a"],
+            "credits_used": a["credits"],
+            "status": t.get("status") or "complete",
+            "visibility": t.get("visibility") or "chat",
+            "linked_human_message_id": t.get("linked_human_message_id"),
+            "branch_name": t.get("branch_name"),
+            "updated_at": a["last"] or t.get("created_at"),
+            "created_at": t.get("created_at"),
+        })
+    out.sort(key=lambda d: d["updated_at"] or "", reverse=True)
+    return {"discussions": out}
+
+
 def _ensure_chat_admin(chat: dict, user_id: str) -> None:
     """Raise 403 unless `user_id` is an admin of `chat` (group-only)."""
     if chat.get("type") != "group":

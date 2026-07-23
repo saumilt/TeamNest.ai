@@ -30,6 +30,8 @@ import {
   ChevronRight,
   Check,
   Building2,
+  X,
+  Maximize2,
 } from "lucide-react";
 import IntegrationsDialog from "@/components/IntegrationsDialog";
 import InviteGuestDialog from "@/components/InviteGuestDialog";
@@ -53,6 +55,7 @@ import SaveToRoleDialog from "@/components/chat/SaveToRoleDialog";
 import MessageList from "@/components/chat/MessageList";
 import ChatComposer from "@/components/chat/ChatComposer";
 import AiModelPicker from "@/components/chat/AiModelPicker";
+import AiDiscussionsDashboard from "@/components/chat/AiDiscussionsDashboard";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 function relativeTime(iso) {
@@ -826,6 +829,11 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [devOsBusy, setDevOsBusy] = useState(false);
   const [activeThread, setActiveThread] = useState(initialThread || null);
   const [fullScreenThread, setFullScreenThread] = useState(null);
+  // Dual-view (Human | Combined | AI) + right-side AI discussion panel.
+  const [view, setView] = useState("human");
+  const [discussions, setDiscussions] = useState([]);
+  const [panelThread, setPanelThread] = useState(null);
+  const [panelWidth, setPanelWidth] = useState(460);
   const [comparisonAllowed, setComparisonAllowed] = useState(true);
   const [aiSession, setAiSession] = useState({ active: false });
   const [showSaveRole, setShowSaveRole] = useState(false);
@@ -838,6 +846,51 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     () => api.get(`/chats/${chatId}`).then(({ data }) => setChat(data)),
     [chatId],
   );
+
+  // AI discussions (research threads) linked to this chat — powers the AI view
+  // + the compact research cards shown in the Human view.
+  const reloadDiscussions = useCallback(() => {
+    if (!chatId) return;
+    api
+      .get(`/chats/${chatId}/ai-discussions`)
+      .then(({ data }) => setDiscussions(data.discussions || []))
+      .catch(() => {});
+  }, [chatId]);
+
+  // Per-user, per-chat view preference (Human is the recommended default).
+  useEffect(() => {
+    setPanelThread(null);
+    if (!chatId || !user?.id) return;
+    const saved = localStorage.getItem(`tn:chatview:${user.id}:${chatId}`);
+    setView(saved === "combined" || saved === "ai" ? saved : "human");
+  }, [chatId, user?.id]);
+
+  const changeView = useCallback(
+    (v) => {
+      setView(v);
+      if (user?.id && chatId) localStorage.setItem(`tn:chatview:${user.id}:${chatId}`, v);
+    },
+    [user?.id, chatId],
+  );
+
+  const openDiscussion = useCallback((tid) => {
+    if (tid) setPanelThread(tid);
+  }, []);
+
+  // Drag-to-resize the right-side AI discussion panel (desktop only).
+  const startPanelResize = useCallback((e) => {
+    e.preventDefault();
+    const move = (ev) => {
+      const w = window.innerWidth - ev.clientX;
+      setPanelWidth(Math.min(760, Math.max(360, w)));
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, []);
 
   // Mark this chat as read for the current user (clears its unread badge) and
   // refresh the chat list so the badge updates in the sidebar.
@@ -874,6 +927,16 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         !stoppedThreads.has(m.metadata.thread_id),
     );
   }, [messages, stoppedThreads]);
+
+  // Refresh the discussions list whenever a new AI answer lands (counts/credits
+  // change) and when the chat changes.
+  const aiAnswerCount = useMemo(
+    () => messages.filter((m) => m.message_type === "ai_answer").length,
+    [messages],
+  );
+  useEffect(() => {
+    reloadDiscussions();
+  }, [reloadDiscussions, aiAnswerCount]);
 
   const onStopAI = useCallback(async () => {
     // Optimistically mark every currently-running thread as stopped so the
@@ -1224,13 +1287,27 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
           }
         }}
         devOsBusy={devOsBusy}
+        view={view}
+        onViewChange={changeView}
+        aiCount={discussions.length}
       />
 
+      {view === "ai" ? (
+        <AiDiscussionsDashboard
+          discussions={discussions}
+          memberMap={memberMap}
+          userId={user.id}
+          onOpen={openDiscussion}
+        />
+      ) : (
       <MessageList
         ref={scrollRef}
         messages={messages}
         memberMap={memberMap}
         userId={user.id}
+        view={view}
+        discussions={discussions}
+        onOpenDiscussion={openDiscussion}
         typingUsers={typingUsers}
         onOpenThread={(tid) => {
           if (!comparisonAllowed) {
@@ -1273,6 +1350,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
           ) : null
         }
       />
+      )}
 
       {/* Full-page comparison popup (opened from the inline "Open full screen" link). */}
       {fullScreenThread && (
@@ -1287,6 +1365,63 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             onClose={() => setFullScreenThread(null)}
           />
         </div>
+      )}
+
+      {/* Right-side AI discussion panel (desktop docked / mobile full-screen). */}
+      {panelThread && (
+        <>
+          <div
+            className="fixed inset-0 z-[54] bg-black/50 md:hidden"
+            onClick={() => setPanelThread(null)}
+          />
+          <div
+            data-testid="ai-discussion-panel"
+            className="fixed top-0 right-0 z-[55] h-[100dvh] w-full md:w-[var(--panelw)] bg-surface border-l border-hairline shadow-2xl flex flex-col"
+            style={{ "--panelw": `${panelWidth}px` }}
+          >
+            <div
+              onMouseDown={startPanelResize}
+              className="hidden md:block absolute left-0 top-0 h-full w-1.5 -ml-0.5 cursor-col-resize hover:bg-ai/40"
+              data-testid="ai-panel-resize"
+            />
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-hairline shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="w-4 h-4 text-ai shrink-0" />
+                <span className="text-[13px] font-semibold text-ink truncate">AI Discussion</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  data-testid="ai-panel-expand"
+                  onClick={() => {
+                    setFullScreenThread(panelThread);
+                    setPanelThread(null);
+                  }}
+                  className="w-8 h-8 rounded-lg text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center"
+                  aria-label="Expand to full screen"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  data-testid="ai-panel-close"
+                  onClick={() => setPanelThread(null)}
+                  className="w-8 h-8 rounded-lg text-ink-mute hover:text-ink hover:bg-white/5 flex items-center justify-center"
+                  aria-label="Close AI discussion"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <AIComparison
+                threadId={panelThread}
+                chatId={chatId}
+                onClose={() => setPanelThread(null)}
+              />
+            </div>
+          </div>
+        </>
       )}
 
       <NextIdeasPanel

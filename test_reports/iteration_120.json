@@ -1,0 +1,41 @@
+{
+  "summary": "Phase 1 dual Human | Combined | AI views (web only). Backend GET /api/chats/{chat_id}/ai-discussions verified for member (200 with correct shape), non-member (404), bogus chat (404); human message send verified NOT to bill AI credits or create a discussion. Frontend verified end-to-end on chat d77a7d2a-b6e9-4923-89cd-54a21880c6a6 (AIConv Test): default view is HUMAN, Human shows 8 ai-research-cards and 0 Synthesized badges (raw AI answers hidden), Combined shows 0 cards + 4 Synthesized badges + 'Show all comparisons' (regression), AI dashboard renders (1 group · 8 items · search box · items testable). Clicking a research card in Human view AND an item in AI view both open ai-discussion-panel with ai-panel-close, ai-panel-expand (which opens fullscreen-comparison) and ai-panel-resize present. Per-user+per-chat persistence key format `tn:chatview:{userId}:{chatId}` confirmed in localStorage. composer-destination pill shows 'To: Everyone · human chat', composer-switch-ai correctly prepends '@ai ' to the draft, and the previously-shipped inline @ai popover (ai-model-inline-popover) still shows on '@ai ' typing (regression pass).",
+  "platforms_tested": ["web"],
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "ChatComposer destination pill", "issues": ["Text renders as 'To: Everyone· human chat' — the middle-dot separator is missing a space before it (missing space between 'Everyone' and '·'). Cosmetic only. Reference: /app/frontend/src/components/chat/ChatComposer.jsx"]},
+        {"screen": "ChatHeader view switch (chat-view-switch)", "issues": ["The chat-view-human / chat-view-combined / chat-view-ai buttons don't set an `aria-pressed` attribute for screen readers. Suggest adding aria-pressed={view===...} on each toggle button. Not a functional blocker (visual active state is present). Reference: /app/frontend/src/components/chat/ChatHeader.jsx"]}
+      ]
+    },
+    "mobile": { "ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": [] }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration120_ai_discussions.py",
+    "/app/test_reports/pytest/iteration120.xml"
+  ],
+  "action_items": [
+    "(Cosmetic) Add a leading space before the middle-dot in composer-destination pill so 'Everyone · human chat' reads naturally.",
+    "(A11y) Add aria-pressed={active} to the chat-view-human/combined/ai buttons in ChatHeader.jsx for screen readers."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/chats.py list_chat_ai_discussions() correctly filters by chat membership (404 for non-members verified) and returns visibility default 'chat'. Good.",
+    "frontend Chats.jsx L860-874: per-user+per-chat localStorage view persistence uses `tn:chatview:{user.id}:{chatId}` key exactly per spec; default falls back to 'human' correctly. Verified.",
+    "MessageList Human-view transform correctly collapses ai_question+ai_answer pairs into a single ai-research-card while preserving the user's own '@ai …' human bubbles (visible in Human view screenshot).",
+    "AiDiscussionsDashboard search filter narrows visible items but does NOT show ai-discussions-empty when filter yields 0 (empty-state is reserved for 'chat has no research'). Per-spec this is intentional; verify with UX if a 'no-match' state is desired."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration120_ai_discussions.py"
+  ],
+  "success_rate": { "backend": "100% (4/4)", "frontend": "100% on all 8 requested flows" },
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super admin, member of AIConv Test). raj@demo.team / Demo@2026 used to prove 404 for non-member.",
+  "seed_data_creation": "Sent one TEST_HUMAN_PING_iter120 text message (non-AI) to chat d77a7d2a…c6a6 during human-credit assertion — no cleanup performed (single line, low signal).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 web dual views feature is functionally complete and green. Persistence key is exactly `tn:chatview:{userId}:{chatId}`. Backend list_chat_ai_discussions returns 404 for non-members (uses chat member_ids filter, no leaks). If mobile parity is picked up next phase, follow /app/mobile changes and mirror the same testIDs.",
+  "rca of the issue": "n/a — no bugs found."
+}

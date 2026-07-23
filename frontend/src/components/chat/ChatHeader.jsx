@@ -29,6 +29,9 @@ export default function ChatHeader({
   devOsBusy,
   onProjectSwitched,
   onSaveToRole,
+  view,
+  onViewChange,
+  aiCount = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -97,6 +100,40 @@ export default function ChatHeader({
               {chat.type === "direct" && <span>Direct</span>}
             </div>
           </button>
+
+          {onViewChange && !isAIChat && (
+            <div
+              className="mt-1.5 inline-flex items-center gap-0.5 rounded-full bg-surface-2 p-0.5 ring-1 ring-hairline"
+              data-testid="chat-view-switch"
+              role="tablist"
+              aria-label="Conversation view"
+            >
+              {[
+                ["human", "Human"],
+                ["combined", "Combined"],
+                ["ai", "AI"],
+              ].map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === val}
+                  data-testid={`chat-view-${val}`}
+                  onClick={() => onViewChange(val)}
+                  className={`h-6 px-2.5 rounded-full text-[11px] font-semibold transition-colors ${
+                    view === val
+                      ? "bg-ai text-black"
+                      : "text-ink-dim hover:text-ink hover:bg-white/5"
+                  }`}
+                >
+                  {label}
+                  {val === "ai" && aiCount ? (
+                    <span className={view === val ? "opacity-70" : "text-ai"}> {aiCount}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          )}
 
           {showPillRow && (
             <div className="flex flex-wrap items-center gap-1 mt-1">
