@@ -132,7 +132,8 @@ async def chunked_init(payload: ChunkInit, current=Depends(require_user)):
 
 @router.put("/uploads/chunked/{upload_id}/part/{index}")
 async def chunked_part(
-    upload_id: str, index: int, request: Request, current=Depends(require_user)
+    upload_id: str, index: int, request: Request,
+    b64: int = Query(0), current=Depends(require_user),
 ):
     sess = await db.upload_sessions.find_one(
         {"id": upload_id, "user_id": current["id"]}, {"_id": 0}
@@ -141,9 +142,19 @@ async def chunked_part(
         raise HTTPException(404, "Upload session not found")
     if index < 0 or index >= sess["total_parts"]:
         raise HTTPException(400, "Invalid part index")
-    data = await request.body()
-    if not data:
+    raw = await request.body()
+    if not raw:
         raise HTTPException(400, "Empty part")
+    # Mobile clients send base64 text (?b64=1) since RN can't easily stream raw
+    # binary; web sends raw octet-stream.
+    if b64:
+        import base64 as _b64
+        try:
+            data = _b64.b64decode(raw)
+        except Exception:
+            raise HTTPException(400, "Invalid base64 part")
+    else:
+        data = raw
     if len(data) > MAX_PART_SIZE:
         raise HTTPException(413, "Part too large")
     try:

@@ -224,6 +224,12 @@ export default function YouScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        <TouchableOpacity testID="you-documents" style={styles.linkRow} onPress={() => router.push("/documents")}>
+          <Ionicons name="folder-open-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>Documents</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
         <TouchableOpacity testID="you-ai-conversation" style={styles.linkRow} onPress={() => router.push("/settings/ai-conversation")}>
           <Ionicons name="chatbubbles-outline" size={18} color={colors.accent} />
           <Text style={styles.linkLabel}>AI Conversation Mode</Text>

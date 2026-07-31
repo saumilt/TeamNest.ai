@@ -77,9 +77,12 @@ async def create_source(payload: CreateSource, current=Depends(require_user)):
 
 
 @router.get("/knowledge/sources")
-async def list_sources(current=Depends(require_user)):
+async def list_sources(chat_id: Optional[str] = None, current=Depends(require_user)):
+    q = {"workspace_id": current["workspace_id"]}
+    if chat_id:
+        q["chat_id"] = chat_id
     rows = await db.knowledge_sources.find(
-        {"workspace_id": current["workspace_id"]}, {"_id": 0}
+        q, {"_id": 0}
     ).sort("created_at", -1).to_list(200)
     return {"sources": [_source_public(r) for r in rows]}
 

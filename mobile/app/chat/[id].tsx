@@ -26,6 +26,7 @@ import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { getItem, setItem } from "@/src/storage";
 import { AI_MODELS, RECOMMENDED_MODEL } from "@/src/aiModels";
+import { uploadZipChunked, MOBILE_MAX_SIZE } from "@/src/chunkedUpload";
 import { AiDiscussionCard } from "@/src/components/AiDiscussionCard";
 import { AiDiscussionsDashboard } from "@/src/components/AiDiscussionsDashboard";
 import { AiComposeModal } from "@/src/components/AiComposeModal";
@@ -166,6 +167,27 @@ export default function ChatScreen() {
   useEffect(() => {
     reloadDiscussions();
   }, [reloadDiscussions, aiAnswerCount]);
+
+  // Knowledge sources (uploaded ZIPs) attached to this chat — powers the header
+  // "AI knows this ZIP" chip and lets @ai answer over the archive.
+  const [chatKnowledge, setChatKnowledge] = useState<any[]>([]);
+  const reloadChatKnowledge = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const d = await apiGet(`/api/knowledge/sources?chat_id=${chatId}`);
+      setChatKnowledge(d.sources || []);
+    } catch {
+      /* best-effort */
+    }
+  }, [chatId]);
+  useEffect(() => {
+    reloadChatKnowledge();
+  }, [reloadChatKnowledge]);
+  useEffect(() => {
+    if (!chatKnowledge.some((s) => s.status === "processing")) return;
+    const t = setInterval(reloadChatKnowledge, 4000);
+    return () => clearInterval(t);
+  }, [chatKnowledge, reloadChatKnowledge]);
 
   // Reply to a specific message — capture a lightweight preview.
   const startReply = useCallback(
@@ -380,9 +402,26 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
-  const uploadAsset = async (asset: { uri: string; name: string; type: string }) => {
+  const uploadAsset = async (asset: { uri: string; name: string; type: string; size?: number }) => {
     setUploading(true);
     try {
+      // ZIPs stream via the chunked path (the simple endpoint rejects .zip) and
+      // become a chat-linked knowledge source so @ai can answer over them.
+      if ((asset.name || "").toLowerCase().endsWith(".zip")) {
+        if ((asset.size || 0) > MOBILE_MAX_SIZE) {
+          Alert.alert(
+            "File too large for mobile",
+            `Phones are limited to ${Math.round(MOBILE_MAX_SIZE / 1024 / 1024)}MB. Upload larger archives from the web app.`,
+          );
+          return;
+        }
+        const data = await uploadZipChunked(asset as any, { chatId });
+        setAttachments((prev) => [...prev, data]);
+        apiPost("/api/knowledge/sources", { file_id: data.id, chat_id: chatId, name: data.filename })
+          .then(() => { reloadChatKnowledge(); Alert.alert("Indexing ZIP", "@ai will be able to answer about this archive shortly."); })
+          .catch(() => {});
+        return;
+      }
       const data = await apiUpload("/api/uploads", asset, { chat_id: chatId });
       setAttachments((prev) => [...prev, data]);
     } catch (e: any) {
@@ -405,6 +444,7 @@ export default function ChatScreen() {
           uri: a.uri,
           name: a.name || "file",
           type: a.mimeType || "application/octet-stream",
+          size: a.size,
         });
       }
     } catch (e: any) {
@@ -759,6 +799,24 @@ export default function ChatScreen() {
           <Text style={styles.headerSub} numberOfLines={1}>
             {subtitle}
           </Text>
+          {(() => {
+            const ready = chatKnowledge.filter((s) => s.status === "ready").length;
+            const processing = chatKnowledge.some((s) => s.status === "processing");
+            if (!ready && !processing) return null;
+            return (
+              <TouchableOpacity
+                testID="chat-knowledge-chip"
+                onPress={() => router.push("/documents")}
+                style={styles.kbChip}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={processing ? "sync" : "folder-open"} size={11} color={colors.accent} />
+                <Text style={styles.kbChipText}>
+                  {processing ? "Indexing ZIP…" : ready === 1 ? "AI knows this ZIP" : `AI knows ${ready} ZIPs`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })()}
         </View>
         {chat?.linked_dev_project ? (
           <View style={styles.devPill}>
@@ -1639,4 +1697,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   destAskAiText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
+  kbChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 3,
+  },
+  kbChipText: { color: colors.accent, fontSize: font.tiny, fontWeight: "700" },
 });

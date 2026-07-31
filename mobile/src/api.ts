@@ -13,6 +13,10 @@ export function getBase(): string {
   return BASE as string;
 }
 
+export function getAuthToken(): string | null {
+  return _token;
+}
+
 async function req(path: string, method: string, body?: any): Promise<any> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;

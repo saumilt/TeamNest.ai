@@ -836,6 +836,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   // Dual-view (Human | Combined | AI) + right-side AI discussion panel.
   const [view, setView] = useState("human");
   const [discussions, setDiscussions] = useState([]);
+  const [chatKnowledge, setChatKnowledge] = useState([]);
   const [panelThread, setPanelThread] = useState(null);
   const [panelWidth, setPanelWidth] = useState(460);
   // "Ask AI" from a specific message → compose a new linked discussion.
@@ -975,6 +976,24 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   useEffect(() => {
     reloadDiscussions();
   }, [reloadDiscussions, aiAnswerCount]);
+
+  // Knowledge sources (uploaded ZIPs) attached to this chat — powers the header
+  // "AI knows this ZIP" chip.
+  const reloadChatKnowledge = useCallback(() => {
+    if (!chatId) return;
+    api
+      .get(`/knowledge/sources`, { params: { chat_id: chatId } })
+      .then(({ data }) => setChatKnowledge(data.sources || []))
+      .catch(() => {});
+  }, [chatId]);
+  useEffect(() => { reloadChatKnowledge(); }, [reloadChatKnowledge, aiAnswerCount]);
+  useEffect(() => {
+    if (!chatKnowledge.some((s) => s.status === "processing")) return undefined;
+    const t = setInterval(reloadChatKnowledge, 3500);
+    return () => clearInterval(t);
+  }, [chatKnowledge, reloadChatKnowledge]);
+  const knowledgeReady = chatKnowledge.filter((s) => s.status === "ready").length;
+  const knowledgeProcessing = chatKnowledge.some((s) => s.status === "processing");
 
   const onStopAI = useCallback(async () => {
     // Optimistically mark every currently-running thread as stopped so the
@@ -1356,6 +1375,9 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onViewChange={changeView}
         aiCount={discussions.length}
         onOpenSearch={() => setSearchOpen(true)}
+        knowledgeReady={knowledgeReady}
+        knowledgeProcessing={knowledgeProcessing}
+        onOpenKnowledge={() => nav("/knowledge")}
       />
 
       {view === "ai" ? (

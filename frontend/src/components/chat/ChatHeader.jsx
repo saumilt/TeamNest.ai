@@ -1,4 +1,4 @@
-import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket, Landmark, Search } from "lucide-react";
+import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2, Rocket, Landmark, Search, FolderArchive } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Avatar from "@/components/ui-v2/Avatar";
@@ -33,6 +33,9 @@ export default function ChatHeader({
   onViewChange,
   aiCount = 0,
   onOpenSearch,
+  knowledgeReady = 0,
+  knowledgeProcessing = false,
+  onOpenKnowledge,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -98,6 +101,17 @@ export default function ChatHeader({
                 </span>
               )}
               {chat.type === "personal_ai" && <span>Always available</span>}
+              {(knowledgeReady > 0 || knowledgeProcessing) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onOpenKnowledge?.(); }}
+                  data-testid="chat-knowledge-chip"
+                  className="inline-flex items-center gap-1 rounded-full bg-ai-tint text-ai px-2 py-0.5 text-[11px] font-medium hover:opacity-90 transition-opacity"
+                >
+                  <FolderArchive className="w-3 h-3" />
+                  {knowledgeProcessing ? "Indexing ZIP…" : knowledgeReady === 1 ? "AI knows this ZIP" : `AI knows ${knowledgeReady} ZIPs`}
+                </button>
+              )}
               {chat.type === "direct" && <span>Direct</span>}
             </div>
           </button>
