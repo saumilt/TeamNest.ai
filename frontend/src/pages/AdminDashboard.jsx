@@ -27,6 +27,15 @@ import {
   TrendingUp,
   Download,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 const ROLES = ["owner", "admin", "member", "viewer", "guest"];
 const STATUSES = ["active", "disabled"];
@@ -53,6 +62,84 @@ function bytesFmt(n) {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+function fmtDay(iso) {
+  // "2026-06-03" -> "Jun 3"
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function UsageTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="border border-yellow-500/40 bg-[#0a0a0a] rounded-sm px-3 py-2 text-xs">
+      <div className="font-mono text-zinc-400 mb-1">{fmtDay(p.date)}</div>
+      <div className="font-display font-bold text-yellow-400 tabular-nums">{p.credits} credits</div>
+      <div className="text-zinc-500 font-mono tabular-nums">{p.count} calls</div>
+    </div>
+  );
+}
+
+function UsageTrendChart({ trend, loading }) {
+  if (loading) return <div className="h-40 shimmer rounded-sm mb-4" data-testid="admin-usage-trend-loading" />;
+  const points = trend?.points || [];
+  const hasSpend = points.some((p) => p.credits > 0);
+  return (
+    <div className="border border-white/10 bg-[#0a0a0a] rounded-sm p-4 mb-4" data-testid="admin-usage-trend">
+      <div className="flex items-center justify-between mb-3">
+        <div className="label-mono">DAILY CREDIT SPEND</div>
+        <div className="flex items-center gap-3 text-xs font-mono text-zinc-500 tabular-nums">
+          <span>PEAK <span className="text-yellow-400 font-bold">{trend?.peak_credits ?? 0}</span></span>
+        </div>
+      </div>
+      {hasSpend ? (
+        <div style={{ width: "100%", height: 160 }} data-testid="admin-usage-trend-chart">
+          <ResponsiveContainer>
+            <AreaChart data={points} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="usageFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#eab308" stopOpacity={0.5} />
+                  <stop offset="100%" stopColor="#eab308" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#ffffff10" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={fmtDay}
+                minTickGap={28}
+                tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                axisLine={{ stroke: "#ffffff14" }}
+                tickLine={false}
+              />
+              <YAxis
+                allowDecimals={false}
+                width={44}
+                tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<UsageTooltip />} cursor={{ stroke: "#eab308", strokeOpacity: 0.3 }} />
+              <Area
+                type="monotone"
+                dataKey="credits"
+                stroke="#eab308"
+                strokeWidth={2}
+                fill="url(#usageFill)"
+                dot={false}
+                activeDot={{ r: 4, fill: "#eab308" }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="h-40 flex items-center justify-center text-xs text-zinc-500" data-testid="admin-usage-trend-empty">
+          No AI credit spend in this period.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [overview, setOverview] = useState(null);
@@ -61,6 +148,7 @@ export default function AdminDashboard() {
   const [approvalsAnalytics, setApprovalsAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [aiUsage, setAiUsage] = useState(null);
+  const [usageTrend, setUsageTrend] = useState(null);
   const [usageGroupBy, setUsageGroupBy] = useState("user");
   const [usageDays, setUsageDays] = useState(30);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -92,10 +180,12 @@ export default function AdminDashboard() {
   const loadUsage = async () => {
     setUsageLoading(true);
     try {
-      const { data } = await api.get("/admin/ai-usage", {
-        params: { group_by: usageGroupBy, days: usageDays },
-      });
-      setAiUsage(data);
+      const [usageRes, trendRes] = await Promise.all([
+        api.get("/admin/ai-usage", { params: { group_by: usageGroupBy, days: usageDays } }),
+        api.get("/admin/ai-usage/trend", { params: { days: usageDays } }),
+      ]);
+      setAiUsage(usageRes.data);
+      setUsageTrend(trendRes.data);
     } catch (e) {
       console.warn("[admin ai-usage]", e);
     } finally {
@@ -290,6 +380,8 @@ export default function AdminDashboard() {
                   <span className="text-zinc-400">Total credits used:</span>
                   <span className="font-display text-lg font-bold text-yellow-400 tabular-nums" data-testid="admin-usage-total">{aiUsage?.total_credits ?? 0}</span>
                 </div>
+
+                <UsageTrendChart trend={usageTrend} loading={usageLoading} />
 
                 {usageLoading ? (
                   <div className="space-y-2">{[1, 2, 3, 4].map((i) => <div key={i} className="h-9 shimmer rounded-sm" />)}</div>

@@ -117,6 +117,39 @@ async def admin_ai_usage_export(
     )
 
 
+@router.get("/admin/ai-usage/trend")
+async def admin_ai_usage_trend(
+    days: int = Query(30, ge=1, le=365),
+    current=Depends(require_user),
+):
+    """Owner/Admin only — daily AI credit spend for the last N days (zero-filled)."""
+    if current["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Admin only")
+    ws_id = current["workspace_id"]
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=days - 1)
+    cutoff = datetime(start.year, start.month, start.day, tzinfo=timezone.utc).isoformat()
+    buckets: dict = {}
+    async for e in db.ai_credit_ledger.find(
+        {"workspace_id": ws_id, "at": {"$gte": cutoff}},
+        {"_id": 0, "amount": 1, "billed_amount": 1, "at": 1},
+    ):
+        day = (e.get("at") or "")[:10]
+        if not day:
+            continue
+        b = buckets.setdefault(day, {"credits": 0, "count": 0})
+        b["credits"] += int(e.get("amount") or e.get("billed_amount") or 0)
+        b["count"] += 1
+    points = []
+    for i in range(days):
+        d = (start + timedelta(days=i)).isoformat()
+        b = buckets.get(d, {"credits": 0, "count": 0})
+        points.append({"date": d, "credits": b["credits"], "count": b["count"]})
+    total = sum(p["credits"] for p in points)
+    peak = max((p["credits"] for p in points), default=0)
+    return {"days": days, "total_credits": total, "peak_credits": peak, "points": points}
+
+
 async def _member_user_ids(workspace_id: str) -> list:
     """Return all user ids that are members of this workspace via workspace_members."""
     return [
