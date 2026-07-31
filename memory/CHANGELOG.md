@@ -3,6 +3,22 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 123 (Jul 2026) — Large-file uploads + ZIP Knowledge/Documents (RAG) — WEB — COMPLETE
+User asked to raise the upload limit (~1GB) and let a ZIP be parsed + queried by AI. Delivered in 4 phases (web-first, all tested):
+**Phase 1 — Chunked/resumable upload + accept .zip** (`routes/uploads.py`, `storage.py`, `lib/chunkedUpload.js`):
+- New endpoints: `POST /api/uploads/chunked/init`, `PUT /api/uploads/chunked/{id}/part/{i}`, `POST .../complete`, `POST .../abort`. Parts stored to object storage, assembled to a temp file and streamed to the final object via new `storage.put_object_file` (memory-safe). New `delete_object` + `build_part_path` helpers.
+- Caps: chunked ≤1GB (8MB parts), simple path stays 30MB. `.zip` (+docx/xlsx/pptx MIME) now accepted on the chunked path.
+- Web composer + Documents page route large files/all ZIPs through chunked upload with an "Uploading NN%" indicator (`upload-progress`). Verified byte-perfect + edge cases (missing-part 400, abort, oversize 413, bad-ext 400).
+**Phase 2 — ZIP ingestion → knowledge source** (`services/knowledge_ingest.py`): background unzip + per-file text extraction (reuses `file_extract.extract_one` for pdf/docx/xlsx/pptx/csv/txt/md/code; images OCR'd best-effort via new `ai_service.vision_extract_text`, capped 20/source), tiktoken chunking → `knowledge_chunks`. Collections: `knowledge_sources`, `knowledge_files`, `knowledge_chunks`. Status/progress tracked.
+**Phase 3 — Retrieval + Q&A** (`services/knowledge_search.py`, `routes/knowledge.py`): Mongo `$text` lexical retrieval (compound index `source_id+text`), answer synthesised by **Claude Sonnet 4.6** (default) / **GPT-5.5** via `ai_service.complete`, with file-name citations + graceful "not found". Endpoints: `POST/GET /api/knowledge/sources`, `GET /{id}`, `POST /{id}/ask`, `DELETE /{id}`.
+- New web page **Documents** (`pages/Knowledge.jsx`, route `/knowledge`, sidebar `nav-knowledge`): upload ZIP, live indexing status, file list, Ask box w/ model picker + citations, delete.
+**Phase 4 — Chat @ai over an attached ZIP** (`ai_runtime` hook + `knowledge_search.knowledge_context`): a ZIP uploaded into a chat auto-creates a chat-linked knowledge source; `handle_ai_command` injects top excerpts so `@ai` answers over the ZIP. Verified: `@ai` returned "$1.2M / Q3 2026 [report.md]" from an uploaded zip.
+- Retrieval is **lexical** (no embeddings) for reliability/cost; semantic embeddings are a future enhancement.
+- Caveats: true 1GB depends on prod ingress (infra, not app code); OCR is best-effort/slow on big zips; feature is **web-only** this round (mobile parity pending).
+- Tested: iteration_123.json (frontend green) + main-agent curl/DB verification of chunked upload, ingestion, ask (both models), and chat @ai-over-zip.
+
+
+
 ## Iteration 122 (Jul 2026) — Dual Human/AI Views: Phase 3 (web admin) + Phase 4 (mobile parity) — COMPLETE
 **A) WEB Phase 3 — Admin AI-Usage analytics (AdminDashboard.jsx → AI Usage tab):**
 - New **AI CREDIT USAGE** simple table wired to the (already-tested) `GET /api/admin/ai-usage?group_by=&days=`.
