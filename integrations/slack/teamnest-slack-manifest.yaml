@@ -1,0 +1,37 @@
+# TeamNest — Slack App Manifest (YAML)
+# Create the app from this file:
+#   1. Go to https://api.slack.com/apps
+#   2. Click "Create New App" -> "From an app manifest"
+#   3. Pick your Slack workspace -> choose YAML -> paste this file -> Create
+#   4. Click "Install to Workspace" and Allow
+#   5. Open "OAuth & Permissions" and copy the "Bot User OAuth Token" (starts with xoxb-)
+#   6. Send that token to TeamNest so posting into channels can go live.
+#
+# Scopes explained (outbound posting only — no inbound events needed):
+#   chat:write         -> post messages as the TeamNest bot
+#   chat:write.public  -> post to public channels without first inviting the bot
+#   channels:read      -> list public channels (so you can pick a default channel)
+#   groups:read        -> list private channels the bot is in
+
+display_information:
+  name: TeamNest
+  description: Post AI answers, ZIP insights and AI-credit budget alerts from TeamNest into your channels.
+  background_color: "#0f0f12"
+
+features:
+  bot_user:
+    display_name: TeamNest
+    always_online: true
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - channels:read
+      - groups:read
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

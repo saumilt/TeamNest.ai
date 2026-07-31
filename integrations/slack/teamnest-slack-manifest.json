@@ -1,0 +1,28 @@
+{
+  "display_information": {
+    "name": "TeamNest",
+    "description": "Post AI answers, ZIP insights and AI-credit budget alerts from TeamNest into your channels.",
+    "background_color": "#0f0f12"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "TeamNest",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "chat:write.public",
+        "channels:read",
+        "groups:read"
+      ]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
