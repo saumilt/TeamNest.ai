@@ -84,10 +84,67 @@ def get_object(path: str) -> Tuple[bytes, str]:
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
+def put_object_file(path: str, file_path: str, content_type: str) -> dict:
+    """Stream a local file to object storage without loading it fully into
+    memory — used to finalize a large chunked upload."""
+    key = init_storage()
+    if not key:
+        raise RuntimeError("Storage unavailable")
+    size = os.path.getsize(file_path)
+
+    def _do(k):
+        with open(file_path, "rb") as fh:
+            return requests.put(
+                f"{STORAGE_URL}/objects/{path}",
+                headers={
+                    "X-Storage-Key": k,
+                    "Content-Type": content_type,
+                    "Content-Length": str(size),
+                },
+                data=fh,
+                timeout=900,
+            )
+
+    resp = _do(key)
+    if resp.status_code == 403:
+        _reset_key()
+        key = init_storage()
+        resp = _do(key)
+    resp.raise_for_status()
+    try:
+        return resp.json()
+    except Exception:
+        return {"path": path, "size": size}
+
+
+def delete_object(path: str) -> None:
+    """Best-effort delete (used to clean up temporary chunk parts)."""
+    key = init_storage()
+    if not key:
+        return
+    try:
+        requests.delete(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key},
+            timeout=30,
+        )
+    except Exception as e:  # pragma: no cover - cleanup is best-effort
+        logger.warning("delete_object failed for %s: %s", path, e)
+
+
+def build_part_path(upload_id: str, index: int) -> str:
+    return f"{APP_NAME}/uploads/parts/{upload_id}/{int(index)}"
+
+
 MIME = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
     "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf",
     "json": "application/json", "csv": "text/csv", "txt": "text/plain",
+    "md": "text/markdown", "zip": "application/zip",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "xls": "application/vnd.ms-excel",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "mp4": "video/mp4", "mp3": "audio/mpeg",
 }
 

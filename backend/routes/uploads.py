@@ -1,11 +1,20 @@
 """File upload / download via Emergent Object Storage."""
+import os
+import tempfile
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from fastapi import (
+    APIRouter, Depends, File, Form, Header, HTTPException, Query, Request,
+    Response, UploadFile,
+)
+from pydantic import BaseModel
 
 from auth_utils import decode_token
 from deps import PROJ, db, logger, new_id, now_iso, require_user
-from storage import build_path, get_object, guess_mime, put_object
+from storage import (
+    build_part_path, build_path, delete_object, get_object, guess_mime,
+    put_object, put_object_file,
+)
 
 router = APIRouter()
 
@@ -15,7 +24,12 @@ ALLOWED_EXT = {
     "docx", "xlsx", "xls", "pptx",              # office
     "mp4", "mp3",                                # media
 }
-MAX_UPLOAD_SIZE = 30 * 1024 * 1024  # 30MB
+# Chunked uploads also accept .zip archives (parsed into a knowledge source).
+CHUNKED_ALLOWED_EXT = ALLOWED_EXT | {"zip"}
+MAX_UPLOAD_SIZE = 30 * 1024 * 1024  # 30MB (single-request path)
+MAX_CHUNKED_SIZE = 1024 * 1024 * 1024  # 1GB (chunked path — infra ceiling may be lower)
+MAX_PART_SIZE = 12 * 1024 * 1024  # 12MB per part (client uses ~8MB)
+CLIENT_PART_SIZE = 8 * 1024 * 1024
 
 
 @router.post("/uploads")
@@ -74,6 +88,165 @@ async def upload_file(
         "is_image": record["is_image"],
         "project_folder_id": project_folder_id,
     }
+
+
+# ─── Chunked / resumable upload (large files up to ~1GB, incl. .zip) ─────────
+class ChunkInit(BaseModel):
+    filename: str
+    size: int
+    total_parts: int
+    chat_id: Optional[str] = None
+    project_folder_id: Optional[str] = None
+
+
+@router.post("/uploads/chunked/init")
+async def chunked_init(payload: ChunkInit, current=Depends(require_user)):
+    """Open a chunked upload session. The client then PUTs each part and calls
+    /complete to assemble + store the final object."""
+    filename = payload.filename or "file.bin"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    if ext not in CHUNKED_ALLOWED_EXT:
+        raise HTTPException(400, f"Unsupported file type: .{ext}")
+    if payload.size <= 0 or payload.size > MAX_CHUNKED_SIZE:
+        raise HTTPException(413, "File too large (max 1GB)")
+    if payload.total_parts < 1 or payload.total_parts > 8000:
+        raise HTTPException(400, "Invalid part count")
+    upload_id = new_id()
+    await db.upload_sessions.insert_one({
+        "id": upload_id,
+        "workspace_id": current["workspace_id"],
+        "user_id": current["id"],
+        "filename": filename,
+        "ext": ext,
+        "content_type": guess_mime(filename, ""),
+        "total_size": payload.size,
+        "total_parts": payload.total_parts,
+        "received": [],
+        "chat_id": payload.chat_id,
+        "project_folder_id": payload.project_folder_id,
+        "status": "open",
+        "created_at": now_iso(),
+    })
+    return {"upload_id": upload_id, "part_size": CLIENT_PART_SIZE}
+
+
+@router.put("/uploads/chunked/{upload_id}/part/{index}")
+async def chunked_part(
+    upload_id: str, index: int, request: Request, current=Depends(require_user)
+):
+    sess = await db.upload_sessions.find_one(
+        {"id": upload_id, "user_id": current["id"]}, {"_id": 0}
+    )
+    if not sess or sess.get("status") != "open":
+        raise HTTPException(404, "Upload session not found")
+    if index < 0 or index >= sess["total_parts"]:
+        raise HTTPException(400, "Invalid part index")
+    data = await request.body()
+    if not data:
+        raise HTTPException(400, "Empty part")
+    if len(data) > MAX_PART_SIZE:
+        raise HTTPException(413, "Part too large")
+    try:
+        put_object(build_part_path(upload_id, index), data, "application/octet-stream")
+    except Exception as e:
+        logger.exception("Chunk store failed: %s", e)
+        raise HTTPException(500, "Chunk store failed")
+    await db.upload_sessions.update_one(
+        {"id": upload_id}, {"$addToSet": {"received": index}}
+    )
+    return {"index": index, "ok": True}
+
+
+@router.post("/uploads/chunked/{upload_id}/complete")
+async def chunked_complete(upload_id: str, current=Depends(require_user)):
+    sess = await db.upload_sessions.find_one(
+        {"id": upload_id, "user_id": current["id"]}, {"_id": 0}
+    )
+    if not sess:
+        raise HTTPException(404, "Upload session not found")
+    if sess.get("status") == "done":
+        raise HTTPException(400, "Upload already completed")
+    total = sess["total_parts"]
+    if len(set(sess.get("received", []))) != total:
+        missing = total - len(set(sess.get("received", [])))
+        raise HTTPException(400, f"Upload incomplete — {missing} part(s) missing")
+    await db.upload_sessions.update_one({"id": upload_id}, {"$set": {"status": "completing"}})
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{sess['ext']}")
+    tmp_path = tmp.name
+    tmp.close()
+    try:
+        with open(tmp_path, "wb") as out:
+            for i in range(total):
+                data, _ = get_object(build_part_path(upload_id, i))
+                out.write(data)
+        size = os.path.getsize(tmp_path)
+        final_path = build_path(current["id"], sess["filename"])
+        put_object_file(final_path, tmp_path, sess["content_type"])
+    except Exception as e:
+        logger.exception("Assembly/upload failed: %s", e)
+        await db.upload_sessions.update_one({"id": upload_id}, {"$set": {"status": "open"}})
+        raise HTTPException(500, "Could not finalize the upload")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+    for i in range(total):
+        delete_object(build_part_path(upload_id, i))
+
+    project_folder_id = sess.get("project_folder_id")
+    chat_id = sess.get("chat_id")
+    if not project_folder_id and chat_id:
+        chat = await db.chats.find_one(
+            {"id": chat_id, "workspace_id": current["workspace_id"]},
+            {"_id": 0, "project_folder_id": 1},
+        )
+        if chat:
+            project_folder_id = chat.get("project_folder_id")
+
+    content_type = sess["content_type"]
+    record = {
+        "id": new_id(),
+        "workspace_id": current["workspace_id"],
+        "uploaded_by": current["id"],
+        "storage_path": final_path,
+        "original_filename": sess["filename"],
+        "content_type": content_type,
+        "size": size,
+        "is_image": content_type.startswith("image/"),
+        "is_archive": sess["ext"] == "zip",
+        "is_deleted": False,
+        "chat_id": chat_id,
+        "project_folder_id": project_folder_id,
+        "created_at": now_iso(),
+    }
+    await db.files.insert_one(record.copy())
+    await db.upload_sessions.update_one({"id": upload_id}, {"$set": {"status": "done"}})
+    return {
+        "id": record["id"],
+        "url": f"/api/files/{record['id']}",
+        "filename": record["original_filename"],
+        "content_type": content_type,
+        "size": size,
+        "is_image": record["is_image"],
+        "is_archive": record["is_archive"],
+        "project_folder_id": project_folder_id,
+    }
+
+
+@router.post("/uploads/chunked/{upload_id}/abort")
+async def chunked_abort(upload_id: str, current=Depends(require_user)):
+    sess = await db.upload_sessions.find_one(
+        {"id": upload_id, "user_id": current["id"]}, {"_id": 0}
+    )
+    if sess:
+        for i in range(sess.get("total_parts", 0)):
+            delete_object(build_part_path(upload_id, i))
+        await db.upload_sessions.update_one(
+            {"id": upload_id}, {"$set": {"status": "aborted"}}
+        )
+    return {"ok": True}
 
 
 @router.get("/files/{file_id}")

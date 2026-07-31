@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { uploadFileChunked, CHUNKED_THRESHOLD } from "@/lib/chunkedUpload";
 import { createReconnectingWS } from "@/lib/ws";
 import { useAuth } from "@/context/AuthContext";
 
@@ -1109,6 +1110,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
 
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -1119,21 +1121,44 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const uploadFile = async (file) => {
     if (!file) return;
     setUploading(true);
+    setUploadPct(0);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      // Stamp the upload with the active chat so the backend can auto-link it
-      // to that chat's project folder (so it appears under the folder's
-      // Documents tab without any extra action).
-      if (chat?.id) form.append("chat_id", chat.id);
-      const { data } = await api.post("/uploads", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      let data;
+      if (file.size > CHUNKED_THRESHOLD || file.name.toLowerCase().endsWith(".zip")) {
+        // Large files + all ZIPs stream in parts to object storage (the simple
+        // endpoint doesn't accept .zip).
+        data = await uploadFileChunked(file, {
+          chatId: chat?.id,
+          onProgress: setUploadPct,
+        });
+      } else {
+        const form = new FormData();
+        form.append("file", file);
+        // Stamp the upload with the active chat so the backend can auto-link it
+        // to that chat's project folder (so it appears under the folder's
+        // Documents tab without any extra action).
+        if (chat?.id) form.append("chat_id", chat.id);
+        ({ data } = await api.post("/uploads", form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        }));
+      }
       setAttachments((prev) => [...prev, data]);
+      // A ZIP uploaded into a chat becomes a knowledge source linked to that
+      // chat, so @ai can answer questions about its contents (Phase 4).
+      if (data?.is_archive && chat?.id) {
+        api.post("/knowledge/sources", {
+          file_id: data.id,
+          chat_id: chat.id,
+          name: data.filename,
+        })
+          .then(() => toast.success("Indexing this ZIP so @ai can answer about it here"))
+          .catch(() => {});
+      }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Upload failed");
     } finally {
       setUploading(false);
+      setUploadPct(0);
     }
   };
 
@@ -1539,6 +1564,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onPickCamera={onPickCamera}
         onFileChange={onFileChange}
         uploading={uploading}
+        uploadPct={uploadPct}
         showAI={showAI}
         onCancelAI={() => setShowAI(false)}
         onAIResearch={onAIResearch}

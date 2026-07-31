@@ -289,6 +289,30 @@ async def complete(system_message: str, prompt: str, model_key: str = "claude") 
     return str(await chat.send_message(UserMessage(text=prompt)))
 
 
+async def vision_extract_text(image_bytes: bytes, model_key: str = "gemini") -> str:
+    """Best-effort OCR: pull readable text out of an image via a multimodal model
+    (Universal LLM key). Falls back to Gemini for non-multimodal keys."""
+    cfg = MODEL_CONFIG.get(model_key) or MODEL_CONFIG["gemini"]
+    if cfg.get("engine") != "emergent":
+        cfg = MODEL_CONFIG["gemini"]
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"ocr-{secrets.randbelow(1_000_000) + 1}",
+        system_message=(
+            "You extract text from images. Return ONLY the readable text in the "
+            "image, verbatim. If there is no readable text, describe the image in "
+            "one short sentence."
+        ),
+    ).with_model(cfg["provider"], cfg["model"])
+    resp = await chat.send_message(
+        UserMessage(
+            text="Extract all readable text from this image.",
+            file_contents=[ImageContent(image_base64=base64.b64encode(image_bytes).decode("utf-8"))],
+        )
+    )
+    return str(resp)
+
+
 async def extract_task(message_body: str, team_members: List[Dict]) -> Dict:
     """Use AI to convert a chat message into a structured task draft."""
     import json

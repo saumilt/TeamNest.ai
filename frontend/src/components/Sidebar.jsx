@@ -16,6 +16,7 @@ import {
         Building2,
         Plug,
         Brain,
+        FolderArchive,
         ChevronsUpDown,
         Check,
         LogOut,
@@ -291,6 +292,19 @@ export default function Sidebar() {
         >
           <Brain className="w-5 h-5 shrink-0" strokeWidth={1.8} />
           {!collapsed && <span className="truncate">AI Memory</span>}
+        </NavLink>
+        <NavLink
+          to="/knowledge"
+          data-testid="nav-knowledge"
+          title="Documents — upload a ZIP and ask AI about its contents"
+          className={({ isActive }) =>
+            `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
+              isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+            }`
+          }
+        >
+          <FolderArchive className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+          {!collapsed && <span className="truncate">Documents</span>}
         </NavLink>
         {(user?.role === "owner" || user?.role === "admin" || user?.is_super_admin) && (
           <NavLink

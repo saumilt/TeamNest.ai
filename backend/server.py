@@ -50,6 +50,7 @@ from routes import (
     imports,
     integrations,
     invites,
+    knowledge,
     launch,
     launch_admin,
     memory,
@@ -104,6 +105,7 @@ api.include_router(share.router)         # AI research /share endpoints
 api.include_router(tasks.router)
 api.include_router(dashboard.router)
 api.include_router(uploads.router)
+api.include_router(knowledge.router)
 api.include_router(integrations.router)
 api.include_router(invites.router)
 api.include_router(launch.router)

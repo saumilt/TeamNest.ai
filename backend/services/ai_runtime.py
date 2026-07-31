@@ -438,6 +438,15 @@ async def handle_ai_command(
             f"{history_ctx}")
     if prefix:
         prompt_question = "\n\n".join(prefix) + f"\n\n[Current question]\n{question}"
+    # Knowledge sources attached to this chat (e.g. an uploaded ZIP) — inject the
+    # most relevant excerpts so @ai can answer over their contents.
+    try:
+        from services.knowledge_search import knowledge_context
+        kctx = await knowledge_context(chat_id, question)
+        if kctx:
+            prompt_question = f"{prompt_question}\n\n{kctx}"
+    except Exception as e:
+        logger.warning("[ai] knowledge context failed: %s", e)
     image_bytes: Optional[list] = None
     # Merge attachments on THIS message with documents uploaded earlier in the
     # chat, so questions like "what's the expiry date on the doc I sent?" work.

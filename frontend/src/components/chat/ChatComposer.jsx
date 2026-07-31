@@ -45,6 +45,7 @@ export default function ChatComposer({
   onPickCamera,
   onFileChange,
   uploading,
+  uploadPct = 0,
   showAI,
   onCancelAI,
   onAIResearch,
@@ -378,7 +379,9 @@ export default function ChatComposer({
               {hasImageAttachment ? "Ask AI about photo" : "Ask AI"}
             </button>
             {uploading && (
-              <span className="text-[11px] text-brand ml-1">Uploading…</span>
+              <span className="text-[11px] text-brand ml-1" data-testid="upload-progress">
+                {uploadPct > 0 ? `Uploading ${uploadPct}%` : "Uploading…"}
+              </span>
             )}
           </div>
           <div className="flex items-end gap-2 relative">
