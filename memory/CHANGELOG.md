@@ -3,6 +3,14 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 128 (Jun 2026) — Budget Alerts (per-user AI credit nudge) — WEB + MOBILE — VERIFIED
+User wanted proactive cost control: a per-user AI credit budget with an in-app nudge when someone nears their cap (building on the existing 4-scope credit governance).
+- **Backend (`services/credit_governance.py`, `routes/credit_governance.py`)**: New `user_budget_status(workspace_id, user_id)` returns the caps applicable to the current user (personal/workspace/enterprise, chat excluded) with used/limit/remaining/pct, sorted tightest-first. New `GET /api/credit-governance/my-budget` → `{budgets, nearest}`. Extended `_notify_owners` so a **user-scope** cap crossing 80%/100% now ALSO notifies the affected member directly (previously only owners/admins were alerted) — deduped per period via `credit_cap_alerts`.
+- **Web (`components/BudgetNudge.jsx` in `AppShell`)**: slim dismissible bottom banner, polls `/my-budget` (60s + on `teamnest:credits-changed`), appears at ≥80%, amber (80–99%) / rose (100%), usage meter + "AI pauses at 100%" copy. Dismissal is per threshold-bucket (80→100 re-surfaces). testIDs: `budget-nudge`, `budget-nudge-dismiss`, `budget-nudge-usage`.
+- **Mobile parity (`src/components/BudgetNudge.tsx` in `(tabs)/_layout`)**: same banner floating above the tab bar, same thresholds/colors/copy, dismissal persisted via SecureStore. Same testIDs.
+- Verified: curl on `/my-budget` (0% → 90% after seeding a 630/700 personal cap), web screenshot (amber banner at 90%), mobile screenshot (amber banner above tabs). Test artifacts cleaned up afterward.
+
+
 ## Iteration 127 (Jun 2026) — Admin AI-usage daily trend chart — VERIFIED
 - **Web (`/app/backend/routes/admin.py` + `/app/frontend/src/pages/AdminDashboard.jsx`)**: New `GET /api/admin/ai-usage/trend?days=N` returns a zero-filled daily credit-spend series (`points[{date,credits,count}]`, plus `total_credits`, `peak_credits`) for the selected range. Added a recharts `AreaChart` ("Daily Credit Spend", yellow accent, custom dark tooltip, PEAK label) above the AI-usage table so spend spikes are visible at a glance. Trend fetched alongside the usage table in `loadUsage` (both react to the range selector). Loading shimmer + empty state handled. Backend curl-verified; chart screenshot-verified (Jul 8 spike, peak 5000).
 

@@ -138,6 +138,34 @@ async def caps_status(workspace_id: str) -> List[Dict[str, Any]]:
     return out
 
 
+async def user_budget_status(workspace_id: str, user_id: str) -> List[Dict[str, Any]]:
+    """Live budget status for the caps that apply to THIS user (for the in-app
+    nudge). Includes their personal (user) cap plus any workspace/enterprise cap
+    they're subject to; chat caps are excluded (not user-specific). Sorted by
+    the tightest (highest pct) first so the UI can nudge on the binding cap."""
+    caps = await list_caps(workspace_id)
+    since = await _period_start_iso(workspace_id)
+    labels = {"user": "your personal", "workspace": "the workspace", "enterprise": "the enterprise"}
+    out = []
+    for c in caps:
+        scope = c["scope"]
+        if scope == "chat":
+            continue
+        if scope == "user" and c["scope_id"] != user_id:
+            continue
+        limit = int(c["limit_credits"])
+        if limit <= 0:
+            continue
+        used = await _usage_for(workspace_id, scope, c["scope_id"], since)
+        out.append({
+            "scope": scope, "scope_id": c["scope_id"], "limit": limit, "used": used,
+            "remaining": max(0, limit - used), "pct": round(used / limit * 100),
+            "label": labels.get(scope, scope),
+        })
+    out.sort(key=lambda x: x["pct"], reverse=True)
+    return out
+
+
 
 async def enforce_caps(workspace_id: str, user_id: Optional[str], chat_id: Optional[str],
                        cost: int) -> None:
@@ -216,6 +244,23 @@ async def _notify_owners(workspace_id: str, cap: dict, label: str, used: int, li
                 o["id"], "credit_cap_alert", title, body,
                 meta={"scope": cap["scope"], "scope_id": cap["scope_id"],
                       "threshold": label, "used": used, "limit": limit},
+            )
+        except Exception:
+            pass
+    # Also nudge the affected member directly for their PERSONAL cap so cost
+    # control is proactive for the person spending (owners already covered above).
+    if cap["scope"] == "user" and cap["scope_id"] not in {o["id"] for o in owners}:
+        u_title = ("You've reached your AI credit limit" if label == "100%"
+                   else "You're nearing your AI credit limit")
+        u_body = (f"You've used {label} of your monthly AI credit budget "
+                  f"({used}/{limit} credits). "
+                  + ("Ask your workspace admin to raise it or wait for the monthly reset."
+                     if label == "100%" else "Heavy usage will pause AI once you hit 100%."))
+        try:
+            await create_notification(
+                cap["scope_id"], "credit_cap_alert", u_title, u_body,
+                meta={"scope": "user", "scope_id": cap["scope_id"], "threshold": label,
+                      "used": used, "limit": limit, "self": True},
             )
         except Exception:
             pass

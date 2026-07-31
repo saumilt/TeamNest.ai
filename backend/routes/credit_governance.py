@@ -21,6 +21,15 @@ class CapIn(BaseModel):
     limit_credits: int
 
 
+@router.get("/credit-governance/my-budget")
+async def my_budget(current=Depends(require_user)):
+    """Live budget status for the current user (drives the in-app nudge banner).
+    Returns every applicable cap plus the tightest one as `nearest`."""
+    budgets = await cg.user_budget_status(current["workspace_id"], current["id"])
+    nearest = budgets[0] if budgets else None
+    return {"budgets": budgets, "nearest": nearest}
+
+
 @router.get("/credit-governance/caps")
 async def list_caps(current=Depends(require_user)):
     _admin_only(current)

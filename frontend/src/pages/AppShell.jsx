@@ -7,6 +7,7 @@ import ChangelogModal from "@/components/ChangelogModal";
 import EmployeeCrossSell from "@/components/EmployeeCrossSell";
 import CreditSplash from "@/components/CreditSplash";
 import CreditsBadge from "@/components/CreditsBadge";
+import BudgetNudge from "@/components/BudgetNudge";
 import ForcePasswordChange from "@/components/ForcePasswordChange";
 import useUnreadTitle from "@/hooks/useUnreadTitle";
 
@@ -52,6 +53,7 @@ export default function AppShell() {
       <EmployeeCrossSell />
       <CreditSplash />
       <CreditsBadge />
+      <BudgetNudge />
     </div>
   );
 }
