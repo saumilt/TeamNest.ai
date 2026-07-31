@@ -25,6 +25,7 @@ import {
   HardDrive,
   AlertTriangle,
   TrendingUp,
+  Download,
 } from "lucide-react";
 
 const ROLES = ["owner", "admin", "member", "viewer", "guest"];
@@ -103,6 +104,31 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { if (isAdmin) loadUsage(); }, [isAdmin, usageGroupBy, usageDays]);
+
+  const [exporting, setExporting] = useState(false);
+  const exportUsageCsv = async () => {
+    setExporting(true);
+    try {
+      const { data } = await api.get("/admin/ai-usage/export", {
+        params: { group_by: usageGroupBy, days: usageDays },
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([data], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ai-usage-${usageGroupBy}-${usageDays}d.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("AI usage CSV downloaded");
+    } catch (e) {
+      console.warn("[admin ai-usage export]", e);
+      toast.error("Could not export AI usage");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -248,6 +274,15 @@ export default function AdminDashboard() {
                         {USAGE_RANGES.map((r) => <SelectItem key={r.value} value={String(r.value)} className="text-xs font-mono uppercase tracking-widest">{r.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    <button
+                      data-testid="admin-usage-export-btn"
+                      onClick={exportUsageCsv}
+                      disabled={exporting || usageLoading || !aiUsage?.rows?.length}
+                      className="h-8 inline-flex items-center gap-1.5 px-3 rounded-sm bg-yellow-500 text-black text-xs font-mono uppercase tracking-widest font-bold hover:bg-yellow-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      {exporting ? "Exporting…" : "Export CSV"}
+                    </button>
                   </div>
                 </div>
 

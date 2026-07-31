@@ -1,9 +1,12 @@
 """Admin dashboard analytics + user management (owner / admin only)."""
 import asyncio
+import csv
+import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from deps import PROJ, _ws_chat_ids, db, now_iso, public_user, require_user
@@ -41,7 +44,11 @@ async def admin_ai_usage(
     """Owner/Admin only — AI credit usage broken down by user / chat / model / date."""
     if current["role"] not in ("owner", "admin"):
         raise HTTPException(403, "Admin only")
-    ws_id = current["workspace_id"]
+    return await _compute_ai_usage(current["workspace_id"], group_by, days)
+
+
+async def _compute_ai_usage(ws_id: str, group_by: str, days: int) -> dict:
+    """Aggregate AI credit usage for a workspace, grouped and labelled."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     rows: dict = {}
     total = 0
@@ -81,6 +88,33 @@ async def admin_ai_usage(
             r["label"] = r["key"] or "Unknown"
     out.sort(key=lambda r: r["credits"], reverse=True)
     return {"group_by": group_by, "days": days, "total_credits": total, "rows": out}
+
+
+@router.get("/admin/ai-usage/export")
+async def admin_ai_usage_export(
+    group_by: str = Query("user", regex="^(user|chat|model|date)$"),
+    days: int = Query(30, ge=1, le=365),
+    current=Depends(require_user),
+):
+    """Owner/Admin only — download the AI credit usage breakdown as CSV."""
+    if current["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Admin only")
+    data = await _compute_ai_usage(current["workspace_id"], group_by, days)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    label_col = {"user": "User", "chat": "Chat", "model": "Model", "date": "Date"}[group_by]
+    writer.writerow(["Rank", label_col, "Key", "Credits", "Calls"])
+    for i, r in enumerate(data["rows"], start=1):
+        writer.writerow([i, r.get("label", ""), r.get("key", ""), r["credits"], r["count"]])
+    writer.writerow([])
+    writer.writerow(["Total credits", "", "", data["total_credits"], ""])
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"ai-usage-{group_by}-{days}d-{stamp}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 async def _member_user_ids(workspace_id: str) -> list:

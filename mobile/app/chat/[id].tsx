@@ -423,7 +423,7 @@ export default function ChatScreen() {
         setAttachments((prev) => [...prev, data]);
         apiPost("/api/knowledge/sources", { file_id: data.id, chat_id: chatId, name: data.filename })
           .then(() => { reloadChatKnowledge(); Alert.alert("Indexing ZIP", "@ai will be able to answer about this archive shortly."); })
-          .catch(() => {});
+          .catch((err: any) => Alert.alert("Indexing failed", err?.message || "Could not index that ZIP."));
         return;
       }
       const data = await apiUpload("/api/uploads", asset, { chat_id: chatId });
@@ -449,6 +449,10 @@ export default function ChatScreen() {
           name: a.name || "file",
           type: a.mimeType || "application/octet-stream",
           size: a.size,
+          // Preserve the Blob DocumentPicker returns on web; uploadZipChunked
+          // needs it to take the web-slice path (blob: URIs aren't readable by
+          // expo-file-system). Dropping it silently broke in-chat ZIP uploads.
+          file: (a as any).file,
         });
       }
     } catch (e: any) {
