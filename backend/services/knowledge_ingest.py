@@ -19,6 +19,7 @@ import tiktoken
 
 from ai_service import vision_extract_text
 from deps import db, logger, new_id, now_iso
+from services.embeddings import embed_texts, embeddings_enabled
 from services.file_extract import extract_one
 from storage import get_object
 
@@ -236,13 +237,23 @@ async def _store_chunks(src: dict, file_id: str, path: str, text: str, start_ind
     chunks = _chunk_text(text)
     if not chunks:
         return 0
+    vectors: list = []
+    if embeddings_enabled():
+        try:
+            vectors = await embed_texts(chunks)
+        except Exception as e:
+            logger.warning("[knowledge] embedding failed for %s: %s", path, e)
+            vectors = []
     docs = []
     for idx, ch in enumerate(chunks):
-        docs.append({
+        doc = {
             "id": new_id(), "source_id": src["id"], "workspace_id": src["workspace_id"],
             "chat_id": src.get("chat_id"), "file_id": file_id, "file_path": path,
             "chunk_index": start_index + idx, "text": ch, "created_at": now_iso(),
-        })
+        }
+        if vectors and idx < len(vectors):
+            doc["embedding"] = vectors[idx]
+        docs.append(doc)
     if docs:
         await db.knowledge_chunks.insert_many(docs)
     return len(docs)

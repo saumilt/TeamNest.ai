@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from ai_service import complete
 from deps import db, logger
+from services.embeddings import cosine_top_k, embed_query, embeddings_enabled
 
 # Ask param -> internal MODEL_CONFIG key.
 ASK_MODELS = {"claude": "claude", "chatgpt": "chatgpt"}
@@ -22,6 +23,27 @@ _ANSWER_SYSTEM = (
     "brackets like [report.pdf]. If the answer is not contained in the excerpts, "
     "say you could not find it in the uploaded documents. Be concise and specific."
 )
+
+
+async def _semantic_search(match: dict, question: str, k: int):
+    """Vector retrieval via OpenAI embeddings; returns None when unavailable so
+    the caller can fall back to keyword search."""
+    if not embeddings_enabled():
+        return None
+    try:
+        qv = await embed_query(question)
+        if not qv:
+            return None
+        rows = await db.knowledge_chunks.find(
+            {**match, "embedding": {"$exists": True}},
+            {"_id": 0, "text": 1, "file_path": 1, "chunk_index": 1, "embedding": 1},
+        ).limit(5000).to_list(5000)
+        if not rows:
+            return None
+        return cosine_top_k(qv, rows, k)
+    except Exception as e:
+        logger.warning("[knowledge] semantic search failed: %s", e)
+        return None
 
 
 async def _text_search(match: dict, question: str, k: int) -> List[dict]:
@@ -43,6 +65,14 @@ async def _text_search(match: dict, question: str, k: int) -> List[dict]:
     return await cur.to_list(k)
 
 
+async def _retrieve(match: dict, question: str, k: int) -> List[dict]:
+    """Semantic retrieval first (if embeddings available + present), else keyword."""
+    sem = await _semantic_search(match, question, k)
+    if sem:
+        return sem
+    return await _text_search(match, question, k)
+
+
 def _build_prompt(question: str, chunks: List[dict]) -> str:
     excerpts = "\n\n---\n\n".join(
         f"[{c.get('file_path', 'file')}]\n{(c.get('text') or '')[:1500]}" for c in chunks
@@ -55,7 +85,7 @@ def _build_prompt(question: str, chunks: List[dict]) -> str:
 
 
 async def ask_source(source_id: str, question: str, model: str = DEFAULT_ASK_MODEL, k: int = 8) -> dict:
-    chunks = await _text_search({"source_id": source_id}, question, k)
+    chunks = await _retrieve({"source_id": source_id}, question, k)
     if not chunks:
         return {"answer": "This source has no indexed content yet.", "citations": [], "model": model}
     model_key = ASK_MODELS.get(model, DEFAULT_ASK_MODEL)
@@ -78,7 +108,7 @@ async def knowledge_context(chat_id: str, question: str, k: int = 5) -> Optional
     )
     if not src_ids:
         return None
-    chunks = await _text_search({"source_id": {"$in": src_ids}}, question, k)
+    chunks = await _retrieve({"source_id": {"$in": src_ids}}, question, k)
     if not chunks:
         return None
     excerpts = "\n\n".join(

@@ -1,0 +1,44 @@
+{
+  "summary": "Mobile-focused frontend testing for TeamNest.ai ZIP-RAG follow-up. Login works. Documents screen at /documents renders correctly when reached via in-app You→Documents nav (5 ready sources listed, upload button, delete icons, status labels all present with correct testIDs). CRITICAL: chat-knowledge-chip does NOT render on mobile chat header even though the backend API returns 3 ready sources for chat d77a7d2a — root cause is an auth-timing bug: the chip's data hook (reloadChatKnowledge) fires on mount before the JWT is hydrated by AuthProvider, gets 401, silently sets chatKnowledge=[] and never retries. The same auth-timing pattern also breaks /documents when opened via direct URL (works fine via in-app nav because the module-level _token is already set in memory). Because the chat chip never rendered, its tap-to-navigate behavior and the paraphrased-question / model chips / documents-answer / documents-citations flow could not be end-to-end validated on mobile in this session (blocked by the chip + timing).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+    "mobile": {
+      "ui_bugs": [
+        {"component": "ChatHeader knowledge chip", "issue": "chat-knowledge-chip is NEVER rendered on the mobile chat screen even for a chat with 3 ready ZIP sources (backend GET /api/knowledge/sources?chat_id=<id> returns 200 with count=3, ready=3). Fetched via page.evaluate in the same session it works, but the app's own reloadChatKnowledge call returns 401 -> catches -> leaves chatKnowledge=[].", "testID": "chat-knowledge-chip", "priority": "HIGH"},
+        {"component": "Documents screen (direct URL)", "issue": "Opening /documents by direct URL shows 'No documents yet' with 401 in console. Same auth-timing race — useFocusEffect calls apiGet('/api/knowledge/sources') before the auth token is hydrated from localStorage. Works fine when reached via You tab → Documents (5 sources appear).", "testID": "documents-empty", "priority": "MEDIUM"}
+      ],
+      "integration_issues": [
+        {"flow": "Chat header ZIP chip", "issue": "Chip never renders → user cannot see 'AI knows N ZIPs' status and cannot tap it to jump to Documents. Blocks the promised UX.", "affected_testIDs": ["chat-knowledge-chip"]}
+      ],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "expo package version", "issue": "Metro logs repeatedly warn: expo@54.0.35 installed but expected ~54.0.36. Also mobile supervisor was FATAL earlier this session ('Command \"expo\" not found') until a restart succeeded — please investigate stability. Reference: /var/log/supervisor/mobile.err.log"}
+      ]
+    }
+  },
+  "parity_issues": [
+    {"flow": "Chat header 'AI knows this ZIP' chip", "platform": "mobile", "issue": "Web renders the chip correctly (prior iteration verified). Mobile chip never renders due to auth-timing race in reloadChatKnowledge.", "expected": "Chip 'AI knows 3 ZIPs' visible in mobile chat header, tap → /documents", "actual": "No chip at all"}
+  ],
+  "test_report_links": ["/app/test_reports/iteration_124.json"],
+  "action_items": [
+    "MOBILE bug fix (HIGH): in /app/mobile/app/chat/[id].tsx lines 173-190, gate reloadChatKnowledge on `authLoading` + `token` from useAuth() (same pattern used at line 302-306 for the main chat fetch). Add `token` (or authLoading) to useCallback/useEffect deps so the fetch re-runs once auth is hydrated. Currently it silently 401s once and never retries.",
+    "MOBILE bug fix (MEDIUM): in /app/mobile/app/documents/index.tsx, gate the initial load() call (line 41-48 useFocusEffect) on auth being ready. Otherwise a direct URL / deep-link load into /documents shows an empty state until the user navigates away and back. Same fix inside SourceDetail's load (line 197-203).",
+    "Retest after fixes: verify (1) chip renders + tap → /documents; (2) paraphrased ask flow (documents-ask-input + documents-model-claude/chatgpt + documents-ask-btn → documents-answer + documents-citations); (3) zip-in-chat upload alert + chip transitions indexing → ready.",
+    "Investigate mobile supervisor stability — 'expo command not found' FATAL required a manual restart before testing could proceed. Suggest fixing the version mismatch (expo 54.0.35 → ~54.0.36) or the yarn/node PATH issue.",
+    "Not blocking, but the mobile chat screen has TWO separate useEffects that fetch chat data — one gated on token (line 302), one not (line 183). Recommend consolidating so all initial fetches share the same 'wait for auth' guard. Same DRY concern exists for pollingUseEffect (line 374) which also doesn't gate on token."
+  ],
+  "critical_code_review_comments": [
+    "Auth-timing race is a recurring pattern across mobile screens. Consider a `useAuthedEffect` helper or hoisting the token check into apiGet/apiPost with a small retry-once-when-token-arrives queue so screens don't each need to remember to gate. Currently the fix has to be applied per-screen (chat, documents, likely others).",
+    "reloadChatKnowledge uses a plain try/catch that swallows ALL errors identically — a 401 (auth not ready) and a genuine 500 both silently produce an empty chip. Consider distinguishing: on 401, retry after auth hydration; on other errors, surface at least a debug log."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "~55% (Documents UI works via in-app nav; chat chip broken; ask/answer/citations not exercised end-to-end due to chip block)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (works on mobile Expo web preview; token key: tn_token in localStorage)",
+  "seed_data_creation": "None. Used existing knowledge sources in chat d77a7d2a (Semantic KB, Chat KB, chatzip.zip x2, test.zip — 5 total, all Ready).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile supervisor was FATAL at start of session and required manual `sudo supervisorctl restart mobile` — check status first (`sudo supervisorctl status mobile`) and restart if not RUNNING. Auth flow: mobile stores JWT in localStorage under key `tn_token`. IMPORTANT: navigate through the app (Login → home → You tab → Documents / Chat) rather than direct URL, because reloadChatKnowledge + Documents' load do NOT wait for auth token hydration on a cold page load, resulting in 401 that isn't retried. Direct API test confirmed backend returns 3 ready sources for chat d77a7d2a and 5 total sources. Paraphrased-ask semantic flow was not exercised end-to-end on mobile in this run.",
+  "rca of the issue": "Root cause of missing mobile chat-knowledge-chip: /app/mobile/app/chat/[id].tsx line 183-185 useEffect runs reloadChatKnowledge() on mount without gating on authLoading/token from useAuth(). Because the module-level _token in /app/mobile/src/api.ts is null on a fresh reload until AuthProvider rehydrates from AsyncStorage/localStorage, the very first /api/knowledge/sources?chat_id=... request goes out without an Authorization header and gets 401. The best-effort try/catch swallows it, setChatKnowledge stays [], and there's no dependency on token so the effect never re-runs. Fix: mirror line 302-306's pattern — early-return in the useEffect when authLoading || !token, and add token/authLoading to the dep array. Same story for /app/mobile/app/documents/index.tsx's useFocusEffect. Reproduction: (1) log in on mobile Expo preview, (2) reload the browser directly at /chat/<id>, (3) observe 401 in console for /api/knowledge/sources and no chip in header; then navigate via home → tab → chat and the chip still won't appear because the useEffect ran once with a null token on the reload. Only route that currently works is: never full-reload after login."
+}
