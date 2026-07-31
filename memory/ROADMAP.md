@@ -8,6 +8,8 @@
 ## P2
 - (DONE iter 79) Site importer — URL/domain detection + content/color extraction into codegen context.
 - (DONE iter 82) Expand Template gallery — booking + real_estate_crm one-click code templates (3 total incl. ap_ledger).
+- (DONE iter 126) Admin AI-usage CSV export (GET /api/admin/ai-usage/export + Export CSV button, respects group_by + range).
+- (P1, pending) Replace MOCKED Slack & CRM connectors with real integrations once user provides credentials.
 
 ## Future / Backlog
 - (DONE iter 80) Custom domain routing (p-resolve + frontend bootstrap + Release tab UI).

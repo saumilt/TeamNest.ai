@@ -3,6 +3,12 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 126 (Jun 2026) — P0 mobile ZIP-in-chat fix + P2 Admin AI-usage CSV export — BOTH VERIFIED
+- **P0 (mobile, `/app/mobile/app/chat/[id].tsx`)**: In-chat ZIP upload was silently failing on Expo web preview because `pickDocument` rebuilt the DocumentPicker asset and dropped its `.file` Blob, so `uploadZipChunked` fell out of the web branch. Fixed by forwarding `file: (a as any).file` so both native + web paths work. Also replaced the silent `.catch(() => {})` on `POST /api/knowledge/sources` with a visible "Indexing failed" Alert. Testing agent verified: attach .zip → chunked init/part/complete → chat-linked source created → chip transitions to "AI knows this ZIP".
+- **P2 (web, `/app/backend/routes/admin.py` + `/app/frontend/src/pages/AdminDashboard.jsx`)**: New `GET /api/admin/ai-usage/export` returns the AI credit-usage breakdown as CSV (respects `group_by` user/model/chat/date + `days` 7/30/90/365, includes a Total credits line, `Content-Disposition` attachment). Refactored the shared aggregation into `_compute_ai_usage()`. Added an "Export CSV" button (`admin-usage-export-btn`) in the AI Usage tab that downloads via a Blob and toasts on success; disabled when no rows/loading. Testing agent verified both group_bys + filename respects selectors.
+
+
+
 ## Iteration 123 (Jul 2026) — Large-file uploads + ZIP Knowledge/Documents (RAG) — WEB — COMPLETE
 User asked to raise the upload limit (~1GB) and let a ZIP be parsed + queried by AI. Delivered in 4 phases (web-first, all tested):
 **Phase 1 — Chunked/resumable upload + accept .zip** (`routes/uploads.py`, `storage.py`, `lib/chunkedUpload.js`):
