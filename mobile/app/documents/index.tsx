@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiDelete, apiGet, apiPost } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { MOBILE_MAX_SIZE, uploadZipChunked } from "@/src/chunkedUpload";
 import { Markdown } from "@/src/markdown";
 import { colors, font, radius, spacing } from "@/src/theme";
@@ -24,6 +25,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
+  const { token, loading: authLoading } = useAuth();
   const [sources, setSources] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
@@ -39,13 +41,14 @@ export default function DocumentsScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    if (authLoading || !token) return;
     load();
     const anyProcessing = sources.some((s) => s.status === "processing");
     if (!anyProcessing) return;
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, sources.length]));
+  }, [load, sources.length, authLoading, token]));
 
   const pickAndUpload = async () => {
     try {

@@ -165,8 +165,9 @@ export default function ChatScreen() {
   // Reload discussions on open + whenever a new AI answer lands.
   const aiAnswerCount = messages.filter((m) => m.message_type === "ai_answer").length;
   useEffect(() => {
+    if (authLoading || !token) return;
     reloadDiscussions();
-  }, [reloadDiscussions, aiAnswerCount]);
+  }, [reloadDiscussions, aiAnswerCount, authLoading, token]);
 
   // Knowledge sources (uploaded ZIPs) attached to this chat — powers the header
   // "AI knows this ZIP" chip and lets @ai answer over the archive.
@@ -181,8 +182,11 @@ export default function ChatScreen() {
     }
   }, [chatId]);
   useEffect(() => {
+    // Wait for the stored JWT to rehydrate, else a cold deep-link 401s and the
+    // chip never renders.
+    if (authLoading || !token) return;
     reloadChatKnowledge();
-  }, [reloadChatKnowledge]);
+  }, [reloadChatKnowledge, authLoading, token]);
   useEffect(() => {
     if (!chatKnowledge.some((s) => s.status === "processing")) return;
     const t = setInterval(reloadChatKnowledge, 4000);
