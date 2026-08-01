@@ -3,6 +3,17 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 129 (Jun 2026) — Fix: workspace invitations never emailed + secure provisioning — VERIFIED
+Production bug: an invited member ("Milan") received no invitation email. RCA: **Mailgun was fine** (domain `teamnest.ai` active/verified, live send queued OK) — the real gap was that `POST /workspace/invite` created the account but **never called the email service** (and provisioned brand-new users with a shared hardcoded password `Invite@2026`, no notification).
+- **`routes/workspace.py`**: `invite_member` now (a) for a brand-new email: creates the user with a **secure random** bcrypt password + `must_change_password` + `status=invited`, mints a single-use **7-day** set-password token (reusing `password_reset_tokens`, `kind="invite"`), and fire-and-forget emails a branded invite via Mailgun with a `/reset-password?token=` link; (b) for an existing user added to the workspace: sends a "you've been added" email + the existing in-app reminder. New helper `_issue_invite_link`.
+- **New `POST /workspace/invite/{user_id}/resend`** (owner/admin): re-issues the token + re-sends the invite email (returns 503 if Mailgun unconfigured). Unblocks already-invited members like Milan.
+- **New `services/invite_email.py`**: `send_invite_email` + `send_added_email` (dark/yellow branded, Mailgun with Resend stub fallback).
+- **`routes/auth.py` `reset_password`**: now also clears `must_change_password` and, for `kind="invite"` tokens, flips the user + workspace membership `invited → active` — so invitees aren't double-prompted and show as active after accepting.
+- **Web `TeamAdmin.jsx` + `MembersTable.jsx`**: invite toast now says "Invitation email sent to …"; added an ACTION column with a **Resend** button for members still `invited`/`must_change_password` (`member-resend-<id>`).
+- Verified end-to-end via curl: invite → Mailgun `[invite-email] sent id=<…@teamnest.ai>`; 7-day invite token created; resend re-queues; accept via `/auth/reset-password` sets password + activates user & membership; login returns HTTP 200. Test user cleaned up afterward. Team page screenshot renders the new Action column.
+- **Unblock for existing Milan (prod):** on the Team page, click **Resend** on his row → he gets a fresh set-password email. (Old accounts created with `Invite@2026` are unaffected until re-invited.)
+
+
 ## Iteration 128 (Jun 2026) — Budget Alerts (per-user AI credit nudge) — WEB + MOBILE — VERIFIED
 User wanted proactive cost control: a per-user AI credit budget with an in-app nudge when someone nears their cap (building on the existing 4-scope credit governance).
 - **Backend (`services/credit_governance.py`, `routes/credit_governance.py`)**: New `user_budget_status(workspace_id, user_id)` returns the caps applicable to the current user (personal/workspace/enterprise, chat excluded) with used/limit/remaining/pct, sorted tightest-first. New `GET /api/credit-governance/my-budget` → `{budgets, nearest}`. Extended `_notify_owners` so a **user-scope** cap crossing 80%/100% now ALSO notifies the affected member directly (previously only owners/admins were alerted) — deduped per period via `credit_cap_alerts`.

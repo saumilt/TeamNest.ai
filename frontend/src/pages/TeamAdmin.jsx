@@ -71,14 +71,23 @@ export default function TeamAdmin() {
       const { data } = await api.post("/workspace/invite", { name, email, role });
       toast.success(
         data?.added_to_existing_user
-          ? `${data.name} already had a TeamNest account — added them to your workspace.`
-          : "Member invited"
+          ? `${data.name} already had a TeamNest account — added them and emailed a heads-up.`
+          : `Invitation email sent to ${email}`
       );
       setShowInvite(false);
       setName(""); setEmail(""); setRole("member");
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Invite failed");
+    }
+  };
+
+  const resendInvite = async (member) => {
+    try {
+      await api.post(`/workspace/invite/${member.id}/resend`);
+      toast.success(`Invitation re-sent to ${member.email}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not resend invite");
     }
   };
 
@@ -147,7 +156,7 @@ export default function TeamAdmin() {
         role={user?.role}
       />
 
-      <MembersTable members={members} />
+      <MembersTable members={members} canManage={canInviteByEmail} onResend={resendInvite} />
 
       <InviteByEmailDialog
         open={showInvite}

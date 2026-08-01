@@ -1,4 +1,10 @@
 """Workspace info, members, invites, multi-workspace switch."""
+import asyncio
+import hashlib
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -15,6 +21,7 @@ from deps import (
     require_user,
 )
 from models import AddExistingMember, InviteMember, WorkspaceCreate, WorkspaceSwitch, WorkspaceTransferOwnership
+from services.invite_email import send_added_email, send_invite_email
 from services.workspace_membership import (
     ensure_membership,
     list_user_workspaces,
@@ -22,6 +29,34 @@ from services.workspace_membership import (
 )
 
 router = APIRouter()
+
+# Invite set-password links live longer than a normal 1-hour reset link.
+INVITE_TOKEN_TTL_DAYS = 7
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
+
+
+def _app_base() -> str:
+    return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+
+
+async def _issue_invite_link(user_id: str) -> str:
+    """Mint a single-use, 7-day set-password token (password_reset_tokens) and
+    return the absolute set-password URL the invitee clicks."""
+    raw = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "id": new_id(),
+        "user_id": user_id,
+        "token_hash": _hash_token(raw),
+        "used": False,
+        "created_at": now,
+        "expires_at": now + timedelta(days=INVITE_TOKEN_TTL_DAYS),
+        "kind": "invite",
+    })
+    return f"{_app_base()}/reset-password?token={raw}"
 
 
 @router.get("/workspace")
@@ -57,6 +92,9 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
     if current.get("role") not in ("owner", "admin"):
         raise HTTPException(403, "Only owner/admin can invite")
     email_lower = payload.email.lower()
+    ws = await db.workspaces.find_one({"id": current["workspace_id"]}, {"_id": 0, "name": 1})
+    ws_name = (ws or {}).get("name", "the workspace")
+    inviter_name = current.get("name") or current.get("email") or "A teammate"
     existing = await db.users.find_one({"email": email_lower})
     if existing:
         # User already exists — add them to this workspace as an additional
@@ -68,39 +106,86 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
         if already and already.get("status") != "removed":
             raise HTTPException(400, "User is already a member of this workspace")
         await ensure_membership(existing["id"], current["workspace_id"], role=payload.role)
-        ws = await db.workspaces.find_one(
-            {"id": current["workspace_id"]}, {"_id": 0, "name": 1}
-        )
-        ws_name = (ws or {}).get("name", "the workspace")
         # Drop a reminder in their currently-active workspace's personal AI
-        # chat so they actually see it.
+        # chat so they actually see it, AND email them a heads-up.
         await _post_reminder(
             existing["id"],
             f'{current["name"]} added you to "{ws_name}". '
             "Switch workspaces from your sidebar to view it.",
             {"id": current["workspace_id"]},
         )
+        asyncio.create_task(send_added_email(
+            name=existing.get("name"), email=email_lower, workspace=ws_name,
+            inviter=inviter_name, link=f"{_app_base()}/login",
+        ))
         return {
             **public_user(existing),
             "role": payload.role,
             "added_to_existing_user": True,
+            "email_sent": True,
         }
-    # Brand-new email — create user.
+    # Brand-new email — create user with a secure random password (never a
+    # shared/guessable one) and force a password change on first login. They
+    # set their real password via the emailed invite link.
     user = {
         "id": new_id(),
         "name": payload.name,
         "email": email_lower,
-        "password_hash": hash_password("Invite@2026"),
+        "password_hash": hash_password(secrets.token_urlsafe(24)),
         "avatar": None,
         "role": payload.role,
         "workspace_id": current["workspace_id"],
         "status": "invited",
+        "must_change_password": True,
+        "temp_password_issued_at": now_iso(),
+        "invited_by": current["id"],
         "created_at": now_iso(),
     }
     await db.users.insert_one(user.copy())
     await ensure_membership(user["id"], current["workspace_id"], role=payload.role, status="invited")
     await ensure_personal_ai_chat(user["id"], current["workspace_id"])
-    return public_user(user)
+
+    link = await _issue_invite_link(user["id"])
+    asyncio.create_task(send_invite_email(
+        name=payload.name, email=email_lower, workspace=ws_name,
+        inviter=inviter_name, link=link,
+    ))
+    return {**public_user(user), "email_sent": True}
+
+
+@router.post("/workspace/invite/{user_id}/resend")
+async def resend_invite(user_id: str, current=Depends(require_user)):
+    """Re-send the invitation email to a member who hasn't accepted yet."""
+    if current.get("role") not in ("owner", "admin"):
+        raise HTTPException(403, "Only owner/admin can resend invites")
+    member = await db.workspace_members.find_one(
+        {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"_id": 0},
+    )
+    if not member or member.get("status") == "removed":
+        raise HTTPException(404, "Member not found in this workspace")
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    ws = await db.workspaces.find_one({"id": current["workspace_id"]}, {"_id": 0, "name": 1})
+    ws_name = (ws or {}).get("name", "the workspace")
+    inviter_name = current.get("name") or current.get("email") or "A teammate"
+
+    # Only pending/provisioned accounts get a fresh set-password link; users who
+    # already own a password just get the "you've been added" nudge.
+    if user.get("must_change_password") or user.get("status") == "invited":
+        link = await _issue_invite_link(user_id)
+        res = await send_invite_email(
+            name=user.get("name"), email=user["email"], workspace=ws_name,
+            inviter=inviter_name, link=link,
+        )
+    else:
+        res = await send_added_email(
+            name=user.get("name"), email=user["email"], workspace=ws_name,
+            inviter=inviter_name, link=f"{_app_base()}/login",
+        )
+    if not res.get("ok") and res.get("reason") == "not_configured":
+        raise HTTPException(503, "Email is not configured — set MAILGUN_* env vars to send invites.")
+    return {"ok": bool(res.get("ok")), "email": user["email"], "reason": res.get("reason")}
 
 
 # ---- Multi-workspace switcher ----

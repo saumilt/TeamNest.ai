@@ -199,8 +199,18 @@ async def reset_password(payload: ResetPasswordRequest):
 
     await db.users.update_one(
         {"id": rec["user_id"]},
-        {"$set": {"password_hash": hash_password(payload.password)}},
+        {"$set": {"password_hash": hash_password(payload.password),
+                  "must_change_password": False}},
     )
+    # Accepting an invite link (kind="invite") also activates the account +
+    # membership so the invitee isn't stuck showing as "invited".
+    if rec.get("kind") == "invite":
+        await db.users.update_one(
+            {"id": rec["user_id"], "status": "invited"}, {"$set": {"status": "active"}}
+        )
+        await db.workspace_members.update_many(
+            {"user_id": rec["user_id"], "status": "invited"}, {"$set": {"status": "active"}}
+        )
     await db.password_reset_tokens.update_one(
         {"id": rec["id"]}, {"$set": {"used": True, "used_at": now_iso()}}
     )
