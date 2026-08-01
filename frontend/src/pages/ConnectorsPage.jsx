@@ -6,6 +6,7 @@ import {
   Check, X, ScrollText, Sparkles, Lock,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import SlackPanel from "@/components/connectors/SlackPanel";
 
 const CAT_ICON = { Email: Mail, CRM: Building2, Chat: MessageSquare, Files: FolderOpen };
 
@@ -280,6 +281,8 @@ export default function ConnectorsPage() {
         <div className="inline-flex items-center gap-2 text-xs text-ink-dim bg-surface border border-line rounded-full px-3 py-1 mb-6">
           <Lock className="w-3 h-3 text-emerald-400" /> Connect with OAuth. Never share your password with TeamNest.
         </div>
+
+        <SlackPanel />
 
         {Object.entries(grouped).map(([cat, providers]) => {
           const CatIcon = CAT_ICON[cat] || Plug;

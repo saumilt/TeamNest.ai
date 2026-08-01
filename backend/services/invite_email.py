@@ -9,9 +9,42 @@ Two flavours:
 Fire-and-forget. Errors are logged, never raised — inviting must not fail
 because email is down.
 """
+import hashlib
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from deps import logger
+from deps import db, logger, new_id
+
+# Invite set-password links live longer than a normal 1-hour reset link.
+INVITE_TOKEN_TTL_DAYS = 7
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
+
+
+def _app_base() -> str:
+    return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+
+
+async def mint_invite_link(user_id: str) -> str:
+    """Mint a single-use, 7-day set-password token (password_reset_tokens,
+    kind="invite") and return the absolute set-password URL the invitee clicks.
+    Shared by the invite endpoint and the expiry-reminder loop."""
+    raw = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "id": new_id(),
+        "user_id": user_id,
+        "token_hash": _hash_token(raw),
+        "used": False,
+        "created_at": now,
+        "expires_at": now + timedelta(days=INVITE_TOKEN_TTL_DAYS),
+        "kind": "invite",
+    })
+    return f"{_app_base()}/reset-password?token={raw}"
 
 _INVITE_HTML = """\
 <html><body style="background:#0F0F12;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#e5e5e5;padding:32px 16px;">
@@ -68,6 +101,7 @@ _ADDED_TEXT = (
 
 async def send_invite_email(
     *, name: str, email: str, workspace: str, inviter: str, link: str,
+    reminder: bool = False,
 ) -> Dict[str, Any]:
     if not email:
         return {"ok": False, "reason": "no_email"}
@@ -75,17 +109,22 @@ async def send_invite_email(
     safe_name = (name or "there").strip() or "there"
     ctx = {"name": safe_name, "email": email, "workspace": workspace or "a workspace",
            "inviter": inviter or "A teammate", "link": link}
+    if reminder:
+        subject = f"Reminder: your invite to {ctx['workspace']} is expiring soon"
+    else:
+        subject = f"{ctx['inviter']} invited you to {ctx['workspace']} on TeamNest"
     res = await mailgun_service.send_email(
         to=[email],
-        subject=f"{ctx['inviter']} invited you to {ctx['workspace']} on TeamNest",
+        subject=subject,
         html=_INVITE_HTML.format(**ctx),
         text=_INVITE_TEXT.format(**ctx),
-        tags={"source": "workspace_invite"},
+        tags={"source": "workspace_invite_reminder" if reminder else "workspace_invite"},
     )
     if not res.get("ok"):
         logger.warning("[invite-email] not sent to %s: %s", email, res.get("reason"))
     else:
-        logger.info("[invite-email] sent to %s · id=%s", email, res.get("id"))
+        logger.info("[invite-email%s] sent to %s · id=%s",
+                    " reminder" if reminder else "", email, res.get("id"))
     return res
 
 

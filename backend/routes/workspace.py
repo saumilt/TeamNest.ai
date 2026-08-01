@@ -1,9 +1,7 @@
 """Workspace info, members, invites, multi-workspace switch."""
 import asyncio
-import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -21,7 +19,7 @@ from deps import (
     require_user,
 )
 from models import AddExistingMember, InviteMember, WorkspaceCreate, WorkspaceSwitch, WorkspaceTransferOwnership
-from services.invite_email import send_added_email, send_invite_email
+from services.invite_email import mint_invite_link, send_added_email, send_invite_email
 from services.workspace_membership import (
     ensure_membership,
     list_user_workspaces,
@@ -30,33 +28,13 @@ from services.workspace_membership import (
 
 router = APIRouter()
 
-# Invite set-password links live longer than a normal 1-hour reset link.
-INVITE_TOKEN_TTL_DAYS = 7
-
-
-def _hash_token(raw: str) -> str:
-    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
-
 
 def _app_base() -> str:
     return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
 
 
 async def _issue_invite_link(user_id: str) -> str:
-    """Mint a single-use, 7-day set-password token (password_reset_tokens) and
-    return the absolute set-password URL the invitee clicks."""
-    raw = secrets.token_urlsafe(32)
-    now = datetime.now(timezone.utc)
-    await db.password_reset_tokens.insert_one({
-        "id": new_id(),
-        "user_id": user_id,
-        "token_hash": _hash_token(raw),
-        "used": False,
-        "created_at": now,
-        "expires_at": now + timedelta(days=INVITE_TOKEN_TTL_DAYS),
-        "kind": "invite",
-    })
-    return f"{_app_base()}/reset-password?token={raw}"
+    return await mint_invite_link(user_id)
 
 
 @router.get("/workspace")

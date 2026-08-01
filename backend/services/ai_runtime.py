@@ -440,6 +440,7 @@ async def handle_ai_command(
         prompt_question = "\n\n".join(prefix) + f"\n\n[Current question]\n{question}"
     # Knowledge sources attached to this chat (e.g. an uploaded ZIP) — inject the
     # most relevant excerpts so @ai can answer over their contents.
+    kctx = None
     try:
         from services.knowledge_search import knowledge_context
         kctx = await knowledge_context(chat_id, question)
@@ -527,6 +528,17 @@ async def handle_ai_command(
             {"$set": {"deleted_at": now_iso()}},
         )
         return
+
+    # Mirror the answer into Slack (opt-in per workspace via Connectors).
+    try:
+        from services.bg import fire_and_forget
+        from services import slack_service
+        fire_and_forget(slack_service.notify_ai_answer(
+            workspace_id, chat, question,
+            (answer_msg or {}).get("body"), used_knowledge=bool(kctx),
+        ))
+    except Exception as e:
+        logger.warning("[ai] slack mirror failed: %s", e)
 
     # AI Conversation Mode — keep (or start) this user's AI session so their
     # next follow-up routes to the assistant without another @ai mention.

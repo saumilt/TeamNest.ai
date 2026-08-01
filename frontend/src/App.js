@@ -59,6 +59,7 @@ import EULA from "@/pages/legal/EULA";
 import Downloads from "@/pages/Downloads";
 import WebLayout from "@/components/web/WebLayout";
 import WebHome from "@/pages/web/Home";
+import WebHomeV2 from "@/pages/web/HomeV2";
 import WebShowcase from "@/pages/web/Showcase";
 import WebPricing from "@/pages/web/Pricing";
 import WebDevOsInfo from "@/pages/web/DevOsInfo";
@@ -128,6 +129,9 @@ export default function App() {
             <Route path="/employees-info" element={<WebEmployees />} />
             <Route path="/changelog" element={<WebChangelog />} />
           </Route>
+
+          {/* Website rebuild PREVIEW (standalone: own nav/footer/theme). Old / untouched. */}
+          <Route path="/v2" element={<WebHomeV2 />} />
 
           {/* Auth (own layout, two-column product surface) */}
           <Route path="/login" element={<WebAuth defaultMode="login" />} />

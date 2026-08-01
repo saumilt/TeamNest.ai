@@ -277,3 +277,16 @@ async def _notify_owners(workspace_id: str, cap: dict, label: str, used: int, li
             )
     except Exception:
         pass
+    # Best-effort Slack alert into the workspace's configured channel.
+    try:
+        from services import slack_service
+        scope_word = {"user": "A member's", "chat": "A chat's",
+                      "workspace": "The workspace's", "enterprise": "The enterprise"}.get(
+            cap["scope"], cap["scope"])
+        emoji = ":rotating_light:" if label == "100%" else ":warning:"
+        await slack_service.notify_budget_alert(
+            workspace_id,
+            f"{emoji} *{scope_word} AI credit cap is at {label}* — {used}/{limit} credits used this month.",
+        )
+    except Exception:
+        pass

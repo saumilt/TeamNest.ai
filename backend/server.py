@@ -42,6 +42,7 @@ from routes import (
     changelog,
     chat_ai_settings,
     chats,
+    connectors_slack,
     dashboard,
     decisions,
     devices,
@@ -148,6 +149,7 @@ api.include_router(template_market.router)
 api.include_router(dev_gates.router)
 api.include_router(workspace_ai.router)
 api.include_router(connectors.router)
+api.include_router(connectors_slack.router)
 api.include_router(enterprise.router)
 api.include_router(credit_governance.router)
 api.include_router(learned_memory.router)
@@ -278,6 +280,14 @@ async def startup():
         logger.info("[startup] seller weekly digest loop scheduled (1h tick, 7d cadence)")
     except Exception as e:
         logger.warning("Seller weekly digest loop failed to start: %s", e)
+
+    try:
+        import asyncio as _asyncio
+        from services.invite_reminders import invite_reminder_loop as _ir
+        _asyncio.create_task(_ir())
+        logger.info("[startup] invite-expiry reminder loop scheduled (1h tick, T-48h nudge)")
+    except Exception as e:
+        logger.warning("Invite reminder loop failed to start: %s", e)
 
     try:
         import asyncio as _asyncio

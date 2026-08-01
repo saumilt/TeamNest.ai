@@ -15,7 +15,7 @@ try {
   /* OneSignal optional — app shell still works without it */
 }
 
-const CACHE = "teamnest-shell-v1";
+const CACHE = "teamnest-shell-v2";
 const SHELL = ["/", "/index.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
