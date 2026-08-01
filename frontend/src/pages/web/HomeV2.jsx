@@ -155,7 +155,7 @@ function Problem() {
     { name: "ChatGPT", has: "the answer" },
   ];
   return (
-    <section id="problem" className="relative py-20 md:py-24 px-5 border-t border-[var(--w-hairline)] bg-[var(--w-bg2)]">
+    <section id="problem" className="relative py-20 md:py-24 px-5 border-t border-[var(--w-hairline)]">
       <div className="max-w-6xl mx-auto">
         <div className="max-w-3xl">
           <Eyebrow tone="default" className="mb-4">The problem</Eyebrow>
@@ -673,10 +673,10 @@ export default function WebHomeV2() {
         <NavV2 />
         <main className="pt-16">
           <Hero />
+          <Continuity />
           <Problem />
           <Engine />
           <FeatureSurfaces />
-          <Continuity />
           <ProofWalkthrough />
           <SocialProof />
           <FinalCTA />
