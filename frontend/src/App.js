@@ -120,7 +120,7 @@ export default function App() {
         <Routes>
           {/* Marketing site (web layout: nav + footer, light/dark themed) */}
           <Route element={<WebLayout />}>
-            <Route path="/" element={<WebHome />} />
+            <Route path="/legacy" element={<WebHome />} />
             <Route path="/showcase" element={<WebShowcase />} />
             <Route path="/pricing" element={<WebPricing />} />
             <Route path="/dev-os-guide" element={<WebDevOsInfo />} />
@@ -130,7 +130,9 @@ export default function App() {
             <Route path="/changelog" element={<WebChangelog />} />
           </Route>
 
-          {/* Website rebuild PREVIEW (standalone: own nav/footer/theme). Old / untouched. */}
+          {/* Collective-Intelligence homepage (rebuild). Old design preserved at /legacy.
+              /v2 kept as alias. Rollback = swap "/" back to <WebHome/> in the group above. */}
+          <Route path="/" element={<WebHomeV2 />} />
           <Route path="/v2" element={<WebHomeV2 />} />
 
           {/* Auth (own layout, two-column product surface) */}
