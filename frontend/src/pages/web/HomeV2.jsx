@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import {
   Brain, MessageSquare, Sparkles, ListChecks, Mic, Download,
   ArrowRight, PlayCircle, Unlink, ArrowLeftRight, Quote, ShieldCheck,
+  Briefcase, Mail, UserMinus, UserPlus, Check,
 } from "lucide-react";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import {
@@ -194,7 +195,7 @@ const SPOKES = [
   { key: "conversation", label: "Conversation", sub: "Group chat", icon: MessageSquare, angle: -90 },
   { key: "reasoning", label: "Reasoning", sub: "Multi-model AI", icon: Sparkles, angle: -18 },
   { key: "action", label: "Action", sub: "Tasks & deadlines", icon: ListChecks, angle: 54 },
-  { key: "import", label: "Import", sub: "WhatsApp history", icon: Download, angle: 126 },
+  { key: "import", label: "Import", sub: "Email & WhatsApp", icon: Download, angle: 126 },
   { key: "capture", label: "Capture", sub: "Voice / video", icon: Mic, angle: 198 },
 ];
 const R = 40; // % radius for spoke placement
@@ -410,6 +411,119 @@ function FeatureSurfaces() {
   );
 }
 
+// ---- Section 4.5: Continuity — intelligence outlives the person -----------
+function RoleHandoffVisual() {
+  const retained = ["Every decision & the reasoning behind it", "Client threads & call transcripts", "Key contacts & relationships", "Playbooks & how-we-do-it SOPs"];
+  return (
+    <div className="rounded-[20px] border border-[var(--w-hairline)] bg-[var(--w-surface)] p-6" data-testid="role-handoff">
+      {/* People row */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col items-center text-center w-[110px]">
+          <div className="relative w-14 h-14 rounded-full bg-[var(--w-surface2)] border border-[var(--w-hairline)] flex items-center justify-center text-[18px] font-bold text-[var(--w-text)]">
+            P
+            <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[var(--w-red)]/20 border border-[var(--w-red)]/50 flex items-center justify-center">
+              <UserMinus className="w-3.5 h-3.5 text-[var(--w-red)]" />
+            </span>
+          </div>
+          <div className="mt-2 text-[13px] font-semibold text-[var(--w-text)]">Priya</div>
+          <div className="text-[11px] text-[var(--w-text-mute)]">leaving Friday</div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center">
+          <ArrowRight className="w-6 h-6 text-[var(--w-brand)]" />
+          <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-[var(--w-text-mute)]">role memory</div>
+        </div>
+
+        <div className="flex flex-col items-center text-center w-[110px]">
+          <div className="relative w-14 h-14 rounded-full bg-[var(--w-brand-tint)] border border-[var(--w-brand)]/40 flex items-center justify-center text-[18px] font-bold text-[var(--w-brand)]">
+            +
+            <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[var(--w-green)]/20 border border-[var(--w-green)]/50 flex items-center justify-center">
+              <UserPlus className="w-3.5 h-3.5 text-[var(--w-green)]" />
+            </span>
+          </div>
+          <div className="mt-2 text-[13px] font-semibold text-[var(--w-text)]">New hire</div>
+          <div className="text-[11px] text-[var(--w-text-mute)]">day one</div>
+        </div>
+      </div>
+
+      {/* Role capsule */}
+      <div className="mt-6 rounded-[14px] border border-[var(--w-brand)]/30 bg-[var(--w-bg)] p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-[var(--w-brand-tint)] flex items-center justify-center">
+            <Briefcase className="w-4 h-4 text-[var(--w-brand)]" />
+          </div>
+          <div className="text-[13px] font-bold text-[var(--w-text)]">Role · Account Lead</div>
+          <span className="ml-auto text-[10px] font-mono uppercase tracking-widest text-[var(--w-green)]">inherited intact</span>
+        </div>
+        <ul className="space-y-2">
+          {retained.map((r) => (
+            <li key={r} className="flex items-center gap-2 text-[13px] text-[var(--w-text-dim)]">
+              <Check className="w-4 h-4 text-[var(--w-green)] shrink-0" /> {r}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2 text-[12px] text-[var(--w-text-mute)]">
+        <ShieldCheck className="w-4 h-4 text-[var(--w-green)]" />
+        No personal data transferred — role knowledge only.
+      </div>
+    </div>
+  );
+}
+
+function BenefitRow({ icon: Icon, tone, title, body }) {
+  return (
+    <div className="flex gap-4">
+      <div className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${tone === "ai" ? "bg-[var(--w-ai-tint)]" : "bg-[var(--w-brand-tint)]"}`}>
+        <Icon className={`w-5 h-5 ${tone === "ai" ? "text-[var(--w-ai)]" : "text-[var(--w-brand)]"}`} />
+      </div>
+      <div>
+        <div className="text-[16px] font-bold text-[var(--w-text)]">{title}</div>
+        <p className="mt-1 text-[14px] leading-6 text-[var(--w-text-dim)] max-w-[46ch]">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function Continuity() {
+  return (
+    <section id="continuity" className="relative py-20 md:py-28 px-5 border-t border-[var(--w-hairline)] bg-[var(--w-bg2)] scroll-mt-20">
+      <EngineBackdrop />
+      <div className="relative max-w-6xl mx-auto">
+        <div className="max-w-3xl mb-14">
+          <Eyebrow tone="brand" className="mb-4">Knowledge that outlives the person</Eyebrow>
+          <SectionTitle>When someone leaves, their intelligence stays.</SectionTitle>
+          <SectionSub className="mt-5">
+            The most expensive part of turnover isn&apos;t hiring — it&apos;s the years of context that walk out the door with the person. Because TeamNest holds a role&apos;s collective intelligence, the next person inherits it on day one instead of starting from zero.
+          </SectionSub>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <RoleHandoffVisual />
+          <div className="space-y-7">
+            <BenefitRow
+              icon={Briefcase} tone="brand"
+              title="Transferable by role, not by person"
+              body="Memory attaches to the seat, not the individual. Backfill a role and the new hire opens it to find every decision, thread and key contact already there."
+            />
+            <BenefitRow
+              icon={Mail} tone="ai"
+              title="Email, in the same memory"
+              body="Connect email so the context living in inboxes joins the record — instead of leaving the company when the person does."
+            />
+            <BenefitRow
+              icon={ShieldCheck} tone="brand"
+              title="Privacy by design"
+              body="We capture work knowledge by role, never personal data. No private messages, no personal profiles — only what the role needs to keep running."
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---- Section 5: Proof — one continuous narrative walkthrough ---------------
 const STEPS = [
   { n: 1, label: "Debate it in chat", body: "The team argues launch timing in a thread.", Mock: GroupChatMock, tone: "brand" },
@@ -562,6 +676,7 @@ export default function WebHomeV2() {
           <Problem />
           <Engine />
           <FeatureSurfaces />
+          <Continuity />
           <ProofWalkthrough />
           <SocialProof />
           <FinalCTA />
