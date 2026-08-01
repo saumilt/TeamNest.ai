@@ -1,13 +1,16 @@
 import { Link } from "react-router-dom";
 import {
   Brain, MessageSquare, Sparkles, ListChecks, Mic, Download,
-  ArrowRight, PlayCircle, Unlink, ArrowLeftRight,
+  ArrowRight, PlayCircle, Unlink, ArrowLeftRight, Quote, ShieldCheck,
 } from "lucide-react";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import {
   Eyebrow, PrimaryButton, GhostButton, SectionTitle, SectionSub, LogoMark, Wordmark,
 } from "@/components/web/atoms";
-import { ChatListPanel, ChatDetailWithCompare } from "@/components/web/mocks";
+import {
+  ChatListPanel, ChatDetailWithCompare, GroupChatMock, SixModelStrip,
+  CallTranscriptMock, TaskCardMock,
+} from "@/components/web/mocks";
 
 /* ============================================================================
    TeamNest.ai — Website Rebuild (v2 preview).  Standalone route: /v2
@@ -325,29 +328,225 @@ function Engine() {
   );
 }
 
-// ---- Review checkpoint banner ----------------------------------------------
-function ReviewStop() {
+// ---- Section 4: Feature surfaces of the Engine -----------------------------
+const SURFACES = [
+  {
+    key: "conversation",
+    role: "Where intelligence is exchanged",
+    tone: "brand",
+    title: "Every message becomes part of what your team knows.",
+    desc: "Group chat that feels like WhatsApp, but nothing scrolls away into the void. Every thread, decision and aside is captured into the same memory the AI reasons over — so the conversation isn't just talk, it's input.",
+    Mock: GroupChatMock,
+  },
+  {
+    key: "reasoning",
+    role: "Where intelligence is reasoned over",
+    tone: "ai",
+    title: "Don't get one AI's opinion — get consensus or contrast across models.",
+    desc: "Ask GPT-4o, Claude, Gemini, DeepSeek, Perplexity and Grok the same question in one place and see where they agree and where they diverge. Because it runs on your team's memory, the answer is grounded in your context — not a generic reply.",
+    Mock: SixModelStrip,
+  },
+  {
+    key: "memory",
+    role: "Where intelligence is captured & stored",
+    tone: "brand",
+    title: "What's said out loud shouldn't need a note-taker to survive.",
+    desc: "Voice and video calls transcribe live, and the decisions inside them become Decision Log cards you can search months later. The meeting doesn't end when the call does — it compounds into the record.",
+    Mock: CallTranscriptMock,
+  },
+  {
+    key: "action",
+    role: "Where intelligence becomes action",
+    tone: "ai",
+    title: "Intelligence that doesn't turn into action is just trivia.",
+    desc: "Decisions spin straight out into tasks with owners and deadlines, tied back to the thread and the reasoning that created them. Nothing gets agreed and then quietly forgotten.",
+    Mock: TaskCardMock,
+  },
+];
+
+function SurfaceBlock({ surface, flip }) {
+  const { role, title, desc, Mock, tone } = surface;
   return (
-    <section id="about" className="py-16 px-5 border-t border-[var(--w-hairline)] bg-[var(--w-bg2)]">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--w-brand)]/30 bg-[var(--w-brand-tint)] text-[var(--w-brand)] text-[12px] font-bold mb-4">
-          Preview · Sections 1–3
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center" data-testid={`surface-${surface.key}`}>
+      <div className={flip ? "lg:order-2" : ""}>
+        <div className={`inline-flex items-center gap-2 mb-4 text-[11px] font-bold uppercase tracking-[0.16em] ${tone === "ai" ? "text-[var(--w-ai)]" : "text-[var(--w-brand)]"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${tone === "ai" ? "bg-[var(--w-ai)]" : "bg-[var(--w-brand)]"}`} />
+          {role}
         </div>
-        <h3 className="text-[22px] font-bold text-[var(--w-text)]">The rest of the site is built around this.</h3>
-        <p className="mt-3 text-[15px] leading-7 text-[var(--w-text-dim)]">
-          Per the plan, we stop here for sign-off on the Engine — the one new structural idea. Approve this and the next pass adds the reframed feature surfaces (Conversation · Reasoning · Memory · Action), a single narrative walkthrough, social proof, and the closing CTA.
+        <h3 className="text-[26px] sm:text-[32px] leading-[1.12] font-bold tracking-[-0.02em] text-[var(--w-text)]" style={{ textWrap: "balance" }}>
+          {title}
+        </h3>
+        <p className="mt-4 text-[16px] leading-7 text-[var(--w-text-dim)] max-w-[54ch]" style={{ textWrap: "pretty" }}>
+          {desc}
+        </p>
+      </div>
+      <div className={flip ? "lg:order-1" : ""}>
+        <BrowserFrame>
+          <div className="p-4 sm:p-5 min-h-[300px] flex items-center justify-center bg-[var(--w-bg)]">
+            <div className="w-full"><Mock /></div>
+          </div>
+        </BrowserFrame>
+      </div>
+    </div>
+  );
+}
+
+function FeatureSurfaces() {
+  return (
+    <section id="surfaces" className="relative py-20 md:py-28 px-5 border-t border-[var(--w-hairline)]">
+      <div className="max-w-6xl mx-auto">
+        <div className="max-w-3xl mb-16">
+          <Eyebrow tone="default" className="mb-4">Four surfaces · one engine</Eyebrow>
+          <SectionTitle>Each feature is where the intelligence does something different.</SectionTitle>
+          <SectionSub className="mt-5">
+            Same system, four surfaces. Watch the throughline: everything below feeds the memory at the center — and pulls from it.
+          </SectionSub>
+        </div>
+        <div className="space-y-20 md:space-y-28">
+          {SURFACES.map((s, i) => <SurfaceBlock key={s.key} surface={s} flip={i % 2 === 1} />)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Section 5: Proof — one continuous narrative walkthrough ---------------
+const STEPS = [
+  { n: 1, label: "Debate it in chat", body: "The team argues launch timing in a thread.", Mock: GroupChatMock, tone: "brand" },
+  { n: 2, label: "Pull in the client call", body: "A recorded call drops in, transcribed and searchable.", Mock: CallTranscriptMock, tone: "brand" },
+  { n: 3, label: "Ask models to reconcile", body: "Two AIs weigh the tradeoffs against project history.", Mock: SixModelStrip, tone: "ai" },
+  { n: 4, label: "Ship it as tasks", body: "The resolution spins out owners and deadlines automatically.", Mock: TaskCardMock, tone: "ai" },
+];
+
+function ProofWalkthrough() {
+  return (
+    <section id="proof" className="relative py-20 md:py-28 px-5 border-t border-[var(--w-hairline)] bg-[var(--w-bg2)] scroll-mt-20">
+      <EngineBackdrop />
+      <div className="relative max-w-6xl mx-auto">
+        <div className="max-w-3xl mb-14">
+          <Eyebrow tone="ai" className="mb-4">How it works</Eyebrow>
+          <SectionTitle>One decision, start to finish — across every surface.</SectionTitle>
+          <SectionSub className="mt-5">
+            Not four features shown side by side. One continuous flow, where each step hands off to the next through the shared memory.
+          </SectionSub>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 md:gap-4">
+          {STEPS.map((s, i) => (
+            <div key={s.n} className="relative" data-testid={`proof-step-${s.n}`}>
+              {i < STEPS.length - 1 && (
+                <ArrowRight className="hidden md:block absolute -right-3 top-[86px] w-5 h-5 text-[var(--w-text-mute)] z-10" />
+              )}
+              <div className="rounded-[14px] border border-[var(--w-hairline)] bg-[var(--w-surface)] overflow-hidden h-full flex flex-col">
+                <div className="h-[150px] overflow-hidden border-b border-[var(--w-hairline)] bg-[var(--w-bg)] p-3">
+                  <div className="scale-[0.82] origin-top-left w-[122%]"><s.Mock /></div>
+                </div>
+                <div className="p-4 flex-1">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-bold ${s.tone === "ai" ? "bg-[var(--w-ai-tint)] text-[var(--w-ai)]" : "bg-[var(--w-brand-tint)] text-[var(--w-brand)]"}`}>{s.n}</span>
+                    <div className="text-[15px] font-bold text-[var(--w-text)]">{s.label}</div>
+                  </div>
+                  <p className="text-[13px] leading-5 text-[var(--w-text-dim)]">{s.body}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-10 text-center text-[15px] text-[var(--w-text-dim)] max-w-[62ch] mx-auto">
+          Four tools would have lost this between four apps. Here it&apos;s one thread that <span className="text-[var(--w-text)] font-medium">remembers</span>.
         </p>
       </div>
     </section>
   );
 }
 
-function FooterV2() {
+// ---- Section 6: Social proof (honest — no fabricated logos) -----------------
+function SocialProof() {
+  const chips = ["Institutional memory", "Multi-model reasoning", "Live transcription", "SOC 2 in flight"];
   return (
-    <footer className="py-8 px-5 border-t border-[var(--w-hairline)]">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5"><LogoMark size={24} /><Wordmark size="sm" /></div>
-        <div className="text-[12px] text-[var(--w-text-mute)]">Collective intelligence for teams · rebuild preview</div>
+    <section className="py-16 md:py-20 px-5 border-t border-[var(--w-hairline)]">
+      <div className="max-w-4xl mx-auto text-center">
+        <div className="text-[12px] font-bold uppercase tracking-[0.18em] text-[var(--w-text-mute)] mb-8">
+          Trusted by teams shipping fast
+        </div>
+        <figure className="rounded-[20px] border border-[var(--w-hairline)] bg-[var(--w-surface)] p-8 md:p-10">
+          <Quote className="w-7 h-7 text-[var(--w-brand)] mx-auto mb-4" />
+          <blockquote className="text-[20px] md:text-[24px] leading-[1.4] font-medium text-[var(--w-text)]" style={{ textWrap: "balance" }}>
+            We stopped re-explaining decisions. The context is just there — the chat, the call, the reasoning, all in one place that remembers.
+          </blockquote>
+          <figcaption className="mt-5 text-[13px] text-[var(--w-text-mute)]">Early team on TeamNest</figcaption>
+        </figure>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5">
+          {chips.map((c) => (
+            <span key={c} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--w-hairline)] text-[12px] text-[var(--w-text-dim)]">
+              <ShieldCheck className="w-3.5 h-3.5 text-[var(--w-green)]" /> {c}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Section 7: Closing CTA -------------------------------------------------
+function FinalCTA() {
+  return (
+    <section id="about" className="relative py-24 md:py-32 px-5 border-t border-[var(--w-hairline)] bg-[var(--w-bg2)] overflow-hidden scroll-mt-20">
+      <EngineBackdrop />
+      <div className="relative max-w-3xl mx-auto text-center">
+        <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-[var(--w-ai-tint)] border border-[var(--w-ai)]/40 flex items-center justify-center">
+          <Brain className="w-7 h-7 text-[var(--w-ai)]" />
+        </div>
+        <h2 className="text-[34px] sm:text-[44px] lg:text-[52px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--w-text)]" style={{ textWrap: "balance" }}>
+          Start building your team&apos;s collective intelligence.
+        </h2>
+        <p className="mt-5 text-[18px] leading-8 text-[var(--w-text-dim)] max-w-[56ch] mx-auto">
+          One workspace where conversation, reasoning, memory and action stop leaking between tools — and start compounding.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <PrimaryButton as={Link} to="/login?demo=1" data-testid="v2-final-primary">
+            Start free <ArrowRight className="w-4 h-4" />
+          </PrimaryButton>
+          <GhostButton as="a" href="#proof" data-testid="v2-final-secondary">
+            <PlayCircle className="w-4 h-4" /> See a live demo
+          </GhostButton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FooterV2() {
+  const cols = [
+    { title: "Product", links: [["Product", "#engine"], ["How it works", "#proof"], ["Pricing", "/pricing"]] },
+    { title: "System", links: [["Conversation", "#surfaces"], ["Reasoning", "#surfaces"], ["Memory", "#surfaces"], ["Action", "#surfaces"]] },
+    { title: "Company", links: [["About", "#about"], ["Sign in", "/pricing"]] },
+  ];
+  return (
+    <footer className="py-14 px-5 border-t border-[var(--w-hairline)]">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10">
+        <div>
+          <div className="flex items-center gap-2.5 mb-3"><LogoMark size={28} /><Wordmark size="md" /></div>
+          <p className="text-[13px] leading-5 text-[var(--w-text-mute)] max-w-[34ch]">
+            Collective intelligence for teams — one system that captures, connects and compounds what your team knows.
+          </p>
+        </div>
+        {cols.map((c) => (
+          <div key={c.title}>
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--w-text-mute)] mb-3">{c.title}</div>
+            <ul className="space-y-2">
+              {c.links.map(([label, href]) => (
+                <li key={label}>
+                  <a href={href} className="text-[14px] text-[var(--w-text-dim)] hover:text-[var(--w-text)] transition-colors">{label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-[var(--w-hairline)] text-[12px] text-[var(--w-text-mute)]">
+        © {new Date().getFullYear()} TeamNest.ai · Website rebuild preview
       </div>
     </footer>
   );
@@ -362,7 +561,10 @@ export default function WebHomeV2() {
           <Hero />
           <Problem />
           <Engine />
-          <ReviewStop />
+          <FeatureSurfaces />
+          <ProofWalkthrough />
+          <SocialProof />
+          <FinalCTA />
         </main>
         <FooterV2 />
       </div>
