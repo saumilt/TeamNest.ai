@@ -17,6 +17,9 @@ invite-your-friends flows.
 - **Chat-invite email fix (P0)**: `POST /api/chats/{id}/invite-guest` & `.../invite-member` now email brand-new invitees a Mailgun set-password link (were silently email-less; only returned a one-time password). `_email_new_invitee()` in `routes/chats.py`. Verified live (`email_sent: true` + Mailgun accepted). Reaches production only after **Publish/Deploy**; set prod `PUBLIC_BACKEND_URL=https://teamnest.ai`.
 - **Latest models (P1)**: `chatgpt`→`gpt-5.6-sol`, `claude`→`claude-sonnet-5`, NEW `claude-opus`→`claude-opus-4-8` (premium, 45 cr), `gemini`=`gemini-3.1-pro-preview`. Synced web + mobile pickers, Knowledge/Documents pickers, AI-employee dispatcher, billing + premium gating. All verified via live calls + `GET /api/ai/models`.
 - **Default chat view = Combined** (web + mobile), honoring saved per-chat preference. Verified both surfaces.
+- **Model "best for…" tooltips** (follow-up): shared `hint` per model; web pickers (`AiModelPicker`, `ModelComparePicker`) show a live hover caption + native `title`; mobile pickers (`chat/[id].tsx`, `AiComposeModal.tsx`) show a tap-to-preview caption. Verified web (caption "ChatGPT 5.6 — Strategy & structured thinking").
+- **Resend invite** (follow-up): already shipped on web (`MembersTable.jsx` one-tap RESEND for pending members → `POST /workspace/invite/{id}/resend`). Verified via `/team` screenshot + curl (`ok: true`).
+- **Deploy readiness**: deployment_agent = PASS, no blockers. Emergent auto-sets prod env vars (incl. `PUBLIC_BACKEND_URL`) on Publish. User publishes via the Emergent Publish button. For custom domain `teamnest.ai`, ensure `PUBLIC_BACKEND_URL` resolves to it so emailed links are correct.
 - Test: `tests/test_iteration122_latest_models.py` (5/5).
 
 
