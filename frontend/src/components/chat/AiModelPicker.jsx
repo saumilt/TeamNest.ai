@@ -24,6 +24,7 @@ export default function AiModelPicker({
     () => new Set(initialSelected.length ? initialSelected : [RECOMMENDED_KEY]),
   );
   const [remember, setRemember] = useState(initialRemember);
+  const [hoverKey, setHoverKey] = useState(null);
 
   const toggle = (key) =>
     setSel((prev) => {
@@ -61,6 +62,9 @@ export default function AiModelPicker({
               type="button"
               data-testid={`ai-model-option-${m.key}`}
               aria-pressed={on}
+              title={m.hint}
+              onMouseEnter={() => setHoverKey(m.key)}
+              onMouseLeave={() => setHoverKey(null)}
               onClick={() => toggle(m.key)}
               className={`px-2.5 h-8 rounded-full border text-[12px] inline-flex items-center gap-1.5 transition-colors ${
                 on
@@ -86,6 +90,20 @@ export default function AiModelPicker({
           );
         })}
       </div>
+      {(() => {
+        const h =
+          ALL_MODELS.find((x) => x.key === hoverKey) ||
+          ALL_MODELS.find((x) => x.recommended) ||
+          ALL_MODELS[0];
+        return h?.hint ? (
+          <div
+            data-testid="ai-model-hint"
+            className="text-[11px] text-ink-mute mb-1.5 min-h-[15px] leading-tight"
+          >
+            <span className="text-ink-dim font-medium">{h.name}</span> — {h.hint}
+          </div>
+        ) : null;
+      })()}
       <label
         data-testid="ai-model-remember-toggle"
         className="flex items-center gap-2 py-1.5 cursor-pointer select-none"

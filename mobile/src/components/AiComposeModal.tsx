@@ -36,6 +36,7 @@ export function AiComposeModal({
   const [models, setModels] = useState<string[]>(
     defaultModels.length ? defaultModels : [RECOMMENDED_MODEL],
   );
+  const [activeHint, setActiveHint] = useState<string | null>(null);
 
   const reset = () => {
     setQ("");
@@ -104,7 +105,7 @@ export function AiComposeModal({
                   <TouchableOpacity
                     key={m.key}
                     testID={`ai-compose-model-${m.key}`}
-                    onPress={() => toggle(m.key)}
+                    onPress={() => { setActiveHint(m.key); toggle(m.key); }}
                     activeOpacity={0.8}
                     style={[styles.chip, on && styles.chipOn]}
                   >
@@ -117,6 +118,12 @@ export function AiComposeModal({
                 );
               })}
             </View>
+            <Text style={styles.modelHint} testID="ai-compose-model-hint">
+              {(() => {
+                const h = AI_MODELS.find((x) => x.key === (activeHint || RECOMMENDED_MODEL));
+                return h?.hint ? `${h.name} — ${h.hint}` : "";
+              })()}
+            </Text>
           </ScrollView>
 
           <View style={styles.actions}>
@@ -174,6 +181,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  modelHint: { color: colors.accent, fontSize: font.tiny, marginTop: spacing.sm, minHeight: 14 },
   chip: {
     flexDirection: "row",
     alignItems: "center",

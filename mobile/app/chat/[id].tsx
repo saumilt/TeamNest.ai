@@ -1236,7 +1236,7 @@ export default function ChatScreen() {
                   <TouchableOpacity
                     key={m.key}
                     testID={`ai-model-option-${m.key}`}
-                    onPress={() => togglePickerModel(m.key)}
+                    onPress={() => { setPickerHint(m.key); togglePickerModel(m.key); }}
                     style={[styles.modelChip, on && styles.modelChipOn]}
                     activeOpacity={0.8}
                   >
@@ -1259,6 +1259,12 @@ export default function ChatScreen() {
                 );
               })}
             </View>
+            <Text style={styles.modelHint} testID="ai-model-hint">
+              {(() => {
+                const h = AI_MODELS.find((x) => x.key === (pickerHint || RECOMMENDED_MODEL));
+                return h?.hint ? `${h.name} — ${h.hint}` : "";
+              })()}
+            </Text>
             <TouchableOpacity
               testID="ai-model-remember-toggle"
               style={styles.rememberRow}
@@ -1343,6 +1349,7 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   modalTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800" },
   modalSub: { color: colors.textMuted, fontSize: font.small, marginTop: 2, marginBottom: spacing.md },
+  modelHint: { color: colors.accent, fontSize: font.tiny, marginBottom: spacing.md, minHeight: 14 },
   rolesEmpty: { color: colors.textMuted, fontSize: font.small, paddingVertical: spacing.md },
   roleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
   roleName: { color: colors.textPrimary, fontSize: font.small, fontWeight: "600" },

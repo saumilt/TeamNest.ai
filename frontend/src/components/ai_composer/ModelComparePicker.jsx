@@ -47,6 +47,7 @@ export default function ModelComparePicker({ selected, favorite, onToggle, locke
                                                 <button
                                                         key={m.key}
                                                         data-testid={`model-toggle-${m.key}`}
+                                                        title={m.hint}
                                                         onClick={() => onToggle(m.key)}
                                                         className={`px-3 py-1.5 text-xs font-mono uppercase tracking-widest rounded-sm border transition-colors flex items-center gap-1.5 ${
                                                                 isOn
