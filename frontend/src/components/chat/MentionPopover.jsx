@@ -6,7 +6,7 @@ const AI_DEFAULTS = [
     key: "ai",
     trigger: "@ai",
     label: "AI · default model",
-    desc: "Snappy reply from GPT-4o mini · 1 model · cheapest",
+    desc: "Snappy reply from GPT-5.4 mini · 1 model · cheapest",
     badge: "AI",
     color: "amber",
   },

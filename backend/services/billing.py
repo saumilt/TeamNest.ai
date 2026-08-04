@@ -247,10 +247,11 @@ async def is_comparison_allowed(workspace_id: str) -> bool:
 # already including the 40% margin.
 MODEL_CREDIT_COST = {
     # Premium tier
-    "chatgpt": 23,       # GPT-4o
+    "chatgpt": 23,       # ChatGPT 5.6
     "gpt-4o": 23,
-    "claude": 34,        # Claude Sonnet 4.5
+    "claude": 34,        # Claude Sonnet 5
     "claude-sonnet": 34,
+    "claude-opus": 45,   # Claude Opus 4.8 (deepest reasoning, priciest)
     "gemini": 12,        # Gemini 2.5 Pro
     "gemini-pro": 12,
     "perplexity": 18,    # Perplexity

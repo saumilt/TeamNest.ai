@@ -13,6 +13,13 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 122 (Jun 2026) — Latest AI models + Combined default view + chat-invite email fix
+- **Chat-invite email fix (P0)**: `POST /api/chats/{id}/invite-guest` & `.../invite-member` now email brand-new invitees a Mailgun set-password link (were silently email-less; only returned a one-time password). `_email_new_invitee()` in `routes/chats.py`. Verified live (`email_sent: true` + Mailgun accepted). Reaches production only after **Publish/Deploy**; set prod `PUBLIC_BACKEND_URL=https://teamnest.ai`.
+- **Latest models (P1)**: `chatgpt`→`gpt-5.6-sol`, `claude`→`claude-sonnet-5`, NEW `claude-opus`→`claude-opus-4-8` (premium, 45 cr), `gemini`=`gemini-3.1-pro-preview`. Synced web + mobile pickers, Knowledge/Documents pickers, AI-employee dispatcher, billing + premium gating. All verified via live calls + `GET /api/ai/models`.
+- **Default chat view = Combined** (web + mobile), honoring saved per-chat preference. Verified both surfaces.
+- Test: `tests/test_iteration122_latest_models.py` (5/5).
+
+
 ### Iteration 98 (Jul 2026) — Deployed-employee chat responder + Builder Program hardening
 - **Deployed AI employee auto-responds in live chats** (`services/ai_employee_deploy_dispatcher.py`, hooked into `routes/chats.py` send flow): when a message @-mentions a deployed employee's handle, it replies in-chat via its full runtime (profile+style+knowledge+permissions+escalation, Claude Fable 5). Chat-bound deployments only answer in their bound chat; handle deployments answer anywhere mentioned. Posts a "thinking…" placeholder then updates it; no reply-loop (AI messages bypass the send route).
 - **Rejection cooldown**: after a rejected Builder application, re-applying is blocked for 30 days (`POST /api/builder-program/apply` → 429). `GET /builder-program/me` now returns `can_reapply` + `reapply_at`.

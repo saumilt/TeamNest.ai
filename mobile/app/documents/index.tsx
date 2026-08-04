@@ -14,8 +14,8 @@ import { Markdown } from "@/src/markdown";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const ASK_MODELS = [
-  { key: "claude", label: "Claude Sonnet 4.6" },
-  { key: "chatgpt", label: "GPT-5.5" },
+  { key: "claude", label: "Claude Sonnet 5" },
+  { key: "chatgpt", label: "ChatGPT 5.6" },
 ];
 const STATUS_COLOR: Record<string, string> = {
   processing: "#fbbf24",

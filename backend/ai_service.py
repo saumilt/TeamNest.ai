@@ -18,16 +18,23 @@ XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 MODEL_CONFIG = {
     "chatgpt": {
         "provider": "openai",
-        "model": "gpt-5.5",
-        "display": "ChatGPT 5.5",
+        "model": "gpt-5.6-sol",
+        "display": "ChatGPT 5.6",
         "system": "You are ChatGPT. Be strategic, structured, and insightful.",
         "engine": "emergent",
     },
     "claude": {
         "provider": "anthropic",
-        "model": "claude-sonnet-4-6",
-        "display": "Claude Sonnet 4.6",
+        "model": "claude-sonnet-5",
+        "display": "Claude Sonnet 5",
         "system": "You are Claude. Be thoughtful, nuanced, and detailed.",
+        "engine": "emergent",
+    },
+    "claude-opus": {
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "display": "Claude Opus 4.8",
+        "system": "You are Claude Opus. Reason deeply and give the most rigorous, nuanced answer.",
         "engine": "emergent",
     },
     "gemini": {
@@ -92,6 +99,8 @@ def _build_strengths_weaknesses(model_key: str) -> Dict[str, List[str]]:
                     ["Can be generic", "Less recent data"]),
         "claude": (["Nuanced analysis", "Long-form coherence", "Safe reasoning"],
                    ["Verbose at times", "Cautious tone"]),
+        "claude-opus": (["Deepest reasoning", "Rigorous analysis", "Best for complex work"],
+                        ["Slower", "Most expensive"]),
         "gemini": (["Strong data integration", "Concrete numbers", "Multi-modal"],
                    ["Less narrative flair", "Variable depth"]),
         "deepseek": (["Technical depth", "Logical rigor", "Cost-effective"],

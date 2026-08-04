@@ -834,7 +834,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [activeThread, setActiveThread] = useState(initialThread || null);
   const [fullScreenThread, setFullScreenThread] = useState(null);
   // Dual-view (Human | Combined | AI) + right-side AI discussion panel.
-  const [view, setView] = useState("human");
+  const [view, setView] = useState("combined");
   const [discussions, setDiscussions] = useState([]);
   const [chatKnowledge, setChatKnowledge] = useState([]);
   const [panelThread, setPanelThread] = useState(null);
@@ -872,7 +872,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     setComposeContext(null);
     if (!chatId || !user?.id) return;
     const saved = localStorage.getItem(`tn:chatview:${user.id}:${chatId}`);
-    setView(saved === "combined" || saved === "ai" ? saved : "human");
+    setView(saved === "human" || saved === "ai" ? saved : "combined");
   }, [chatId, user?.id]);
 
   const changeView = useCallback(

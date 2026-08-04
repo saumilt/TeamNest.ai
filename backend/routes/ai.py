@@ -49,7 +49,7 @@ from storage import get_object
 
 router = APIRouter()
 
-PREMIUM_MODEL_KEYS = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "perplexity", "grok"}
+PREMIUM_MODEL_KEYS = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "claude-opus", "perplexity", "grok"}
 
 
 async def _gate_research_models(chat, current, payload):

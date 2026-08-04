@@ -352,7 +352,7 @@ async def handle_ai_command(
             return
         # Apply per-chat feature toggles.
         settings = gate["settings"]
-        premium_keys = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "perplexity", "grok"}
+        premium_keys = {"chatgpt", "gpt-4o", "claude", "claude-sonnet", "claude-opus", "perplexity", "grok"}
         if not settings.get("premium_models_enabled", True):
             models = [m for m in models if m not in premium_keys]
         if not settings.get("multi_model_compare_enabled", True) and len(models) > 1:

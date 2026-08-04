@@ -1,11 +1,12 @@
 /* Shared constants for AIComposer & its sub-components. */
 export const ALL_MODELS = [
-        { key: "gpt-4o-mini", name: "ChatGPT mini", fast: true },
+        { key: "gpt-4o-mini", name: "GPT-5.4 mini", fast: true },
         { key: "claude-haiku", name: "Claude Haiku", fast: true },
-        { key: "gemini-flash", name: "Gemini Flash", fast: true },
-        { key: "chatgpt", name: "ChatGPT 4o", recommended: true },
-        { key: "claude", name: "Claude Sonnet" },
-        { key: "gemini", name: "Gemini Pro" },
+        { key: "gemini-flash", name: "Gemini 3.5 Flash", fast: true },
+        { key: "chatgpt", name: "ChatGPT 5.6", recommended: true },
+        { key: "claude", name: "Claude Sonnet 5" },
+        { key: "claude-opus", name: "Claude Opus 4.8" },
+        { key: "gemini", name: "Gemini 3.1 Pro" },
         { key: "deepseek", name: "DeepSeek" },
         { key: "perplexity", name: "Perplexity" },
         { key: "grok", name: "Grok" },

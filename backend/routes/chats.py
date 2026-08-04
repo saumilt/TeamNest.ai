@@ -1883,6 +1883,27 @@ async def _create_guest_account(
     return target_user
 
 
+async def _email_new_invitee(target_user: dict, current: dict) -> bool:
+    """Send a brand-new chat invitee the same Mailgun "set your password" email
+    that workspace-level invites send, so they can actually log in instead of
+    relying on the inviter to manually hand over a one-time password. Only fires
+    for freshly-created accounts. Fire-and-forget; never blocks the invite."""
+    if not target_user.get("email"):
+        return False
+    from services.invite_email import mint_invite_link, send_invite_email
+    ws = await db.workspaces.find_one(
+        {"id": current["workspace_id"]}, {"_id": 0, "name": 1}
+    )
+    ws_name = (ws or {}).get("name", "the workspace")
+    inviter_name = current.get("name") or current.get("email") or "A teammate"
+    link = await mint_invite_link(target_user["id"])
+    asyncio.create_task(send_invite_email(
+        name=target_user.get("name"), email=target_user["email"], workspace=ws_name,
+        inviter=inviter_name, link=link,
+    ))
+    return True
+
+
 async def _post_guest_added_system_message(chat_id: str, current: dict, target_user: dict):
     """Drop a system message into the chat announcing the new guest."""
     sys_msg = {
@@ -1959,6 +1980,7 @@ async def invite_guest_to_chat(
     if target_user.get("_one_time_password"):
         response["one_time_password"] = target_user["_one_time_password"]
         response["created_new_account"] = True
+        response["email_sent"] = await _email_new_invitee(target_user, current)
     return response
 
 
@@ -2029,6 +2051,7 @@ async def invite_member_to_chat(
     if target_user.get("_one_time_password"):
         response["one_time_password"] = target_user["_one_time_password"]
         response["created_new_account"] = True
+        response["email_sent"] = await _email_new_invitee(target_user, current)
     return response
 
 

@@ -69,7 +69,7 @@ export default function ChatScreen() {
   const [stoppedThreads, setStoppedThreads] = useState<Set<string>>(() => new Set());
   const [nextToTeam, setNextToTeam] = useState(false);
   // Dual views (Human | Combined | AI) + AI discussions.
-  const [view, setView] = useState<"human" | "combined" | "ai">("human");
+  const [view, setView] = useState<"human" | "combined" | "ai">("combined");
   const [discussions, setDiscussions] = useState<any[]>([]);
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [composeCtx, setComposeCtx] = useState<any>(null);
@@ -133,7 +133,7 @@ export default function ChatScreen() {
     if (!chatId || !user?.id) return;
     (async () => {
       const saved = await getItem(`tn:chatview:${user.id}:${chatId}`);
-      setView(saved === "combined" || saved === "ai" ? (saved as any) : "human");
+      setView(saved === "human" || saved === "ai" ? (saved as any) : "combined");
     })();
   }, [chatId, user?.id]);
 

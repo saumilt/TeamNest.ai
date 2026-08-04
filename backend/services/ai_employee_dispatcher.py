@@ -46,10 +46,11 @@ async def _build_trigger_map(workspace_id: str) -> Dict[str, tuple[str, ...]]:
 
 # Map our internal model name to emergent provider/model.
 PROVIDER_MAP = {
-    "chatgpt": ("openai", "gpt-4o"),
-    "gpt-4o": ("openai", "gpt-4o"),
-    "gpt-4o-mini": ("openai", "gpt-4o-mini"),
-    "claude": ("anthropic", "claude-sonnet-4-6"),
+    "chatgpt": ("openai", "gpt-5.6-sol"),
+    "gpt-4o": ("openai", "gpt-5.6-sol"),
+    "gpt-4o-mini": ("openai", "gpt-5.4-mini"),
+    "claude": ("anthropic", "claude-sonnet-5"),
+    "claude-opus": ("anthropic", "claude-opus-4-8"),
     "claude-haiku": ("anthropic", "claude-haiku-4-5-20251001"),
     "gemini": ("gemini", "gemini-3.5-flash"),
 }
@@ -174,7 +175,7 @@ async def _run_employee(chat: dict, sender: dict, message: dict, employee_key: s
     await db.messages.insert_one(placeholder.copy())
     await _broadcast_message(chat["id"], placeholder)
 
-    provider, model = PROVIDER_MAP.get(emp.get("default_model", "chatgpt"), ("openai", "gpt-4o"))
+    provider, model = PROVIDER_MAP.get(emp.get("default_model", "chatgpt"), ("openai", "gpt-5.6-sol"))
 
     # ── AI CMO: pull connected social analytics so we can reason about them ──
     context_block = ""
