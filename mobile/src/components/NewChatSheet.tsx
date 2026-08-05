@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -158,14 +157,16 @@ export function NewChatSheet({
         return;
       }
       const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name] });
-      const raw: { phone: string; name?: string }[] = [];
+      const norms = new Set<string>();
       for (const c of data) {
         for (const p of c.phoneNumbers || []) {
-          if (p.number) raw.push({ phone: p.number, name: c.name });
+          const n = normalizePhone(p.number);
+          if (n && n.length >= 8) norms.add(n);
         }
       }
-      if (!raw.length) { setContactsErr("No phone numbers found in your contacts."); setContactsLoading(false); return; }
-      const res = await apiPost("/api/contacts/match", { raw_contacts: raw.slice(0, 1000) });
+      if (norms.size === 0) { setContactsErr("No phone numbers found in your contacts."); setContactsLoading(false); return; }
+      const hashes = await Promise.all([...norms].slice(0, 2000).map(hashPhone));
+      const res = await apiPost("/api/contacts/match", { hashes });
       setMatches(res.matches || []);
     } catch {
       setContactsErr("Could not read your contacts.");

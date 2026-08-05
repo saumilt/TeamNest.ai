@@ -13,6 +13,10 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 129 (Jun 2026) — Mobile Chats parity (Phase 1)
+- Mobile now has: New Chat sheet (Development project, New group, New contact, Invite via SMS/WhatsApp, Find friends from contacts), chat filters (All/Direct/Groups/AI/Unread), workspace switcher + folder filters, and a Team screen. Plus workspace-shared Model Presets, an Invited→Joined tracker with Mailgun delivery badges, and a P0 mobile picker crash fix. Testing agent = PASS.
+- **Phase 2 PENDING**: LiveKit audio/video/screen-share calls on mobile — backend already configured; needs a native/dev build (not previewable) and platform-guarded imports so the Expo web preview keeps bundling.
+
 ### Iteration 122 (Jun 2026) — Latest AI models + Combined default view + chat-invite email fix
 - **Chat-invite email fix (P0)**: `POST /api/chats/{id}/invite-guest` & `.../invite-member` now email brand-new invitees a Mailgun set-password link (were silently email-less; only returned a one-time password). `_email_new_invitee()` in `routes/chats.py`. Verified live (`email_sent: true` + Mailgun accepted). Reaches production only after **Publish/Deploy**; set prod `PUBLIC_BACKEND_URL=https://teamnest.ai`.
 - **Latest models (P1)**: `chatgpt`→`gpt-5.6-sol`, `claude`→`claude-sonnet-5`, NEW `claude-opus`→`claude-opus-4-8` (premium, 45 cr), `gemini`=`gemini-3.1-pro-preview`. Synced web + mobile pickers, Knowledge/Documents pickers, AI-employee dispatcher, billing + premium gating. All verified via live calls + `GET /api/ai/models`.
