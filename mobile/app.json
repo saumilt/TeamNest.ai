@@ -43,6 +43,12 @@
         {
           "photosPermission": "TeamNest needs access to your photos so you can attach images for the AI to analyze."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "TeamNest uses your contacts to find teammates already on TeamNest so you can start chatting instantly."
+        }
       ]
     ],
     "experiments": {
