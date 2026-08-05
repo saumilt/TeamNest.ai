@@ -6,9 +6,9 @@ import { trackHomeEvent } from "@/components/web/home/primitives";
 
 const PRODUCT_LINKS = [
   ["AI Research", "/multi-model-ai"],
-  ["Human and AI Chat", "/#human-ai"],
-  ["Projects and Tasks", "/#capabilities"],
-  ["Files and Knowledge", "/#capabilities"],
+  ["Human and AI Chat", { pathname: "/", hash: "#human-ai" }],
+  ["Projects and Tasks", { pathname: "/", hash: "#capabilities" }],
+  ["Files and Knowledge", { pathname: "/", hash: "#capabilities" }],
   ["Multi-Model AI", "/multi-model-ai"],
   ["AI Employees", "/employees-info"],
   ["Team Collaboration", "/teams"],
@@ -22,8 +22,8 @@ const USECASE_LINKS = [
   ["Team Collaboration", "/teams"],
   ["Business Knowledge", "/business"],
   ["Legal Collaboration", "/business"],
-  ["Marketing Research", "/#use-cases"],
-  ["Project Management", "/#use-cases"],
+  ["Marketing Research", { pathname: "/", hash: "#use-cases" }],
+  ["Project Management", { pathname: "/", hash: "#use-cases" }],
 ];
 
 function DropdownMenu({ label, items, testId }) {
@@ -41,7 +41,7 @@ function DropdownMenu({ label, items, testId }) {
       <div
         className="absolute left-1/2 -translate-x-1/2 top-full pt-3 opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 transition-all duration-200"
       >
-        <div className="w-[260px] rounded-[16px] border border-[var(--w-hairline)] bg-[var(--w-surface)]/95 backdrop-blur-xl p-2 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
+        <div className="w-[260px] rounded-[16px] border border-[var(--w-hairline)] bg-[var(--w-surface)] p-2 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
           {items.map(([l, href]) => (
             <Link
               key={l}
@@ -67,7 +67,8 @@ export default function NavV2() {
     ["Pricing", "/pricing"],
   ];
   return (
-    <header className="fixed top-0 inset-x-0 z-50 h-16 border-b border-[var(--w-hairline)] bg-[var(--w-bg)]/80 backdrop-blur-xl">
+    <header className="fixed top-0 inset-x-0 z-50 h-16 border-b border-[var(--w-hairline)] backdrop-blur-xl">
+      <div aria-hidden className="absolute inset-0 -z-10 bg-[var(--w-bg)] opacity-90" />
       <div className="max-w-6xl mx-auto h-full px-5 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5" data-testid="home-nav-logo">
           <LogoMark size={30} />
@@ -119,7 +120,8 @@ export default function NavV2() {
       </div>
 
       {open && (
-        <div className="lg:hidden border-t border-[var(--w-hairline)] bg-[var(--w-bg)]/98 backdrop-blur-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
+        <div className="lg:hidden relative border-t border-[var(--w-hairline)] h-[calc(100vh-4rem)] overflow-y-auto">
+          <div aria-hidden className="absolute inset-0 -z-10 bg-[var(--w-bg)]" />
           <div className="px-5 py-4 flex flex-col gap-1">
             {[
               ["Individuals", "/individuals"],

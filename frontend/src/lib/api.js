@@ -28,6 +28,14 @@ export const api = axios.create({ baseURL: API, withCredentials: true });
 // endpoint on every load to detect a logged-in cookie).
 const PUBLIC_PATHS = [
   "/",
+  "/v2",
+  "/legacy",
+  "/individuals",
+  "/students",
+  "/teams",
+  "/business",
+  "/ai-research",
+  "/multi-model-ai",
   "/pricing",
   "/product",
   "/templates",

@@ -585,6 +585,7 @@ Resolved by promoting users to a true multi-workspace model (Slack/Discord-style
   `POST/GET/DELETE /api/devices/register` (idempotent upsert verified).
 
 ## Iteration History
-See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-120).
+See `/app/memory/CHANGELOG.md` for the full per-iteration changelog (iterations 24-130).
+- iter 130 (2026-06): **Marketing homepage rebuild (web)** — broadened positioning to Individuals/Students/Teams/Businesses. New `HomeV2` (13 sections) + reusable `components/web/home/*`, public landing pages `/individuals /students /teams /business /ai-research /multi-model-ai`, new nav/footer, SEO. Fixed the `lib/api.js` 401-interceptor `PUBLIC_PATHS` allowlist (deep-links to new + pre-existing `/v2`,`/legacy` were bouncing to `/`). Enterprise app route preserved. testing_agent web = PASS.
 - iter 120 (2026-06): Dual Human/Combined/AI chat views — **Phase 1 (web)**. Header view switch (default Human), Human-view research cards, AI-view dashboard grouped by participant, right-side AI discussion panel, composer "To: Everyone" destination pill. Backend `GET /api/chats/{id}/ai-discussions` (extends `ai_threads`). Phases 2–4 (visibility/publish, notifications/search/analytics, mobile parity) pending.
 - iter 119 (2026-06): Inline `@ai` model picker (web + mobile).

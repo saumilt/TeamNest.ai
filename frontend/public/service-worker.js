@@ -15,7 +15,7 @@ try {
   /* OneSignal optional — app shell still works without it */
 }
 
-const CACHE = "teamnest-shell-v3";
+const CACHE = "teamnest-shell-v4";
 const SHELL = ["/", "/index.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -64,10 +64,16 @@ self.addEventListener("fetch", (event) => {
   const isAsset = /\.(js|css|png|jpg|jpeg|svg|webp|gif|woff2?|ttf|ico|json)$/.test(url.pathname);
   if (req.mode !== "navigate" && !isAsset) return;
 
+  // The app shell (HTML navigations) and code assets (JS/CSS) must never be
+  // served stale while online — a stale bundle would run an old route table
+  // and mis-route deep links. Force these to bypass the HTTP cache so we
+  // always execute the latest deploy; other assets (images/fonts) use default.
+  const mustBeFresh = req.mode === "navigate" || /\.(js|css)$/.test(url.pathname);
+
   event.respondWith(
     (async () => {
       try {
-        const net = await fetch(req);
+        const net = await fetch(req, mustBeFresh ? { cache: "no-store" } : {});
         if (net && net.ok) {
           const cache = await caches.open(CACHE);
           cache.put(req, net.clone()).catch(() => {});
