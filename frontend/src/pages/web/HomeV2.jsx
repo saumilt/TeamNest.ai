@@ -105,7 +105,7 @@ function Hero() {
           <Eyebrow tone="brand" className="mb-5">Collective intelligence for teams</Eyebrow>
           <h1 className="text-[40px] sm:text-[56px] lg:text-[64px] leading-[1.03] font-bold tracking-[-0.03em] text-[var(--w-text)]"
               style={{ textWrap: "balance" }}>
-            Your team&apos;s intelligence shouldn&apos;t disappear when the call ends.
+            Your team&apos;s intelligence shouldn&apos;t disappear when people move on.
           </h1>
           <p className="mt-6 text-[18px] sm:text-[20px] leading-8 text-[var(--w-text-dim)] max-w-[62ch]"
              style={{ textWrap: "pretty" }}>

@@ -1901,6 +1901,9 @@ async def _email_new_invitee(target_user: dict, current: dict) -> bool:
         name=target_user.get("name"), email=target_user["email"], workspace=ws_name,
         inviter=inviter_name, link=link,
     ))
+    await db.users.update_one(
+        {"id": target_user["id"]}, {"$set": {"last_invite_sent_at": now_iso()}}
+    )
     return True
 
 

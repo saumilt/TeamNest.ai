@@ -134,6 +134,33 @@ async def send_batch(
         return {"ok": False, "reason": "exception", "error": str(e)}
 
 
+async def fetch_events(recipient: str, limit: int = 25) -> Dict[str, Any]:
+    """`GET /v3/{domain}/events?recipient=…` — pull recent delivery events for
+    one recipient (accepted / delivered / opened / failed …). Powers the
+    on-demand invite delivery analytics on the Team page. Read-only, best-effort."""
+    if not _configured():
+        return {"ok": False, "reason": "not_configured", "items": []}
+    if not recipient:
+        return {"ok": False, "reason": "no_recipient", "items": []}
+    try:
+        async with httpx.AsyncClient(timeout=12) as c:
+            r = await c.get(
+                f"{_BASE}/v3/{_DOMAIN}/events",
+                auth=("api", _API_KEY),
+                params={"recipient": recipient, "limit": limit},
+            )
+        try:
+            body = r.json()
+        except Exception:
+            body = {}
+        if r.status_code >= 400:
+            return {"ok": False, "reason": "http_error", "status": r.status_code, "items": []}
+        return {"ok": True, "items": (body or {}).get("items", []) or []}
+    except Exception as e:
+        logger.warning("[mailgun] fetch_events failed for %s: %s", recipient, e)
+        return {"ok": False, "reason": "exception", "error": str(e), "items": []}
+
+
 # Re-export the digest renderer so existing callers can stay one-import simple.
 
 

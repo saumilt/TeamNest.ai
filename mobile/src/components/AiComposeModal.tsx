@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { AI_MODELS, RECOMMENDED_MODEL, modelName } from "../aiModels";
+import { ModelPresetBar } from "./ModelPresetBar";
 import { colors, font, radius, spacing } from "../theme";
 
 // "Ask AI" compose sheet — opened from a specific human message. Seeds that
@@ -98,6 +99,10 @@ export function AiComposeModal({
             />
 
             <Text style={[styles.label, { marginTop: spacing.md }]}>Models</Text>
+            <ModelPresetBar
+              selected={models}
+              onApply={(m) => setModels(m.length ? m : [RECOMMENDED_MODEL])}
+            />
             <View style={styles.grid}>
               {AI_MODELS.map((m) => {
                 const on = models.includes(m.key);

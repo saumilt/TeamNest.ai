@@ -80,6 +80,7 @@ from routes import (
     voice_notes,
     workspace,
     workspace_ai,
+    team_tools,
 )
 from seed import seed_demo, seed_market_templates
 from services.workspace_membership import migrate_legacy_users
@@ -98,6 +99,7 @@ api.include_router(public.router)        # `/` health + /public/snapshot
 api.include_router(auth.router)
 api.include_router(profile.router)
 api.include_router(workspace.router)
+api.include_router(team_tools.router)   # model presets + invite analytics
 api.include_router(folders.router)
 api.include_router(chats.router)
 api.include_router(ai.router)

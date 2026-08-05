@@ -14,6 +14,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 export default function TeamAdmin() {
   const { user } = useAuth();
   const [members, setMembers] = useState([]);
+  const [analytics, setAnalytics] = useState({});
   const [workspace, setWorkspace] = useState(null);
   const [showInvite, setShowInvite] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -36,6 +37,9 @@ export default function TeamAdmin() {
       setWorkspace(data);
       setWorkspaceName(data.name);
     });
+    api.get("/workspace/invite-analytics")
+      .then(({ data }) => setAnalytics(data?.analytics || {}))
+      .catch(() => setAnalytics({}));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -156,7 +160,7 @@ export default function TeamAdmin() {
         role={user?.role}
       />
 
-      <MembersTable members={members} canManage={canInviteByEmail} onResend={resendInvite} />
+      <MembersTable members={members} canManage={canInviteByEmail} onResend={resendInvite} analytics={analytics} />
 
       <InviteByEmailDialog
         open={showInvite}

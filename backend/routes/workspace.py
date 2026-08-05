@@ -96,6 +96,9 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
             name=existing.get("name"), email=email_lower, workspace=ws_name,
             inviter=inviter_name, link=f"{_app_base()}/login",
         ))
+        await db.users.update_one(
+            {"id": existing["id"]}, {"$set": {"last_invite_sent_at": now_iso()}}
+        )
         return {
             **public_user(existing),
             "role": payload.role,
@@ -118,6 +121,7 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
         "temp_password_issued_at": now_iso(),
         "invited_by": current["id"],
         "created_at": now_iso(),
+        "last_invite_sent_at": now_iso(),
     }
     await db.users.insert_one(user.copy())
     await ensure_membership(user["id"], current["workspace_id"], role=payload.role, status="invited")

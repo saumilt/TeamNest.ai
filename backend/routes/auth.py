@@ -203,10 +203,13 @@ async def reset_password(payload: ResetPasswordRequest):
                   "must_change_password": False}},
     )
     # Accepting an invite link (kind="invite") also activates the account +
-    # membership so the invitee isn't stuck showing as "invited".
+    # membership so the invitee isn't stuck showing as "invited", and stamps
+    # `accepted_at` so the team roster can show a live "Joined ✅ + when".
     if rec.get("kind") == "invite":
+        accepted = now_iso()
         await db.users.update_one(
-            {"id": rec["user_id"], "status": "invited"}, {"$set": {"status": "active"}}
+            {"id": rec["user_id"]},
+            {"$set": {"status": "active", "accepted_at": accepted}},
         )
         await db.workspace_members.update_many(
             {"user_id": rec["user_id"], "status": "invited"}, {"$set": {"status": "active"}}

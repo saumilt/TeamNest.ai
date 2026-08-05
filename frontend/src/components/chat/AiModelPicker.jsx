@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Zap, Sparkles } from "lucide-react";
 import { ALL_MODELS } from "@/components/ai_composer/constants";
+import ModelPresetBar from "@/components/ai_composer/ModelPresetBar";
 
 const RECOMMENDED_KEY =
   ALL_MODELS.find((m) => m.recommended)?.key || ALL_MODELS[0].key;
@@ -53,6 +54,12 @@ export default function AiModelPicker({
           {sel.size} selected
         </span>
       </div>
+      <ModelPresetBar
+        selected={[...sel]}
+        onApply={(models) =>
+          setSel(new Set(models && models.length ? models : [RECOMMENDED_KEY]))
+        }
+      />
       <div className="flex flex-wrap gap-1.5 mb-2">
         {ALL_MODELS.map((m) => {
           const on = sel.has(m.key);

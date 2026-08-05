@@ -115,6 +115,7 @@ async def list_workspace_members(workspace_id: str) -> list:
         u_copy = dict(u)
         u_copy["role"] = m.get("role") or u.get("role", "member")
         u_copy["status"] = m.get("status") or u.get("status", "active")
+        u_copy["joined_at"] = m.get("joined_at")
         out.append(u_copy)
     return out
 

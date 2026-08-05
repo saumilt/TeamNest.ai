@@ -26,6 +26,7 @@ import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { getItem, setItem } from "@/src/storage";
 import { AI_MODELS, RECOMMENDED_MODEL } from "@/src/aiModels";
+import { ModelPresetBar } from "@/src/components/ModelPresetBar";
 import { uploadZipChunked, MOBILE_MAX_SIZE } from "@/src/chunkedUpload";
 import { AiDiscussionCard } from "@/src/components/AiDiscussionCard";
 import { AiDiscussionsDashboard } from "@/src/components/AiDiscussionsDashboard";
@@ -1229,6 +1230,10 @@ export default function ChatScreen() {
           <TouchableOpacity activeOpacity={1} style={styles.modalCard} testID="ai-model-picker">
             <Text style={styles.modalTitle}>Ask AI with…</Text>
             <Text style={styles.modalSub}>Pick one or more models to answer your @ai message.</Text>
+            <ModelPresetBar
+              selected={pickerSel}
+              onApply={(m) => setPickerSel(m.length ? m : [RECOMMENDED_MODEL])}
+            />
             <View style={styles.modelGrid}>
               {AI_MODELS.map((m) => {
                 const on = pickerSel.includes(m.key);

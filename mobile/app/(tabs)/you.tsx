@@ -147,6 +147,14 @@ export default function YouScreen() {
         />
       </View>
 
+      <View style={[styles.card, { marginTop: spacing.lg }]}>
+        <TouchableOpacity testID="you-team" style={styles.linkRow} onPress={() => router.push("/team")}>
+          <Ionicons name="people-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>Team & Members</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       <CreditLimitsCard />
 
       {/* Brand positioning — mirrors the web landing hero */}
