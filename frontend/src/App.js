@@ -60,6 +60,7 @@ import Downloads from "@/pages/Downloads";
 import WebLayout from "@/components/web/WebLayout";
 import WebHome from "@/pages/web/Home";
 import WebHomeV2 from "@/pages/web/HomeV2";
+import AudienceLanding from "@/pages/web/audience/AudienceLanding";
 import WebShowcase from "@/pages/web/Showcase";
 import WebPricing from "@/pages/web/Pricing";
 import WebDevOsInfo from "@/pages/web/DevOsInfo";
@@ -134,6 +135,16 @@ export default function App() {
               /v2 kept as alias. Rollback = swap "/" back to <WebHome/> in the group above. */}
           <Route path="/" element={<WebHomeV2 />} />
           <Route path="/v2" element={<WebHomeV2 />} />
+
+          {/* Broadened-positioning audience & feature landing pages (public).
+              NOTE: /enterprise is intentionally NOT added here — it is an
+              authenticated app route below; "Enterprise" links point to /business. */}
+          <Route path="/individuals" element={<AudienceLanding kind="individuals" />} />
+          <Route path="/students" element={<AudienceLanding kind="students" />} />
+          <Route path="/teams" element={<AudienceLanding kind="teams" />} />
+          <Route path="/business" element={<AudienceLanding kind="business" />} />
+          <Route path="/ai-research" element={<AudienceLanding kind="ai-research" />} />
+          <Route path="/multi-model-ai" element={<AudienceLanding kind="multi-model-ai" />} />
 
           {/* Auth (own layout, two-column product surface) */}
           <Route path="/login" element={<WebAuth defaultMode="login" />} />

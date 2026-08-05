@@ -1,1 +1,27 @@
 /* Removed legacy CRA styles */
+
+/* Homepage entrance animation — CSS-only, staggered via inline animation-delay.
+   animation-fill-mode: both holds the start state during the delay and the end
+   state afterwards, so content always settles visible (no JS/observer needed). */
+@keyframes tnReveal {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tn-reveal {
+  animation: tnReveal 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tn-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
