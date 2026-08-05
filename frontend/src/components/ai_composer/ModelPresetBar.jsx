@@ -73,7 +73,7 @@ export default function ModelPresetBar({ selected = [], onApply }) {
               >
                 {active && <Check className="w-3 h-3" />}
                 {p.name}
-                <span className="text-[9px] text-ink-mute">· {p.models.length}</span>
+                <span className="text-[9px] text-ink-mute"> · {p.models.length}</span>
               </button>
               {canManage && (
                 <button

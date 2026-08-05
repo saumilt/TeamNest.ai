@@ -82,6 +82,7 @@ export default function ChatScreen() {
   const [pickerMode, setPickerMode] = useState<"send" | "inline">("inline");
   const [pickerSel, setPickerSel] = useState<string[]>([RECOMMENDED_MODEL]);
   const [pickerRemember, setPickerRemember] = useState(true);
+  const [pickerHint, setPickerHint] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isPersonalAI = chat?.type === "personal_ai";
