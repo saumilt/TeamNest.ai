@@ -30,6 +30,7 @@ from deps import (
 from models import (
     ChatAdminToggle,
     ChatViewerToggle,
+    ChatAvatarUpdate,
     ChatCreate,
     ChatMembersAdd,
     ChatPostingPolicy,
@@ -213,9 +214,40 @@ async def create_chat(payload: ChatCreate, current=Depends(require_user)):
         "created_by": current["id"],
         "created_at": now_iso(),
         "pinned_message_ids": [],
+        "avatar_icon": payload.avatar_icon if payload.type == "group" else None,
+        "avatar_color": payload.avatar_color if payload.type == "group" else None,
+        "avatar_url": payload.avatar_url if payload.type == "group" else None,
     }
     await db.chats.insert_one(chat.copy())
     return chat
+
+
+@router.patch("/chats/{chat_id}/avatar")
+async def update_chat_avatar(
+    chat_id: str, payload: ChatAvatarUpdate, current=Depends(require_user)
+):
+    """Admin-only: set/clear a group chat's avatar (preset icon+color or photo).
+    An empty string clears a field; None leaves it unchanged."""
+    chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0})
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    if chat.get("type") != "group":
+        raise HTTPException(400, "Avatars are only for group chats")
+    _ensure_chat_admin(chat, current["id"])
+
+    update: dict = {}
+    for field in ("avatar_icon", "avatar_color", "avatar_url"):
+        val = getattr(payload, field)
+        if val is not None:
+            update[field] = val or None  # empty string clears
+    if not update:
+        raise HTTPException(400, "No avatar fields provided")
+    # Setting a photo clears the preset icon so the UI has one source of truth.
+    if update.get("avatar_url"):
+        update.setdefault("avatar_icon", None)
+    await db.chats.update_one({"id": chat_id}, {"$set": update})
+    fresh = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    return fresh
 
 
 @router.get("/chats/{chat_id}/employee-recommendation")

@@ -73,6 +73,24 @@ class ChatCreate(BaseModel):
     # Group chat posting policy
     posting_policy: Optional[Literal["all", "admin_only", "selected"]] = "all"
     posting_user_ids: Optional[List[str]] = None  # required when posting_policy == "selected"
+    # Group avatar (optional): a preset icon+color, or an uploaded photo data URL.
+    avatar_icon: Optional[str] = None
+    avatar_color: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class ChatAvatarUpdate(BaseModel):
+    """Set/clear a group chat's avatar. Photo (avatar_url) takes precedence over
+    a preset icon+color in the UI. Pass empty string to clear a field."""
+    avatar_icon: Optional[str] = None
+    avatar_color: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class OnboardingUpdate(BaseModel):
+    """Post-signup persona capture: 'How will you use TeamNest?'."""
+    persona: Literal["personal", "student", "team", "business", "enterprise", "other"]
+    completed: Optional[bool] = True
 
 
 class ChatMembersAdd(BaseModel):

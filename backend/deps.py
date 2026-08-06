@@ -113,6 +113,8 @@ def public_user(u: dict) -> dict:
         "is_super_admin": is_super_admin(u),
         "edu_verified": bool(u.get("edu_verified")),
         "edu_email": u.get("edu_email"),
+        "persona": u.get("persona"),
+        "onboarding_completed": bool(u.get("onboarding_completed")),
     }
 
 

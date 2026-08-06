@@ -20,6 +20,14 @@ async def public_credit_pricing():
     return await compute_pricing_table()
 
 
+@router.get("/public/site-config")
+async def public_site_config():
+    """Marketing site config for logged-out visitors (e.g. active homepage hero
+    variant for the Superadmin A/B switch). Safe defaults if unset."""
+    doc = await db.site_config.find_one({"id": "marketing"}, {"_id": 0}) or {}
+    return {"hero_variant": doc.get("hero_variant") or "default"}
+
+
 
 @router.get("/public/snapshot/{token}")
 async def public_snapshot(token: str):

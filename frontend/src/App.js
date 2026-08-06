@@ -61,6 +61,7 @@ import WebLayout from "@/components/web/WebLayout";
 import WebHome from "@/pages/web/Home";
 import WebHomeV2 from "@/pages/web/HomeV2";
 import AudienceLanding from "@/pages/web/audience/AudienceLanding";
+import WebOnboarding from "@/pages/web/Onboarding";
 import WebShowcase from "@/pages/web/Showcase";
 import WebPricing from "@/pages/web/Pricing";
 import WebDevOsInfo from "@/pages/web/DevOsInfo";
@@ -145,6 +146,7 @@ export default function App() {
           <Route path="/business" element={<AudienceLanding kind="business" />} />
           <Route path="/ai-research" element={<AudienceLanding kind="ai-research" />} />
           <Route path="/multi-model-ai" element={<AudienceLanding kind="multi-model-ai" />} />
+          <Route path="/onboarding" element={<WebOnboarding />} />
 
           {/* Auth (own layout, two-column product surface) */}
           <Route path="/login" element={<WebAuth defaultMode="login" />} />

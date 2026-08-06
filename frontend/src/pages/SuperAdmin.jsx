@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { ShieldCheck, Coins, Loader2, Save, ToggleRight, SlidersHorizontal, Building2, Users2, Ticket, Bot } from "lucide-react";
+import { ShieldCheck, Coins, Loader2, Save, ToggleRight, SlidersHorizontal, Building2, Users2, Ticket, Bot, Megaphone, ExternalLink } from "lucide-react";
 import WorkspacesTab from "./superadmin/WorkspacesTab";
 import UsersTab from "./superadmin/UsersTab";
 import InvitesTab from "./superadmin/InvitesTab";
@@ -83,6 +83,26 @@ export default function SuperAdmin() {
   const [values, setValues] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [heroVariant, setHeroVariant] = useState("default");
+
+  useEffect(() => {
+    api
+      .get("/superadmin/site-config")
+      .then(({ data }) => setHeroVariant(data.hero_variant || "default"))
+      .catch(() => {});
+  }, []);
+
+  const setHero = async (variant) => {
+    const prev = heroVariant;
+    setHeroVariant(variant); // optimistic
+    try {
+      await api.patch("/superadmin/site-config", { hero_variant: variant });
+      toast.success(`Homepage hero set to "${variant === "alt" ? "Alternate" : "Default"}"`);
+    } catch (e) {
+      setHeroVariant(prev);
+      toast.error("Could not update homepage hero");
+    }
+  };
 
   useEffect(() => {
     if (user && !user.is_super_admin) {
@@ -235,6 +255,51 @@ export default function SuperAdmin() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save changes
         </button>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-surface-2 p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Megaphone className="w-4 h-4 text-ai" />
+            <h2 className="text-sm font-bold tracking-wide uppercase text-ink-dim">
+              Marketing — homepage hero
+            </h2>
+          </div>
+          <p className="text-xs text-ink-dim mb-4">
+            Choose which hero headline the public homepage shows. Changes apply immediately for logged-out visitors.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {[
+              { id: "default", title: "Default", copy: "Where people and AI think together." },
+              { id: "alt", title: "Alternate", copy: "Your work, research, and AI — in one place." },
+            ].map((v) => {
+              const active = heroVariant === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  data-testid={`hero-variant-${v.id}`}
+                  onClick={() => setHero(v.id)}
+                  className={`flex-1 text-left rounded-xl border p-4 transition-colors ${
+                    active ? "border-ai bg-ai-tint/20" : "border-white/10 hover:border-white/25"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">{v.title}</span>
+                    {active && <span className="text-[10px] font-bold uppercase tracking-wider text-ai">Active</span>}
+                  </div>
+                  <p className="text-xs text-ink-dim mt-1">&ldquo;{v.copy}&rdquo;</p>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-xs">
+            <a href="/?hero=default" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-ink-dim hover:text-ink">
+              <ExternalLink className="w-3 h-3" /> Preview default
+            </a>
+            <a href="/?hero=alt" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-ink-dim hover:text-ink">
+              <ExternalLink className="w-3 h-3" /> Preview alternate
+            </a>
+          </div>
+        </div>
         </>
         )}
       </div>

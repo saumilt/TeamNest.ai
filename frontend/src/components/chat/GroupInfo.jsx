@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import AiBillingTab from "@/components/chat/AiBillingTab";
 import AddMemberDialog from "@/components/AddMemberDialog";
+import GroupAvatarPicker from "@/components/web/GroupAvatarPicker";
 
 /**
  * GroupInfo — slide-over panel listing chat members with role badges.
@@ -186,6 +187,10 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
           )}
           {tab === "members" && (
           <>
+          {/* Group photo / preset icon (admins) */}
+          {isAdmin && (
+            <AvatarSection chatId={chatId} chat={chat} onUpdated={refresh} />
+          )}
           {/* Chat category — used for sidebar grouping and to seed Dev OS smart defaults. */}
           <CategorySection chatId={chatId} chat={chat} onUpdated={onChatChange} />
 
@@ -437,6 +442,40 @@ function MemberRow({ member, isSelf, canManage, busy, onRemove, onToggleAdmin })
         </div>
       )}
     </li>
+  );
+}
+
+function AvatarSection({ chatId, chat, onUpdated }) {
+  const [value, setValue] = useState({});
+  useEffect(() => {
+    setValue({
+      avatar_icon: chat?.avatar_icon || null,
+      avatar_color: chat?.avatar_color || null,
+      avatar_url: chat?.avatar_url || null,
+    });
+  }, [chat?.avatar_icon, chat?.avatar_color, chat?.avatar_url]);
+
+  const handleChange = async (next) => {
+    setValue(next);
+    try {
+      await api.patch(`/chats/${chatId}/avatar`, {
+        avatar_icon: next.avatar_icon ?? "",
+        avatar_color: next.avatar_color ?? "",
+        avatar_url: next.avatar_url ?? "",
+      });
+      onUpdated?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not update group photo");
+    }
+  };
+
+  return (
+    <section data-testid="group-avatar-section">
+      <div className="text-[11px] font-mono uppercase tracking-widest text-ink-dim mb-2">
+        Group photo
+      </div>
+      <GroupAvatarPicker value={value} name={chat?.name || "Group"} onChange={handleChange} />
+    </section>
   );
 }
 

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import GroupAvatarPicker from "@/components/web/GroupAvatarPicker";
 
 const MODELS = [
   { key: "chatgpt", name: "ChatGPT" },
@@ -42,6 +43,7 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const [defaultModels, setDefaultModels] = useState(["chatgpt", "claude", "gemini"]);
   const [type, setType] = useState("group");
   const [postingPolicy, setPostingPolicy] = useState("all");
+  const [avatar, setAvatar] = useState({});
 
   useEffect(() => {
     if (open) {
@@ -49,6 +51,7 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
       api.get("/folders").then(({ data }) => setFolders(data));
       setName(""); setDescription(""); setSelected([]); setFolderId(""); setType("group");
       setPostingPolicy("all");
+      setAvatar({});
       setCreatingFolder(false); setNewFolderName("");
     }
   }, [open]);
@@ -91,6 +94,9 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
         project_folder_id: folderId || null,
         default_models: defaultModels,
         posting_policy: type === "group" ? postingPolicy : undefined,
+        avatar_icon: type === "group" ? avatar.avatar_icon || null : null,
+        avatar_color: type === "group" ? avatar.avatar_color || null : null,
+        avatar_url: type === "group" ? avatar.avatar_url || null : null,
       });
       toast.success("Chat created");
       onCreated?.(data);
@@ -120,6 +126,10 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
               <div>
                 <div className="label-mono mb-2">GROUP NAME</div>
                 <Input data-testid="new-chat-name" value={name} onChange={(e) => setName(e.target.value)} className="bg-[#121214] border-white/10 rounded-sm" placeholder="Q2 product launch" />
+              </div>
+              <div>
+                <div className="label-mono mb-2">GROUP PHOTO (OPTIONAL)</div>
+                <GroupAvatarPicker value={avatar} name={name || "Group"} onChange={setAvatar} />
               </div>
               <div>
                 <div className="label-mono mb-2">DESCRIPTION</div>

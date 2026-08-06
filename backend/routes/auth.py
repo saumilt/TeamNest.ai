@@ -26,7 +26,7 @@ from deps import (
     public_user,
     require_user,
 )
-from models import UserLogin, UserPreferences, UserSignup
+from models import OnboardingUpdate, UserLogin, UserPreferences, UserSignup
 from services.workspace_membership import ensure_membership, list_user_workspaces
 
 router = APIRouter()
@@ -351,6 +351,12 @@ async def update_preferences(payload: UserPreferences, current=Depends(require_u
     if fav and fav not in MODEL_CONFIG:
         raise HTTPException(400, f"Unknown model key: {fav}")
     favs = [m for m in (payload.favorite_models or []) if m in MODEL_CONFIG]
-    update = {"preferences.favorite_ai_model": fav, "preferences.favorite_models": favs}
+@router.patch("/user/onboarding")
+async def update_onboarding(payload: OnboardingUpdate, current=Depends(require_user)):
+    """Save the user's persona ('How will you use TeamNest?') and mark
+    onboarding complete. Used to tailor the first-run experience."""
+    update = {"persona": payload.persona}
+    if payload.completed:
+        update["onboarding_completed"] = True
     await db.users.update_one({"id": current["id"]}, {"$set": update})
-    return {"favorite_ai_model": fav, "favorite_models": favs}
+    return {"persona": payload.persona, "onboarding_completed": bool(payload.completed)}

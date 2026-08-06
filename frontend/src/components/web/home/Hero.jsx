@@ -127,9 +127,21 @@ function HeroWorkspaceMock() {
   );
 }
 
-export default function Hero() {
+const HERO_COPY = {
+  default: {
+    headline: "Where people and AI think together.",
+    sub: "TeamNest brings human conversations, multiple AI models, research, files, tasks, and knowledge into one connected workspace. Work independently, collaborate with classmates, manage a team, or build intelligence across an entire organization.",
+  },
+  alt: {
+    headline: "Your work, research, and AI — in one place.",
+    sub: "Use multiple AI assistants, collaborate with people, organize research, manage tasks, and keep everything you learn connected by project.",
+  },
+};
+
+export default function Hero({ variant = "default" }) {
+  const copy = HERO_COPY[variant] || HERO_COPY.default;
   return (
-    <section className="relative pt-28 pb-16 md:pt-32 md:pb-20 px-5" data-testid="home-hero">
+    <section className="relative pt-28 pb-16 md:pt-32 md:pb-20 px-5" data-testid="home-hero" data-hero-variant={variant}>
       <EngineBackdrop />
       <div className="relative max-w-6xl mx-auto">
         <div className="max-w-3xl">
@@ -142,8 +154,9 @@ export default function Hero() {
             <h1
               className="text-[40px] sm:text-[56px] lg:text-[64px] leading-[1.03] font-bold tracking-[-0.03em] text-[var(--w-text)]"
               style={{ textWrap: "balance" }}
+              data-testid="hero-headline"
             >
-              Where people and AI think together.
+              {copy.headline}
             </h1>
           </Reveal>
           <Reveal delay={120}>
@@ -151,10 +164,7 @@ export default function Hero() {
               className="mt-6 text-[18px] sm:text-[20px] leading-8 text-[var(--w-text-dim)] max-w-[64ch]"
               style={{ textWrap: "pretty" }}
             >
-              TeamNest brings human conversations, multiple AI models, research, files,
-              tasks, and knowledge into one connected workspace. Work independently,
-              collaborate with classmates, manage a team, or build intelligence across
-              an entire organization.
+              {copy.sub}
             </p>
           </Reveal>
           <Reveal delay={180}>

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import SeoHelmet from "@/components/web/SeoHelmet";
@@ -39,8 +39,36 @@ function useHashScroll() {
   }, [hash]);
 }
 
+/** Resolve the active homepage hero variant: `?hero=alt|default` preview
+    override wins, else the Superadmin-set server config, else "default". */
+function useHeroVariant() {
+  const { search } = useLocation();
+  const [variant, setVariant] = useState("default");
+  useEffect(() => {
+    const override = new URLSearchParams(search).get("hero");
+    if (override === "alt" || override === "default") {
+      setVariant(override);
+      return;
+    }
+    let alive = true;
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/public/site-config`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive && (d?.hero_variant === "alt" || d?.hero_variant === "default")) {
+          setVariant(d.hero_variant);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [search]);
+  return variant;
+}
+
 export default function WebHomeV2() {
   useHashScroll();
+  const heroVariant = useHeroVariant();
   return (
     <WebThemeProvider forceDark>
       <SeoHelmet
@@ -51,7 +79,7 @@ export default function WebHomeV2() {
       <div className="min-h-screen bg-[var(--w-bg)] text-[var(--w-text)]">
         <NavV2 />
         <main className="pt-16">
-          <Hero />
+          <Hero variant={heroVariant} />
           <AudienceCards />
           <ProblemSection />
           <MultiModelSection />

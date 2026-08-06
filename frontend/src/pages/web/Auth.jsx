@@ -180,6 +180,8 @@ function AuthForm({ mode, setMode }) {
         }
       } else {
         await signup(form.name || form.email.split("@")[0], form.email, form.password);
+        nav("/onboarding");
+        return;
       }
       nav("/chats");
     } catch (err) {

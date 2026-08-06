@@ -8,7 +8,7 @@ flags that gate core platform capabilities app-wide:
   - allow_subuser_deletion    (admins may remove members from group chats)
   - require_template_approval (marketplace submissions need admin approval)
 """
-from typing import Optional
+from typing import Literal, Optional
 
 import os
 
@@ -87,6 +87,29 @@ async def update_settings(
     if public_signup is not None:
         await _set_public_signup(bool(public_signup))
     return {"settings": await _settings_payload(), "defaults": DEFAULTS_OUT}
+
+
+# ─── Marketing site config (homepage hero A/B switch) ───────────────────────
+class SiteConfigPatch(BaseModel):
+    hero_variant: Literal["default", "alt"]
+
+
+@router.get("/superadmin/site-config")
+async def read_site_config(current=Depends(require_super_admin)):
+    doc = await db.site_config.find_one({"id": "marketing"}, {"_id": 0}) or {}
+    return {"hero_variant": doc.get("hero_variant") or "default"}
+
+
+@router.patch("/superadmin/site-config")
+async def update_site_config(
+    payload: SiteConfigPatch, current=Depends(require_super_admin)
+):
+    await db.site_config.update_one(
+        {"id": "marketing"},
+        {"$set": {"hero_variant": payload.hero_variant}},
+        upsert=True,
+    )
+    return {"hero_variant": payload.hero_variant}
 
 
 

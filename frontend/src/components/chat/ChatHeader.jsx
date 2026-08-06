@@ -2,6 +2,7 @@ import { ChevronLeft, Phone, Video, Plug, UserPlus, MoreVertical, LogOut, Trash2
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Avatar from "@/components/ui-v2/Avatar";
+import { groupAvatarProps } from "@/components/web/groupAvatarPresets";
 import SmartHirePill from "@/components/chat/SmartHirePill";
 import DevProjectSwitcher from "@/components/chat/DevProjectSwitcher";
 
@@ -73,10 +74,10 @@ export default function ChatHeader({
 
         <Avatar
           name={chat.name || (isAIChat ? "AI" : "Direct")}
-          src={chat.avatar}
           size={36}
           ring={isAIChat ? "#B794F4" : undefined}
           className={isAIChat ? "bg-ai-tint" : ""}
+          {...(chat.type === "group" ? groupAvatarProps(chat) : { src: chat.avatar })}
         />
 
         <div className="min-w-0 flex-1">

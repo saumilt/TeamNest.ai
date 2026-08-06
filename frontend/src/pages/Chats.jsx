@@ -38,6 +38,7 @@ import IntegrationsDialog from "@/components/IntegrationsDialog";
 import InviteGuestDialog from "@/components/InviteGuestDialog";
 import { CreateWorkspaceDialog } from "@/components/workspace/CreateWorkspaceDialog";
 import Avatar from "@/components/ui-v2/Avatar";
+import { groupAvatarProps } from "@/components/web/groupAvatarPresets";
 import Pill from "@/components/ui-v2/Pill";
 import safeStorage from "@/lib/safeStorage";
 import ResizableEdge from "@/components/ui-v2/ResizableEdge";
@@ -664,7 +665,7 @@ function ChatRow({ chat, active, onClick, onLeave, onDelete }) {  const c = chat
         }`}
       >
         <div className="relative">
-          <Avatar name={c.name || "Direct"} src={c.avatar} size={44} />
+          <Avatar name={c.name || "Direct"} size={44} {...(c.type === "group" ? groupAvatarProps(c) : { src: c.avatar })} />
           {c.pinned && (
             <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-brand flex items-center justify-center">
               <Pin className="w-2 h-2 text-black" strokeWidth={3} />
