@@ -17,6 +17,18 @@ import { apiGet } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
+const REDEEM_ERRORS: Record<string, string> = {
+  code_expired: "This code is expired.",
+  code_used: "This code has already been used.",
+  code_inactive: "This code is no longer active.",
+  code_invalid: "That code isn't valid.",
+  code_domain_not_allowed: "Your email domain isn't allowed for this code.",
+};
+function humanizeRedeemError(msg?: string): string {
+  if (!msg) return "";
+  return REDEEM_ERRORS[msg] || msg;
+}
+
 export default function Redeem() {
   const { redeem } = useAuth();
   const insets = useSafeAreaInsets();
@@ -64,7 +76,7 @@ export default function Redeem() {
       });
       router.replace("/onboarding");
     } catch (e: any) {
-      setError(e.message || "Could not redeem this code");
+      setError(humanizeRedeemError(e?.message) || "Could not redeem this code");
     } finally {
       setBusy(false);
     }

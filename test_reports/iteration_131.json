@@ -1,0 +1,27 @@
+{
+  "summary": "Mobile-only frontend retest of the Signup Onboarding flow on the Expo web preview. All 8 requested scenarios PASS end-to-end: invalid code humanization, DEVOS100 redeem -> onboarding-step-persona with all 6 persona cards, persona-team + onboarding-project-name + onboarding-finish (POST /api/chats -> 200 and PATCH /api/user/onboarding -> 200, landed on /(tabs) showing the newly-created 'QA Team Project Alpha' chat), persona-personal + template chip + finish, persona-enterprise immediate finish, persona-other immediate finish, onboarding-skip, no onboarding on reload after completion, and demo-login-btn goes straight to Chats (no onboarding).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "onboarding.tsx finish() still swallows API errors and routes to /(tabs) regardless (main agent noted this is intentional for parity with web). If PATCH /api/user/onboarding fails silently, the user would be looped back into onboarding on next load. In this retest the PATCH returned 200 and the reload check confirmed onboarding is not shown again, so no user-visible regression."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "Onboarding 100% (8/8 scenarios pass)"},
+  "test_credentials": "Invite: DEVOS100 (valid, 100 remaining). Fresh emails minted per scenario: onb_team_<ts>@test.io, onb_personal_<ts>@test.io, onb_enterprise_<ts>@test.io, onb_other_<ts>@test.io, onb_skip_<ts>@test.io. Password: Testpass$123.",
+  "seed_data_creation": "5 fresh redeem users + 1 chat 'QA Team Project Alpha' created via the persona-team path (POST /api/chats returned 200).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile Signup Onboarding is fully green. Verified from Expo web preview at https://nest-app-prep.expo.preview.emergentagent.com : (1) have-invite-code-link -> Redeem screen. (2) Invalid code 'ZZZZ9999' submit now shows humanized 'This code is invalid.' (was raw 'code_invalid'). (3) DEVOS100 -> redeem-code-valid banner 'Dev OS Demo · 100 spots left'. (4) After Claim access, routed to /onboarding with onboarding-step-persona and all 6 persona cards (personal/student/team/business/enterprise/other). (5) persona-team -> step2 onboarding-project-name -> onboarding-finish calls POST /api/chats (200) + PATCH /api/user/onboarding (200) and lands on /(tabs) with the created group visible in Chats list. (6) persona-personal -> step2 template chips (research-topic/personal-plan/business-idea/purchase-comparison/trip-planning) -> finish -> /(tabs). (7) persona-enterprise and persona-other skip step2 and go directly to /(tabs). (8) onboarding-skip -> /(tabs). (9) After completion, reloading '/' stays on /(tabs) (no onboarding re-shown). (10) demo-login-btn from a cleared session goes straight to /(tabs) with no onboarding intercept.",
+  "rca of the issue": "N/A — previous blocker (expired DEVOS100) has been resolved. Backend GET /api/launch/code/DEVOS100 now returns state=valid with 100 remaining; POST /api/launch/code/redeem returns 200; humanization map added in mobile/app/(auth)/redeem.tsx handles code_invalid/code_expired/code_used/code_inactive/code_domain_not_allowed."
+}
