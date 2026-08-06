@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 131 (Jun 2026) — Mobile Group Avatars + Mobile Signup Onboarding
+- **Mobile Group Avatars** (Expo parity with web): extended `Avatar.tsx` (photo → preset icon+color → initials), new `groupAvatarPresets.ts` + `GroupAvatarPicker.tsx` (preset color swatches + optional photo upload; photo downscaled to a 256px JPEG data URL via expo-image-manipulator, mirroring web). Wired into group-create (`NewChatSheet.tsx`), chat list + chat header; admins edit via the header avatar → `PATCH /api/chats/{id}/avatar`. Installed `expo-image-manipulator@14.0.8`.
+- **Mobile Signup Onboarding** (`app/onboarding.tsx`): mirrors web ("How will you use TeamNest?" → persona → tailored first project/template, Skip supported). Triggers only after redeem/signup; login & demo-login skip it. Humanized redeem submit errors.
+- No backend changes (reused `POST /api/chats` avatar fields, `PATCH /api/chats/{id}/avatar`, `PATCH /api/user/onboarding`). testing_agent mobile = PASS (iterations 130 + 131). Refilled seeded code `DEVOS100` for onboarding signup testing.
+- **Phase 2 Mobile Calls (LiveKit) still PENDING** — deferred until after user review; needs native modules + platform guards + a Publish build (not previewable).
+
 ### Iteration 129 (Jun 2026) — Mobile Chats parity (Phase 1)
 - Mobile now has: New Chat sheet (Development project, New group, New contact, Invite via SMS/WhatsApp, Find friends from contacts), chat filters (All/Direct/Groups/AI/Unread), workspace switcher + folder filters, and a Team screen. Plus workspace-shared Model Presets, an Invited→Joined tracker with Mailgun delivery badges, and a P0 mobile picker crash fix. Testing agent = PASS.
 - **Phase 2 PENDING**: LiveKit audio/video/screen-share calls on mobile — backend already configured; needs a native/dev build (not previewable) and platform-guarded imports so the Expo web preview keeps bundling.

@@ -3,6 +3,15 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 131 (Jun 2026) — Mobile Group Avatars + Mobile Signup Onboarding (Phase parity) — VERIFIED
+Ported to Expo mobile the two features already shipped on web + backend this milestone. No backend changes (endpoints existed: `POST /api/chats` with avatar fields, `PATCH /api/chats/{id}/avatar`, `PATCH /api/user/onboarding`).
+- **Mobile Group Avatars**: `Avatar.tsx` extended to render an uploaded photo (`src`) → preset icon+color → name-initials fallback. New `groupAvatarPresets.ts` (icon-key→Ionicons map + 8 `GROUP_COLORS` + `groupAvatarProps(chat)`, mirroring the web keys so a group looks consistent across surfaces). New `GroupAvatarPicker.tsx` — preset color swatches + optional photo upload (expo-image-picker with contextual permission flow → expo-image-manipulator downscales to a 256px JPEG **data URL** stored in `avatar_url`, mirroring the web picker). Wired into `NewChatSheet.tsx` group-create (GROUP PHOTO section, sends `avatar_icon/color/url`), the chat-list rows and the chat header (`(tabs)/index.tsx`, `chat/[id].tsx`). Chat-header avatar is tappable for group **admins** → edit modal → `PATCH /api/chats/{id}/avatar`. Installed `expo-image-manipulator@14.0.8`.
+- **Mobile Signup Onboarding**: new `app/onboarding.tsx` mirroring the web flow ("How will you use TeamNest?" → 6 personas → tailored first step: project-name for student/team/business, template chips for personal, immediate finish for enterprise/other; Skip supported). Only triggers after **redeem** (mobile signup) — `redeem.tsx` now routes to `/onboarding`; login/demo-login are unaffected (no forced onboarding for existing users). Route registered in root `_layout.tsx`. Also humanized redeem submit errors (`code_expired`→"This code is expired." etc.).
+- Tested: testing_agent mobile PASS — Group Avatars (iteration_130) and Onboarding (iteration_131) both fully green, no bugs/regressions.
+- Ops: refilled seeded invite code `DEVOS100` (status active, used_count 0, max_uses 100, expires 2027) via `/app/scripts/refill_devos100.py` so the onboarding signup flow is testable.
+- **Phase 2 Mobile Calls (LiveKit) — NOT STARTED** (deferred by user until after reviewing Avatars + Onboarding). Needs native LiveKit RN modules + platform guards; cannot be validated on Expo Go / web preview — requires a native build via Publish.
+
+
 ## Iteration 130 (Jun 2026) — Marketing site REBUILD preview (/v2) — Collective Intelligence repositioning
 User asked for a NEW website design (repositioning around one idea: the Collective Intelligence Engine) as a standalone page to approve BEFORE dropping the old design. Studied live teamnest.ai + reused the existing web design system (tokens `--w-brand #FFD23F`, `--w-ai #B794F4`, dark canvas, LogoMark/Wordmark) and existing product mockups (`components/web/mocks.jsx`) — nothing invented.
 - **New standalone route `/v2` → `pages/web/HomeV2.jsx`** (own nav/footer, `WebThemeProvider forceDark`). Old `/` (Home.jsx) untouched.
