@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.emergent.nestappprepb1f16faa"
+      "bundleIdentifier": "app.emergent.nestappprepb1f16faa",
+      "infoPlist": {
+        "NSCameraUsageDescription": "TeamNest uses your camera for video calls.",
+        "NSMicrophoneUsageDescription": "TeamNest uses your microphone for calls."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,17 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "app.emergent.nestappprepb1f16faa"
+      "package": "app.emergent.nestappprepb1f16faa",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "MODIFY_AUDIO_SETTINGS",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PROJECTION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -48,6 +62,25 @@
         "expo-contacts",
         {
           "contactsPermission": "TeamNest uses your contacts to find teammates already on TeamNest so you can start chatting instantly."
+        }
+      ],
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication",
+            "enableScreenShareService": true
+          },
+          "ios": {
+            "enableMultitaskingCameraAccess": false
+          }
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "TeamNest uses your camera for video calls.",
+          "microphonePermission": "TeamNest uses your microphone for calls."
         }
       ]
     ],

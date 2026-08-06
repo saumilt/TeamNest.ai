@@ -71,6 +71,8 @@ export default function ChatScreen() {
   const [avatarDraft, setAvatarDraft] = useState<GroupAvatarValue>({});
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarFlash, setAvatarFlash] = useState("");
+  const [callStarting, setCallStarting] = useState(false);
+  const [callError, setCallError] = useState("");
   const [msgAction, setMsgAction] = useState<any>(null);
   const [showMemory, setShowMemory] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -651,6 +653,49 @@ export default function ChatScreen() {
       );
     }
 
+    if (item.message_type === "call_started" || item.message_type === "call_ended") {
+      const md = item.metadata || {};
+      const callMode = md.mode === "video" ? "video" : "audio";
+      const isEndedMsg = item.message_type === "call_ended";
+      const hasEnded =
+        isEndedMsg ||
+        messages.some((m) => m.message_type === "call_ended" && m.metadata?.call_id === md.call_id);
+      const live = item.message_type === "call_started" && !hasEnded;
+      const dur = md.duration_seconds;
+      const durText =
+        dur != null ? (dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s` : `${dur}s`) : "";
+      return (
+        <View style={[styles.callCard, live && styles.callCardLive]} testID={`message-${item.id}`}>
+          <View style={[styles.callCardIcon, live && styles.callCardIconLive]}>
+            <Ionicons
+              name={callMode === "video" ? "videocam" : "call"}
+              size={16}
+              color={live ? "#09090b" : colors.textSecondary}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.callCardTitle}>
+              {hasEnded ? "Call ended" : `${callMode === "video" ? "Video" : "Audio"} call started`}
+            </Text>
+            <Text style={styles.callCardSub} numberOfLines={1}>
+              {hasEnded ? (durText ? `Duration ${durText}` : "Ended") : "Tap join to hop in"}
+            </Text>
+          </View>
+          {live ? (
+            <TouchableOpacity
+              testID={`call-join-${md.call_id}`}
+              onPress={() => router.push(`/call/${md.call_id}?mode=${callMode}&title=${encodeURIComponent(title)}`)}
+              style={styles.callJoinBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="call" size={12} color="#09090b" />
+              <Text style={styles.callJoinText}>Join</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      );
+    }
+
     // Quoted-reply preview (only user text replies render a quote).
     const parent =
       item.message_type === "text" && item.parent_message_id
@@ -809,6 +854,22 @@ export default function ChatScreen() {
     }
   };
 
+  const startCall = async (mode: "audio" | "video") => {
+    if (callStarting) return;
+    setCallStarting(true);
+    try {
+      const res = await apiPost("/api/calls/start", { chat_id: chatId, mode });
+      const call = res?.call || res;
+      if (call?.id) {
+        router.push(`/call/${call.id}?mode=${mode}&title=${encodeURIComponent(title)}`);
+      }
+    } catch (e: any) {
+      setCallError(e?.message || "Could not start the call.");
+    } finally {
+      setCallStarting(false);
+    }
+  };
+
   // "AI is thinking" = a running question placeholder with no matching answer yet.
   const answeredThreads = new Set(
     messages
@@ -885,6 +946,28 @@ export default function ChatScreen() {
             <Text style={styles.devPillText}>Dev OS</Text>
           </View>
         ) : null}
+        {chat && chat.type !== "personal_ai" ? (
+          <>
+            <TouchableOpacity
+              testID="chat-call-audio-btn"
+              onPress={() => startCall("audio")}
+              disabled={callStarting}
+              style={styles.backBtn}
+              accessibilityLabel="Start audio call"
+            >
+              <Ionicons name="call-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="chat-call-video-btn"
+              onPress={() => startCall("video")}
+              disabled={callStarting}
+              style={styles.backBtn}
+              accessibilityLabel="Start video call"
+            >
+              <Ionicons name="videocam-outline" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </>
+        ) : null}
         <TouchableOpacity
           testID="chat-save-to-role-btn"
           onPress={openSaveRole}
@@ -894,6 +977,14 @@ export default function ChatScreen() {
           <Ionicons name="bookmark-outline" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
+
+      {callError ? (
+        <TouchableOpacity testID="call-error-banner" onPress={() => setCallError("")} style={styles.callErrorBanner} activeOpacity={0.8}>
+          <Ionicons name="warning" size={14} color={colors.danger} />
+          <Text style={styles.callErrorText} numberOfLines={2}>{callError}</Text>
+          <Ionicons name="close" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+      ) : null}
 
       {chat && chat.type !== "personal_ai" && (
         <View style={styles.viewSwitchBar}>
@@ -1430,6 +1521,16 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 2 },
   headerAvatar: { marginRight: 2 },
+  callErrorBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "rgba(248,113,113,0.12)", paddingHorizontal: spacing.lg, paddingVertical: 10, marginHorizontal: spacing.md, marginTop: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.danger },
+  callErrorText: { flex: 1, color: colors.textPrimary, fontSize: font.small, fontWeight: "600" },
+  callCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, alignSelf: "center", backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: spacing.lg, marginVertical: spacing.sm, maxWidth: "88%" },
+  callCardLive: { borderColor: colors.accentBorder, backgroundColor: colors.accentDim },
+  callCardIcon: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceHover },
+  callCardIconLive: { backgroundColor: colors.accent },
+  callCardTitle: { color: colors.textPrimary, fontSize: font.small, fontWeight: "700" },
+  callCardSub: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1 },
+  callJoinBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 8 },
+  callJoinText: { color: "#09090b", fontWeight: "800", fontSize: font.tiny },
   avatarFlash: { color: colors.danger, fontSize: font.small, marginTop: spacing.sm },
   avatarEditBtns: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm, marginTop: spacing.lg },
   avatarCancelBtn: { paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },

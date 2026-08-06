@@ -23,6 +23,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="onboarding" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="call/[id]" options={{ animation: "slide_from_bottom" }} />
             <Stack.Screen name="team" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="builder/index" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="builder/[id]" options={{ animation: "slide_from_right" }} />
