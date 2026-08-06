@@ -62,7 +62,7 @@ export default function Redeem() {
         email: email.trim(),
         password,
       });
-      router.replace("/(tabs)");
+      router.replace("/onboarding");
     } catch (e: any) {
       setError(e.message || "Could not redeem this code");
     } finally {

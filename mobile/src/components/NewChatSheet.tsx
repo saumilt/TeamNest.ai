@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { Avatar } from "@/src/components/Avatar";
+import { GroupAvatarPicker, GroupAvatarValue } from "@/src/components/GroupAvatarPicker";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 type Member = { id: string; name: string; email?: string; phone?: string; avatar?: string | null };
@@ -63,6 +64,7 @@ export function NewChatSheet({
 
   const [groupName, setGroupName] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [groupAvatar, setGroupAvatar] = useState<GroupAvatarValue>({});
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [contactsErr, setContactsErr] = useState("");
@@ -72,7 +74,7 @@ export function NewChatSheet({
   useEffect(() => {
     if (!visible) return;
     setView("home"); setQuery(""); setInviteName(""); setInvitePhone("+");
-    setGroupName(""); setSelected([]); setMatches([]); setContactsErr(""); setContactsBlocked(false);
+    setGroupName(""); setSelected([]); setGroupAvatar({}); setMatches([]); setContactsErr(""); setContactsBlocked(false);
     apiGet("/api/workspace/members")
       .then((m) => setMembers(Array.isArray(m) ? m : m?.members || []))
       .catch(() => setMembers([]));
@@ -121,7 +123,15 @@ export function NewChatSheet({
     if (!groupName.trim() || selected.length === 0) return;
     setBusy(true);
     try {
-      const chat = await apiPost("/api/chats", { name: groupName.trim(), type: "group", member_ids: selected, default_models: [] });
+      const chat = await apiPost("/api/chats", {
+        name: groupName.trim(),
+        type: "group",
+        member_ids: selected,
+        default_models: [],
+        avatar_icon: groupAvatar.avatar_icon || null,
+        avatar_color: groupAvatar.avatar_color || null,
+        avatar_url: groupAvatar.avatar_url || null,
+      });
       onChatCreated(chat); onClose();
     } catch (e: any) { say(e?.message || "Could not create group"); }
     finally { setBusy(false); }
@@ -234,7 +244,14 @@ export function NewChatSheet({
 
             {view === "group" && (
               <View style={styles.pad}>
-                <Text style={styles.label}>GROUP NAME</Text>
+                <Text style={styles.label}>GROUP PHOTO</Text>
+                <GroupAvatarPicker
+                  value={groupAvatar}
+                  name={groupName || "Group"}
+                  onChange={setGroupAvatar}
+                  onError={say}
+                />
+                <Text style={[styles.label, { marginTop: spacing.lg }]}>GROUP NAME</Text>
                 <TextInput testID="group-name-input" value={groupName} onChangeText={setGroupName} placeholder="Design team" placeholderTextColor={colors.textMuted} style={styles.input} />
                 <Text style={[styles.label, { marginTop: spacing.lg }]}>ADD MEMBERS · {selected.length}</Text>
                 {members.map((m) => {

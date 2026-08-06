@@ -18,10 +18,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiGet, apiPost, apiUpload, getBase } from "@/src/api";
+import { apiGet, apiPatch, apiPost, apiUpload, getBase } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Markdown } from "@/src/markdown";
 import { MessageAttachments } from "@/src/components/MessageAttachments";
+import { Avatar } from "@/src/components/Avatar";
+import { groupAvatarProps } from "@/src/components/groupAvatarPresets";
+import { GroupAvatarPicker, GroupAvatarValue } from "@/src/components/GroupAvatarPicker";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { getItem, setItem } from "@/src/storage";
@@ -64,6 +67,10 @@ export default function ChatScreen() {
   const [aiSession, setAiSession] = useState<any>({ active: false });
   const [saveRoleOpen, setSaveRoleOpen] = useState(false);
   const [roles, setRoles] = useState<any[]>([]);
+  const [avatarEditOpen, setAvatarEditOpen] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState<GroupAvatarValue>({});
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarFlash, setAvatarFlash] = useState("");
   const [msgAction, setMsgAction] = useState<any>(null);
   const [showMemory, setShowMemory] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -772,6 +779,36 @@ export default function ChatScreen() {
       ? "Ask me anything with @ai"
       : `${(chat?.members || []).length} members`;
 
+  const isGroup = chat?.type === "group";
+  const canEditAvatar = isGroup && !!chat?.is_current_user_admin;
+
+  const openAvatarEdit = () => {
+    setAvatarDraft({
+      avatar_icon: chat?.avatar_icon || null,
+      avatar_color: chat?.avatar_color || null,
+      avatar_url: chat?.avatar_url || null,
+    });
+    setAvatarFlash("");
+    setAvatarEditOpen(true);
+  };
+
+  const saveAvatar = async () => {
+    setAvatarSaving(true);
+    try {
+      const fresh = await apiPatch(`/api/chats/${chatId}/avatar`, {
+        avatar_icon: avatarDraft.avatar_icon ?? "",
+        avatar_color: avatarDraft.avatar_color ?? "",
+        avatar_url: avatarDraft.avatar_url ?? "",
+      });
+      setChat(fresh);
+      setAvatarEditOpen(false);
+    } catch (e: any) {
+      setAvatarFlash(e?.message || "Could not update group photo");
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
   // "AI is thinking" = a running question placeholder with no matching answer yet.
   const answeredThreads = new Set(
     messages
@@ -801,6 +838,20 @@ export default function ChatScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <TouchableOpacity testID="chat-back-btn" onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="chat-header-avatar"
+          activeOpacity={canEditAvatar ? 0.7 : 1}
+          onPress={canEditAvatar ? openAvatarEdit : undefined}
+          disabled={!canEditAvatar}
+          style={styles.headerAvatar}
+        >
+          <Avatar
+            name={title}
+            ai={chat?.type === "personal_ai"}
+            size={38}
+            {...groupAvatarProps(chat)}
+          />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -1167,6 +1218,33 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </Modal>
 
+      <Modal visible={avatarEditOpen} transparent animationType="fade" onRequestClose={() => setAvatarEditOpen(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setAvatarEditOpen(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} testID="group-avatar-edit-modal">
+            <Text style={styles.modalTitle}>Group photo</Text>
+            <Text style={styles.modalSub}>Pick a color or upload a photo for this group.</Text>
+            <View style={{ marginTop: spacing.md }}>
+              <GroupAvatarPicker
+                value={avatarDraft}
+                name={chat?.name || "Group"}
+                onChange={setAvatarDraft}
+                onError={setAvatarFlash}
+              />
+            </View>
+            {avatarFlash ? <Text style={styles.avatarFlash} testID="group-avatar-edit-error">{avatarFlash}</Text> : null}
+            <View style={styles.avatarEditBtns}>
+              <TouchableOpacity testID="group-avatar-edit-cancel" onPress={() => setAvatarEditOpen(false)} style={styles.avatarCancelBtn}>
+                <Text style={styles.avatarCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="group-avatar-edit-save" onPress={saveAvatar} disabled={avatarSaving} style={[styles.avatarSaveBtn, avatarSaving && { opacity: 0.5 }]}>
+                {avatarSaving ? <ActivityIndicator color="#09090b" size="small" /> : <Text style={styles.avatarSaveText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+
       <Modal visible={!!msgAction} transparent animationType="fade" onRequestClose={() => setMsgAction(null)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setMsgAction(null)}>
           <View style={styles.modalCard} testID="msg-action-modal">
@@ -1351,6 +1429,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   backBtn: { padding: 2 },
+  headerAvatar: { marginRight: 2 },
+  avatarFlash: { color: colors.danger, fontSize: font.small, marginTop: spacing.sm },
+  avatarEditBtns: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm, marginTop: spacing.lg },
+  avatarCancelBtn: { paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
+  avatarCancelText: { color: colors.textSecondary, fontWeight: "700", fontSize: font.small },
+  avatarSaveBtn: { paddingHorizontal: spacing.xl, paddingVertical: 10, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", minWidth: 84 },
+  avatarSaveText: { color: "#09090b", fontWeight: "800", fontSize: font.small },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: spacing.lg },
   modalCard: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   modalTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800" },

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Avatar } from "@/src/components/Avatar";
+import { groupAvatarProps } from "@/src/components/groupAvatarPresets";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { NewChatSheet } from "@/src/components/NewChatSheet";
 import { NotificationBell } from "@/src/components/NotificationBell";
@@ -156,7 +157,7 @@ export default function ChatsScreen() {
         style={styles.row}
         onPress={() => router.push(`/chat/${item.id}`)}
       >
-        <Avatar name={chatTitle(item)} ai={isAI} size={50} />
+        <Avatar name={chatTitle(item)} ai={isAI} size={50} {...groupAvatarProps(item)} />
         <View style={styles.rowBody}>
           <View style={styles.rowTop}>
             <Text style={styles.title} numberOfLines={1}>{chatTitle(item)}</Text>
