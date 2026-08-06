@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 132 (Jun 2026) — Phase 2 Mobile Calls (LiveKit) + Avatar Reactions
+- **Mobile Calls (LiveKit)** on Expo, reusing the existing `/api/calls` backend (no backend changes). Header audio/video call buttons (group/direct only), in-chat LIVE call card + Join (and "ended" variant), full-screen call route `app/call/[id].tsx`. Native LiveKit room UI (`CallScreen.tsx`: mic/camera toggles, participant tiles, Android screen-share, hang-up) is **platform-guarded** — the web bundle resolves `CallScreen.web.tsx` (placeholder) so `@livekit/react-native` never reaches web. Installed LiveKit RN + webrtc packages + config plugins; app.json permissions set.
+- ⚠️ Native calling only works in an Emergent **Publish** build (not Expo Go / web preview). iOS screen-share deferred (needs Broadcast Extension); screen-share control is Android-only.
+- **Avatar Reactions**: header quick-react (`QuickReactBar.tsx`) — smiley → emoji row (❤️👍🎉😂🔥) → reanimated floating burst + posts the emoji to the chat; subtle reanimated press-scale on the chat-header group avatar.
+- Tested: testing_agent mobile (iteration_132) PASS for all web-observable flows + no regressions; Avatar Reactions self-verified via screenshots.
+
 ### Iteration 131 (Jun 2026) — Mobile Group Avatars + Mobile Signup Onboarding
 - **Mobile Group Avatars** (Expo parity with web): extended `Avatar.tsx` (photo → preset icon+color → initials), new `groupAvatarPresets.ts` + `GroupAvatarPicker.tsx` (preset color swatches + optional photo upload; photo downscaled to a 256px JPEG data URL via expo-image-manipulator, mirroring web). Wired into group-create (`NewChatSheet.tsx`), chat list + chat header; admins edit via the header avatar → `PATCH /api/chats/{id}/avatar`. Installed `expo-image-manipulator@14.0.8`.
 - **Mobile Signup Onboarding** (`app/onboarding.tsx`): mirrors web ("How will you use TeamNest?" → persona → tailored first project/template, Skip supported). Triggers only after redeem/signup; login & demo-login skip it. Humanized redeem submit errors.

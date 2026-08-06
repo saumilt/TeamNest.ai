@@ -11,12 +11,14 @@ import {
   Linking,
   Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPatch, apiPost, apiUpload, getBase } from "@/src/api";
 import { useAuth } from "@/src/auth";
@@ -25,6 +27,7 @@ import { MessageAttachments } from "@/src/components/MessageAttachments";
 import { Avatar } from "@/src/components/Avatar";
 import { groupAvatarProps } from "@/src/components/groupAvatarPresets";
 import { GroupAvatarPicker, GroupAvatarValue } from "@/src/components/GroupAvatarPicker";
+import { QuickReactBar } from "@/src/components/QuickReactBar";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { getItem, setItem } from "@/src/storage";
@@ -870,6 +873,20 @@ export default function ChatScreen() {
     }
   };
 
+  const avatarScale = useSharedValue(1);
+  const avatarAnim = useAnimatedStyle(() => ({ transform: [{ scale: avatarScale.value }] }));
+
+  const sendQuickReaction = (emoji: string) => {
+    apiPost(`/api/chats/${chatId}/messages`, {
+      body: emoji,
+      message_type: "text",
+      metadata: { quick_reaction: true },
+      parent_message_id: null,
+    })
+      .then((m) => upsertMessage(m))
+      .catch(() => {});
+  };
+
   // "AI is thinking" = a running question placeholder with no matching answer yet.
   const answeredThreads = new Set(
     messages
@@ -900,20 +917,22 @@ export default function ChatScreen() {
         <TouchableOpacity testID="chat-back-btn" onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </TouchableOpacity>
-        <TouchableOpacity
-          testID="chat-header-avatar"
-          activeOpacity={canEditAvatar ? 0.7 : 1}
-          onPress={canEditAvatar ? openAvatarEdit : undefined}
-          disabled={!canEditAvatar}
-          style={styles.headerAvatar}
-        >
-          <Avatar
-            name={title}
-            ai={chat?.type === "personal_ai"}
-            size={38}
-            {...groupAvatarProps(chat)}
-          />
-        </TouchableOpacity>
+        <Animated.View style={avatarAnim}>
+          <Pressable
+            testID="chat-header-avatar"
+            onPressIn={() => { avatarScale.value = withSpring(0.86, { damping: 12, stiffness: 260 }); }}
+            onPressOut={() => { avatarScale.value = withSpring(1, { damping: 10, stiffness: 220 }); }}
+            onPress={canEditAvatar ? openAvatarEdit : undefined}
+            style={styles.headerAvatar}
+          >
+            <Avatar
+              name={title}
+              ai={chat?.type === "personal_ai"}
+              size={38}
+              {...groupAvatarProps(chat)}
+            />
+          </Pressable>
+        </Animated.View>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {title}
@@ -948,6 +967,7 @@ export default function ChatScreen() {
         ) : null}
         {chat && chat.type !== "personal_ai" ? (
           <>
+            <QuickReactBar onReact={sendQuickReaction} />
             <TouchableOpacity
               testID="chat-call-audio-btn"
               onPress={() => startCall("audio")}
