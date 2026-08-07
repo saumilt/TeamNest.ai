@@ -10,6 +10,7 @@ import call_service
 import storage as storage_mod
 from ai_service import EMERGENT_LLM_KEY, LlmChat, UserMessage
 from deps import PROJ, db, new_id, now_iso, require_user
+from ws_manager import manager
 from models import (
     CallEnd,
     CallHighlightsRequest,
@@ -18,6 +19,7 @@ from models import (
     CallTranscriptEdit,
 )
 from services.calls_runtime import (
+    generate_and_post_recap,
     generate_and_store_highlights,
     post_call_card,
     public_call,
@@ -118,6 +120,19 @@ async def start_call(payload: CallStart, current=Depends(require_user)):
     for mid in chat_members:
         if mid == current["id"]:
             continue
+        # Foreground in-app ring over the user WebSocket (works while the app is
+        # open); push handles the backgrounded/closed case on a native build.
+        await manager.send_to_user(mid, {
+            "event": "incoming_call",
+            "data": {
+                "call_id": call_id,
+                "chat_id": payload.chat_id,
+                "chat_name": chat.get("name") or "TeamNest chat",
+                "mode": payload.mode,
+                "from_id": current["id"],
+                "from_name": current.get("name") or "Someone",
+            },
+        })
         _asyncio.create_task(_push(
             mid,
             f"{current.get('name') or 'Someone'} is calling",
@@ -206,9 +221,14 @@ async def end_call(call_id: str, payload: CallEnd, current=Depends(require_user)
         call = await db.calls.find_one({"id": call_id}, {"_id": 0})
         await call_service.end_room(call["livekit_room"])
         await post_call_card(call, "call_ended")
+        # Stop any incoming-call ring on other members' devices.
+        chat_for_ring = await db.chats.find_one({"id": call["chat_id"]}, {"_id": 0, "member_ids": 1})
+        for mid in (chat_for_ring or {}).get("member_ids", []) or []:
+            await manager.send_to_user(mid, {"event": "call_unring", "data": {"call_id": call_id}})
+        # Auto AI recap card (only posts when there's a transcript to summarise).
         if call.get("transcript_segments") or []:
             asyncio.create_task(
-                generate_and_store_highlights(call_id, current["workspace_id"])
+                generate_and_post_recap(call_id, current["workspace_id"])
             )
     return public_call(call)
 
@@ -266,6 +286,13 @@ async def livekit_webhook(request: Request):
         )
         call = await db.calls.find_one({"id": call["id"]}, {"_id": 0})
         await post_call_card(call, "call_ended")
+        chat_for_ring = await db.chats.find_one({"id": call["chat_id"]}, {"_id": 0, "member_ids": 1})
+        for mid in (chat_for_ring or {}).get("member_ids", []) or []:
+            await manager.send_to_user(mid, {"event": "call_unring", "data": {"call_id": call["id"]}})
+        if call.get("transcript_segments") or []:
+            asyncio.create_task(
+                generate_and_post_recap(call["id"], call["workspace_id"])
+            )
     elif event_type == "participant_left":
         identity = (evt.get("participant") or {}).get("identity")
         if identity:

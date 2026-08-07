@@ -38,6 +38,7 @@ from models import (
     MessageCreate,
     MessageEdit,
     MessageReact,
+    ReactionBroadcast,
 )
 from services.ai_runtime import handle_ai_command, handle_inline_task
 from services.workspace_membership import ensure_membership
@@ -248,6 +249,29 @@ async def update_chat_avatar(
     await db.chats.update_one({"id": chat_id}, {"$set": update})
     fresh = await db.chats.find_one({"id": chat_id}, {"_id": 0})
     return fresh
+
+
+@router.post("/chats/{chat_id}/reactions")
+async def broadcast_reaction(
+    chat_id: str, payload: ReactionBroadcast, current=Depends(require_user)
+):
+    """Ephemeral live reaction: broadcast an emoji to everyone currently in the
+    chat room over the WebSocket. NOT persisted — it floats up as a live overlay
+    and is gone, keeping the message history clean."""
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    emoji = (payload.emoji or "").strip()[:8]
+    if not emoji:
+        raise HTTPException(400, "emoji required")
+    await manager.broadcast(
+        chat_id,
+        {"event": "reaction", "data": {"emoji": emoji, "user_id": current["id"], "name": current["name"]}},
+    )
+    return {"ok": True}
+
 
 
 @router.get("/chats/{chat_id}/employee-recommendation")

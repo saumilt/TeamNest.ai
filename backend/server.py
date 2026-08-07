@@ -180,6 +180,29 @@ app.add_middleware(
 
 
 # ===== WEBSOCKET =====
+@app.websocket("/api/ws/user")
+async def ws_user_endpoint(websocket: WebSocket, token: str = Query(...)):
+    """App-wide per-user channel (independent of any open chat). Delivers
+    foreground events like incoming-call ringing to whichever screen the user
+    is on. Declared BEFORE the parameterized /api/ws/{chat_id} route so 'user'
+    isn't swallowed as a chat id."""
+    user_id = decode_token(token)
+    if not user_id:
+        await websocket.close(code=4401)
+        return
+    await manager.connect_user(user_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("event") == "ping":
+                await websocket.send_json({"event": "pong"})
+    except WebSocketDisconnect:
+        manager.disconnect_user(user_id, websocket)
+    except Exception as e:
+        logger.exception("User WS error: %s", e)
+        manager.disconnect_user(user_id, websocket)
+
+
 @app.websocket("/api/ws/{chat_id}")
 async def ws_endpoint(websocket: WebSocket, chat_id: str, token: str = Query(...)):
     user_id = decode_token(token)

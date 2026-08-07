@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 133 — mobile-only features (Invite Timeline, Reaction Overlay, Call Recap card, Call Ringing). BACKEND: 8/8 pytest pass (test_iteration133_mobile_features.py). MOBILE UI: all 4 features verified on Expo web preview at mobile viewport 390×844 as amit@demo.team. (1) Invite Timeline: You→Team lists 101 members, tapping member-row-<id> opens invite-timeline-sheet; for priya@demo.team the empty state invite-timeline-empty ('No delivery events yet…') renders — expected since Mailgun is unconfigured for demo emails. (2) Reaction Overlay: In Marketing Site Refresh chat, chat-quick-react-btn expands to quick-react-0..4 (❤️👍🎉😂🔥); tapping ❤️ made a red heart FLOAT UP as an overlay while the chat message count stayed unchanged (verified via document.querySelectorAll('[data-testid^=\"chat-message-\"]') pre/post = 0/0) → no persisted bubble. Backend POST /api/chats/{id}/reactions returns {ok:true}, broadcasts {event:'reaction'} over chat WS, and does NOT insert a message (verified via GET /api/chats/{id}/messages pre/post equal + direct chat-WS listener). (3) Call Recap card: seeded call_recap message renders as call-recap-card with 4 recap-item-* (decision/action/risk/question); call-recap-toggle collapses the body (items go 4→0) and re-expands. (4) Call Ringing: With amit's browser sitting on /(tabs), POSTing /api/calls/start as Priya (mint_token helper) delivered {event:'incoming_call'} over amit's user WS → incoming-call-banner appeared instantly with 'Priya Shah is calling · Marketing Site Refresh · Audio/Video call'. incoming-call-accept (JS click — Playwright refused native click due to Animated.View transform, product works fine — see review comment) navigates to /call/<call_id>?mode=<m>&title=<chat name> and mounts call-screen-web-placeholder. incoming-call-decline dismisses the banner (verified on first call). Backend also verified via /app/scripts/test_ring_e2e.py: incoming_call + call_unring delivered on start/end. No regressions observed: chat send, Human/Combined/AI view switch, group-avatar header, call header buttons, call started/ended cards, onboarding-after-redeem all consistent with iteration 132.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration133_mobile_features.py",
+    "/app/test_reports/pytest/iteration133.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CallRingListener.tsx L47: `Vibration.vibrate([...], true)` — on Expo web the Vibration API is a no-op which is fine, but on iOS the repeating=true pattern requires audio session config to actually ring while the app is backgrounded. Foreground-only ring is what this iteration promises, so this is correct today; when a native Publish build lands, verify that closing the ring via Vibration.cancel() on decline/accept/unmount actually silences the device.",
+    "CallRingListener.tsx L61-70: WebSocket auto-reconnect uses a fixed 3s/4s timer with no jitter or backoff cap. If the server sheds many connections at once (deploy/restart), every client will retry in lockstep and thundering-herd the WS endpoint. Consider exponential backoff with jitter (cap ~30s).",
+    "CallRingListener.tsx L88-94: accept() does not POST /api/calls/{id}/join — it only navigates. The /call route mounts and calls join internally, so this works today, but if the /call route's own join call fails the ringee ends up on a placeholder with no clear error. Minor: consider surfacing the join error at the banner layer or an inline toast on /call/<id>.",
+    "routes/chats.py L254-273 (POST /api/chats/{chat_id}/reactions): No per-user rate limit. A malicious client could spam thousands of reactions per second and cause every other member's ReactionOverlay to spawn hundreds of animated Text nodes. The overlay caps at 15 with `prev.slice(-14)` (good), but the WS broadcast has no throttle. Recommend a per-user token bucket (e.g. ≤10/sec per chat).",
+    "ReactionOverlay.tsx L27: New Floater ids use `${Date.now()}-${Math.random()...}` which is fine, but if two reactions arrive in the same tick with the same random suffix (very unlikely) React key collision could hide one. Consider a monotonic counter ref.",
+    "routes/team_tools.py invite_timeline (L215): Endpoint does not check whether `current` has admin/owner role, so ANY workspace member can view every other member's Mailgun delivery timeline (which contains their email + failure reasons). If Mailgun events are considered admin-only PII, restrict to owner/admin.",
+    "routes/calls.py L120-135: `await manager.send_to_user(mid, {...})` inside a `for mid in chat_members` loop is awaited sequentially. Fine for small chats; for 100+ member chats it will serialise WS writes. Consider `asyncio.gather` fan-out.",
+    "Playwright note: incoming-call-banner uses Animated.View with SlideInUp transform. Playwright's native click() rejects with 'element is outside viewport' during the slide-in even though the DOM rect is on-screen. Adding testID-level `collapsable={false}` and/or splitting the transform onto an inner child (so the outer bbox stays static) would make it testable without JS-click workarounds — cosmetic, purely for automated tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration133_mobile_features.py (new)",
+    "/app/scripts/mint_token.py (new — one-liner helper: mint an auth token for any user id)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (4/4 mobile features + regressions)"},
+  "test_credentials": "demo-login-btn → amit@demo.team. Other member Priya Shah id=1d98bd2f-1f99-40e9-be51-951a1c219158 (Marketing Site Refresh id=5e2e2e58-b77c-4c60-acd4-f05a1ca2ee02).",
+  "seed_data_creation": "3 ephemeral calls (all closed): 1 during pytest ring test, 2 during UI ring test (audio accept flow + video banner-only). All active calls cleaned via /app/scripts/end_active_calls.py at end (active calls: 0). One '🎉' reaction broadcast over the chat WS in the pytest — this does not persist per design.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 new mobile features from iteration 133 verified end-to-end on Expo web preview. Backend pytest at /app/backend/tests/test_iteration133_mobile_features.py covers invite timeline (200 + 404), reaction (200, no persistence, WS broadcast), seeded recap card, and user-WS ring (incoming_call + call_unring). To repro the ring banner on the mobile UI: keep amit's Expo preview open on /(tabs) → mint another member's token via `python /app/scripts/mint_token.py <user_id>` (cwd=/app/backend) → POST http://localhost:8001/api/calls/start with that Bearer + chat_id → amit's browser shows incoming-call-banner within ~1s. Playwright's native click() may reject the banner buttons during the slide-in animation; use `page.evaluate(el => el.click())` instead. Native LiveKit call UI is still gated to Publish build (call-screen-web-placeholder is expected).",
+  "rca of the issue": "N/A — no bugs found."
+}

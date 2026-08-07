@@ -387,6 +387,10 @@ class CallStart(BaseModel):
     mode: Literal["audio", "video"] = "audio"
 
 
+class ReactionBroadcast(BaseModel):
+    emoji: str
+
+
 class CallJoin(BaseModel):
     call_id: str
 

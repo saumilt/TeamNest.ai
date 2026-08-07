@@ -1,50 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, {
-  ZoomIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import { colors, radius, spacing } from "@/src/theme";
 
 const EMOJIS = ["❤️", "👍", "🎉", "😂", "🔥"];
 
-// Chat-header quick-react: a smiley trigger that expands a row of emojis. Tapping
-// one fires a floating burst (rises + fades) and calls onReact so the reaction is
-// broadcast to the chat. Purely additive delight — no layout impact when closed.
+// Chat-header quick-react trigger: a smiley that expands an emoji row. Tapping
+// calls onReact — the chat screen broadcasts it and the ReactionOverlay handles
+// the live floating animation for everyone.
 export function QuickReactBar({ onReact }: { onReact: (emoji: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [burstEmoji, setBurstEmoji] = useState("");
-  const y = useSharedValue(0);
-  const o = useSharedValue(0);
-  const s = useSharedValue(1);
-
-  const burstStyle = useAnimatedStyle(() => ({
-    opacity: o.value,
-    transform: [{ translateY: y.value }, { scale: s.value }],
-  }));
 
   const react = (emoji: string) => {
     onReact(emoji);
-    setBurstEmoji(emoji);
-    y.value = 4;
-    o.value = 1;
-    s.value = 0.6;
-    o.value = withTiming(0, { duration: 850 });
-    y.value = withTiming(-72, { duration: 850 });
-    s.value = withTiming(1.5, { duration: 850 });
     setOpen(false);
   };
 
   return (
     <View style={styles.wrap}>
-      {burstEmoji ? (
-        <Animated.Text pointerEvents="none" style={[styles.burst, burstStyle]}>
-          {burstEmoji}
-        </Animated.Text>
-      ) : null}
       {open ? (
         <View style={styles.row}>
           {EMOJIS.map((e, i) => (
@@ -80,11 +54,4 @@ const styles = StyleSheet.create({
   },
   emojiBtn: { paddingHorizontal: 4, paddingVertical: 2 },
   emoji: { fontSize: 20 },
-  burst: {
-    position: "absolute",
-    right: 0,
-    top: -6,
-    fontSize: 22,
-    zIndex: 10,
-  },
 });

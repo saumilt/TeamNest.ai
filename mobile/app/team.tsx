@@ -53,6 +53,25 @@ const DELIVERY: Record<string, { label: string; color: string; icon: any }> = {
   failed: { label: "Failed", color: colors.danger, icon: "warning-outline" },
 };
 
+const EVENT_META: Record<string, { label: string; color: string; icon: any }> = {
+  accepted: { label: "Accepted by mail server", color: colors.textMuted, icon: "paper-plane-outline" },
+  delivered: { label: "Delivered to inbox", color: "#38bdf8", icon: "checkmark-done-outline" },
+  opened: { label: "Opened the email", color: colors.success, icon: "eye-outline" },
+  clicked: { label: "Clicked a link", color: colors.accent, icon: "hand-left-outline" },
+  failed: { label: "Delivery failed", color: colors.danger, icon: "close-circle-outline" },
+  rejected: { label: "Rejected", color: colors.danger, icon: "close-circle-outline" },
+  complained: { label: "Marked as spam", color: colors.danger, icon: "alert-circle-outline" },
+  unsubscribed: { label: "Unsubscribed", color: colors.textMuted, icon: "remove-circle-outline" },
+  stored: { label: "Stored", color: colors.textMuted, icon: "archive-outline" },
+};
+
+function fmtEventTime(ts?: number): string {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const { user, token, loading: authLoading } = useAuth();
@@ -62,6 +81,11 @@ export default function TeamScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const [timelineFor, setTimelineFor] = useState<Member | null>(null);
+  const [tlEvents, setTlEvents] = useState<any[]>([]);
+  const [tlLoading, setTlLoading] = useState(false);
+  const [tlConfigured, setTlConfigured] = useState(true);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState("");
@@ -95,6 +119,22 @@ export default function TeamScreen() {
 
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 2500); };
 
+  const openTimeline = async (m: Member) => {
+    setTimelineFor(m);
+    setTlEvents([]);
+    setTlConfigured(true);
+    setTlLoading(true);
+    try {
+      const r = await apiGet(`/api/workspace/members/${m.id}/invite-timeline`);
+      setTlEvents(r?.events || []);
+      setTlConfigured(r?.configured !== false);
+    } catch {
+      setTlEvents([]);
+    } finally {
+      setTlLoading(false);
+    }
+  };
+
   const resend = async (m: Member) => {
     setResendingId(m.id);
     try {
@@ -127,7 +167,13 @@ export default function TeamScreen() {
     const info = pending ? analytics[m.id] : null;
     const d = info && info.status && DELIVERY[info.status];
     return (
-      <View key={m.id} style={styles.memberRow} testID={`member-row-${m.id}`}>
+      <TouchableOpacity
+        key={m.id}
+        style={styles.memberRow}
+        testID={`member-row-${m.id}`}
+        onPress={() => openTimeline(m)}
+        activeOpacity={0.7}
+      >
         <Avatar name={m.name} size={40} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.memberName} numberOfLines={1}>{m.name}</Text>
@@ -173,7 +219,8 @@ export default function TeamScreen() {
             )}
           </TouchableOpacity>
         ) : null}
-      </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} testID={`member-timeline-hint-${m.id}`} />
+      </TouchableOpacity>
     );
   };
 
@@ -207,6 +254,54 @@ export default function TeamScreen() {
           </View>
         </ScrollView>
       )}
+
+      <Modal visible={!!timelineFor} transparent animationType="slide" onRequestClose={() => setTimelineFor(null)}>
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setTimelineFor(null)} />
+          <View style={styles.sheet} testID="invite-timeline-sheet">
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHead}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.sheetTitle}>Invite delivery</Text>
+                <Text style={styles.sheetSub} numberOfLines={1}>{timelineFor?.email}</Text>
+              </View>
+              <TouchableOpacity testID="invite-timeline-close" onPress={() => setTimelineFor(null)} style={styles.sheetClose}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {tlLoading ? (
+              <View style={styles.tlCenter}><ActivityIndicator color={colors.accent} /></View>
+            ) : !tlConfigured ? (
+              <Text style={styles.tlEmpty} testID="invite-timeline-unconfigured">Email delivery tracking isn&apos;t configured for this workspace yet.</Text>
+            ) : tlEvents.length === 0 ? (
+              <Text style={styles.tlEmpty} testID="invite-timeline-empty">No delivery events yet. If you just sent the invite, check back in a moment.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ paddingBottom: spacing.lg }}>
+                {tlEvents.map((e, i) => {
+                  const meta = EVENT_META[e.event] || { label: e.event || "Event", color: colors.textMuted, icon: "ellipse-outline" };
+                  const last = i === tlEvents.length - 1;
+                  return (
+                    <View key={i} style={styles.tlRow} testID={`invite-timeline-event-${e.event}`}>
+                      <View style={styles.tlRail}>
+                        <View style={[styles.tlDot, { backgroundColor: meta.color }]}>
+                          <Ionicons name={meta.icon} size={12} color="#09090b" />
+                        </View>
+                        {!last ? <View style={styles.tlLine} /> : null}
+                      </View>
+                      <View style={{ flex: 1, paddingBottom: last ? 0 : spacing.lg }}>
+                        <Text style={[styles.tlLabel, { color: meta.color }]}>{meta.label}</Text>
+                        <Text style={styles.tlTime}>{fmtEventTime(e.timestamp)}</Text>
+                        {e.reason ? <Text style={styles.tlReason}>{e.reason}</Text> : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={inviteOpen} transparent animationType="fade" onRequestClose={() => !inviting && setInviteOpen(false)}>
         <View style={styles.modalOverlay}>
@@ -348,4 +443,20 @@ const styles = StyleSheet.create({
   cancelText: { color: colors.textSecondary, fontWeight: "700", fontSize: font.body },
   sendBtn: { flex: 1, borderRadius: radius.pill, backgroundColor: colors.accent, paddingVertical: 13, alignItems: "center" },
   sendText: { color: "#000", fontWeight: "800", fontSize: font.body },
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.sm },
+  sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.md },
+  sheetHead: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.lg },
+  sheetTitle: { color: colors.textPrimary, fontSize: font.h3, fontWeight: "800" },
+  sheetSub: { color: colors.textSecondary, fontSize: font.small, marginTop: 1 },
+  sheetClose: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceHover },
+  tlCenter: { paddingVertical: spacing.xl, alignItems: "center" },
+  tlEmpty: { color: colors.textMuted, fontSize: font.small, paddingVertical: spacing.lg, lineHeight: 20 },
+  tlRow: { flexDirection: "row", gap: spacing.md },
+  tlRail: { alignItems: "center", width: 24 },
+  tlDot: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  tlLine: { flex: 1, width: 2, backgroundColor: colors.border, marginTop: 2 },
+  tlLabel: { fontSize: font.small, fontWeight: "800" },
+  tlTime: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1 },
+  tlReason: { color: colors.textSecondary, fontSize: font.tiny, marginTop: 3, fontStyle: "italic" },
 });

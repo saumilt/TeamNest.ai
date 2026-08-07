@@ -28,6 +28,8 @@ import { Avatar } from "@/src/components/Avatar";
 import { groupAvatarProps } from "@/src/components/groupAvatarPresets";
 import { GroupAvatarPicker, GroupAvatarValue } from "@/src/components/GroupAvatarPicker";
 import { QuickReactBar } from "@/src/components/QuickReactBar";
+import { ReactionOverlay, ReactionOverlayHandle } from "@/src/components/ReactionOverlay";
+import { CallRecapCard } from "@/src/components/CallRecapCard";
 import { shortTime } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { getItem, setItem } from "@/src/storage";
@@ -361,6 +363,13 @@ export default function ChatScreen() {
         ws.onmessage = (ev) => {
           try {
             const payload = JSON.parse(ev.data);
+            if (payload.event === "reaction" && payload.data) {
+              // Other members' live reactions float in (skip our own echo).
+              if (payload.data.user_id !== user?.id) {
+                reactionOverlayRef.current?.spawn(payload.data.emoji);
+              }
+              return;
+            }
             if (payload.event === "message" || payload.event === "message_updated") {
               if (payload.data && payload.data.chat_id === chatId) {
                 if (payload.data.deleted_at) {
@@ -699,6 +708,14 @@ export default function ChatScreen() {
       );
     }
 
+    if (item.message_type === "call_recap") {
+      return (
+        <View testID={`message-${item.id}`}>
+          <CallRecapCard metadata={item.metadata || {}} />
+        </View>
+      );
+    }
+
     // Quoted-reply preview (only user text replies render a quote).
     const parent =
       item.message_type === "text" && item.parent_message_id
@@ -875,16 +892,12 @@ export default function ChatScreen() {
 
   const avatarScale = useSharedValue(1);
   const avatarAnim = useAnimatedStyle(() => ({ transform: [{ scale: avatarScale.value }] }));
+  const reactionOverlayRef = useRef<ReactionOverlayHandle>(null);
 
   const sendQuickReaction = (emoji: string) => {
-    apiPost(`/api/chats/${chatId}/messages`, {
-      body: emoji,
-      message_type: "text",
-      metadata: { quick_reaction: true },
-      parent_message_id: null,
-    })
-      .then((m) => upsertMessage(m))
-      .catch(() => {});
+    // Optimistic local float, then broadcast to everyone (ephemeral — not saved).
+    reactionOverlayRef.current?.spawn(emoji);
+    apiPost(`/api/chats/${chatId}/reactions`, { emoji }).catch(() => {});
   };
 
   // "AI is thinking" = a running question placeholder with no matching answer yet.
@@ -1309,6 +1322,8 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
       )}
+
+      <ReactionOverlay ref={reactionOverlayRef} />
 
       <Modal visible={saveRoleOpen} transparent animationType="fade" onRequestClose={() => setSaveRoleOpen(false)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSaveRoleOpen(false)}>

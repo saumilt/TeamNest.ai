@@ -63,3 +63,44 @@ async def generate_and_store_highlights(call_id: str, workspace_id: str) -> list
         {"$set": {"transcript_highlights": highlights, "highlights_generated_at": now_iso()}},
     )
     return highlights
+
+
+async def post_call_recap_card(call: dict, highlights: list) -> dict:
+    """Post an AI 'Call recap' card into the call's chat summarising the key
+    highlights (decisions / action items / risks / questions)."""
+    msg = {
+        "id": new_id(),
+        "chat_id": call["chat_id"],
+        "sender_id": "ai-system",
+        "message_type": "call_recap",
+        "body": "",
+        "parent_message_id": None,
+        "metadata": {
+            "call_id": call["id"],
+            "mode": call.get("mode"),
+            "duration_seconds": call.get("duration_seconds"),
+            "highlights": highlights,
+            "count": len(highlights),
+        },
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(msg.copy())
+    await _broadcast_message(call["chat_id"], msg)
+    return msg
+
+
+async def generate_and_post_recap(call_id: str, workspace_id: str) -> list:
+    """Generate call highlights then, if any, drop a recap card into the chat.
+    Fire-and-forget friendly (swallows its own errors)."""
+    try:
+        highlights = await generate_and_store_highlights(call_id, workspace_id)
+        if highlights:
+            call = await db.calls.find_one({"id": call_id, "workspace_id": workspace_id}, {"_id": 0})
+            if call:
+                await post_call_recap_card(call, highlights)
+        return highlights
+    except Exception:
+        return []

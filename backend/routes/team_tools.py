@@ -210,3 +210,31 @@ async def invite_analytics(current=Depends(require_user)):
 
     _analytics_cache[ws_id] = (time.time(), analytics)
     return {"configured": True, "analytics": analytics}
+
+
+@router.get("/workspace/members/{member_id}/invite-timeline")
+async def invite_timeline(member_id: str, current=Depends(require_user)):
+    """Full Mailgun delivery timeline for one member's invite email (every
+    accepted / delivered / opened / clicked / failed event, oldest→newest)."""
+    ws_id = current["workspace_id"]
+    member = await db.users.find_one({"id": member_id}, {"_id": 0, "email": 1, "name": 1})
+    m = await db.workspace_members.find_one(
+        {"user_id": member_id, "workspace_id": ws_id}, {"_id": 0, "user_id": 1}
+    )
+    if not member or not m:
+        raise HTTPException(404, "Member not found")
+    if not mailgun_service._configured():
+        return {"configured": False, "email": member.get("email"), "events": []}
+    res = await mailgun_service.fetch_events(member["email"], limit=50)
+    events = []
+    for it in res.get("items", []) or []:
+        ev = (it.get("event") or "").lower()
+        ds = it.get("delivery-status") or {}
+        events.append({
+            "event": ev,
+            "timestamp": it.get("timestamp"),
+            "reason": it.get("reason") or ds.get("message") or ds.get("description"),
+            "severity": it.get("severity") or ds.get("severity"),
+        })
+    events.sort(key=lambda e: e.get("timestamp") or 0)
+    return {"configured": True, "email": member["email"], "events": events}
