@@ -3,6 +3,15 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 134 (Jun 2026) — Ringtone + Missed Call card + Recap→Task + Resend-from-Timeline (mobile+backend) — VERIFIED (backend 9/9 + mobile UI)
+Four follow-ups on the LiveKit calling / ringing / invite-timeline systems. testing_agent iteration_134 = PASS, no regressions.
+- **Ringtone Sound** (mobile `CallRingListener`): wired `expo-audio` (`useAudioPlayer` + `setAudioModeAsync({playsInSilentMode:true})`) with the shipped `assets/sounds/ringtone.wav` — an incoming-call banner now plays a **looping** ringtone (alongside vibration) and stops on Accept / Decline / `call_unring`. Also added a ~30s no-answer foreground timeout that auto-declines. (Ringtone audio + timer can't be audibly verified on Expo web preview — needs a native/Publish build.)
+- **Missed Call Card**: new `POST /api/calls/{call_id}/decline` — stops the callee's ring across their devices (`call_unring` on their user WS) and, when nobody other than the caller joined, posts ONE `call_missed` system card (idempotent via a `missed_card_posted` guard on the call doc; skipped with `{answered_elsewhere:true}` if another member already joined). Fired by both Decline and the 30s timeout. Mobile chat renders a red "Missed call · From <name>" card with a one-tap **Call back** (`call-back-<call_id>`) that re-starts a call via `/api/calls/start`.
+- **Recap → Tasks** (mobile `CallRecapCard`): each ACTION highlight now shows a **Create task** button (`recap-add-task-<i>`, action_items only) → `POST /api/tasks` with `title`=note, `assigned_to`=self, `source_chat_id`; button flips to "Added to Tasks". Verified the task lands in `GET /api/tasks?scope=mine`.
+- **Nudge From Timeline** (mobile `team.tsx`): added a **Resend invite** button (`invite-timeline-resend`) inside the Invite-delivery bottom sheet for pending (invited / must_change_password) members when the viewer is owner/admin → `POST /api/workspace/invite/{id}/resend`; hidden for joined members.
+- Tests: `/app/backend/tests/test_iteration134_missed_call_and_recap.py` (9/9). Report `/app/test_reports/iteration_134.json`. Seed helper `/app/scripts/seed_iter134_cards.py`.
+
+
 ## Iteration 133 (Jun 2026) — Live Reactions, Call Recap, Invite Timeline, Call Ringing — VERIFIED (backend 8/8 + mobile UI)
 Four mobile features on the shared backend. testing_agent iteration_133 = PASS, no regressions.
 - **Invite Timeline** (mobile team screen): member rows are now tappable → a bottom sheet shows the full Mailgun delivery timeline (accepted→delivered→opened→clicked/failed, oldest→newest) via new `GET /api/workspace/members/{member_id}/invite-timeline` (uses `mailgun_service.fetch_events`). Empty/unconfigured states handled.
