@@ -1,15 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useState } from "react";
-import { useFocusEffect } from "expo-router";
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { apiGet, getBase } from "@/src/api";
+import { router, useFocusEffect } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { apiGet } from "@/src/api";
 import { colors, radius } from "@/src/theme";
 
 /**
  * CreditsBadge — persistent header pill showing remaining AI credits and the
- * current promo bonus %. Credits are purchased on the web (App Store rules
- * require digital goods to use Apple IAP, which this app does not implement),
- * so tapping "Credits" opens the web billing page in the browser.
+ * current promo bonus %. Tapping "Credits" opens the in-app paywall, which
+ * sells subscriptions + credit packs via native App Store / Play Billing
+ * (mobile prices are ~20% higher than the web; the web stays discounted).
  */
 export function CreditsBadge() {
   const [usage, setUsage] = useState<any | null>(null);
@@ -44,7 +44,7 @@ export function CreditsBadge() {
   const remaining = unlimited ? "\u221e" : String(usage.credits_remaining ?? 0);
 
   const openBilling = () => {
-    Linking.openURL(`${getBase()}/billing`).catch(() => {});
+    router.push("/paywall");
   };
 
   return (

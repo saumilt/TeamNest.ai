@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiGet, apiPost, getBase } from "@/src/api";
+import { apiGet, apiPost } from "@/src/api";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { NotificationBell } from "@/src/components/NotificationBell";
 import { Markdown } from "@/src/markdown";
@@ -115,7 +115,7 @@ export default function ResearchScreen() {
             </Text>
             <TouchableOpacity
               testID="research-upgrade-btn"
-              onPress={() => Linking.openURL(`${getBase()}/billing`).catch(() => {})}
+              onPress={() => router.push("/paywall")}
               style={styles.upgradeBtn}
             >
               <Text style={styles.upgradeBtnText}>Upgrade</Text>

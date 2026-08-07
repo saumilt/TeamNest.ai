@@ -48,6 +48,7 @@ from routes import (
     devices,
     exports,
     folders,
+    iap,
     imports,
     integrations,
     invites,
@@ -119,6 +120,7 @@ api.include_router(exports.router)
 api.include_router(admin.router)
 api.include_router(superadmin.router)
 api.include_router(billing.router)
+api.include_router(iap.router)         # RevenueCat in-app purchases (mobile)
 api.include_router(calls.router)
 api.include_router(devices.router)
 api.include_router(memory.router)

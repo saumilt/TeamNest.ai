@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/src/auth";
 import { CallRingListener } from "@/src/components/CallRingListener";
+import { RevenueCatBoot } from "@/src/components/RevenueCatBoot";
 import { colors } from "@/src/theme";
 
 export default function RootLayout() {
@@ -30,8 +31,10 @@ export default function RootLayout() {
             <Stack.Screen name="builder/[id]" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="builder-program" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="marketplace/index" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="paywall" options={{ animation: "slide_from_bottom" }} />
           </Stack>
           <CallRingListener />
+          <RevenueCatBoot />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
