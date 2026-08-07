@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.emergent.nestappprepb1f16faa",
+      "bundleIdentifier": "ai.teamnest.app",
       "infoPlist": {
         "NSCameraUsageDescription": "TeamNest uses your camera for video calls.",
         "NSMicrophoneUsageDescription": "TeamNest uses your microphone for calls."
@@ -22,7 +22,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "app.emergent.nestappprepb1f16faa",
+      "package": "ai.teamnest.app",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
