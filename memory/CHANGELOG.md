@@ -3,6 +3,20 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 135 (Jun 2026) — Mobile In-App Purchases via RevenueCat (no Stripe on mobile) — backend VERIFIED (7/7) + mobile paywall renders
+On the iOS/Android apps, subscriptions + credit packs now buy through native App Store / Google Play billing (RevenueCat) instead of a Stripe web redirect (Apple/Google disallow external processors for digital goods). Web keeps Stripe. Store prices are configured ~20% above web; the website stays the discounted price. testing_agent iteration_135 = PASS, no regressions.
+- **Backend** (`services/iap_revenuecat.py`, `routes/iap.py`, registered in `server.py`):
+  - `POST /api/webhooks/revenuecat` — auth-header guarded (`RC_WEBHOOK_AUTH`), idempotent per event id (`rc_events`), maps entitlements student/pro/team → plan and consumable products credits_1000/5000/15000 → credit ledger (idempotent per transaction via `iap_credit_grants` unique index). Lifecycle: INITIAL_PURCHASE/RENEWAL/UNCANCELLATION/PRODUCT_CHANGE→active (resets monthly allowance), CANCELLATION→keep-until-expiry, EXPIRATION→free, NON_RENEWING_PURCHASE→grant credits. Unknown app_user_id quarantined ({unmatched:true}).
+  - `POST /api/billing/iap/register` (links app_user_id + target workspace), `POST /api/billing/iap/sync` (immediate reconcile via RevenueCat REST when `RC_SECRET_API_KEY` set; else no-op), `GET /api/billing/iap/config`.
+  - Guard prevents monthly-credit-reset abuse: `apply_subscription` only resets counters on real plan change or explicit renewal (`force_reset`), not on repeated Restore/sync.
+  - Plan applied to `iap_workspace_id` (workspace active when paywall opened) or the user's active workspace.
+- **Mobile**: `react-native-purchases@10.7.0` (autolinked — NO app.json config-plugin entry; adding it crashes `expo start`). `src/lib/revenuecat.ts` (native) + `revenuecat.web.ts` (web stub so the Expo web preview bundles). `RevenueCatBoot` configures RC + registers on login. New `app/paywall.tsx` — lists offerings (subs + credits offering) with store priceString, Restore, Manage subscription; Android shows a 'save ~20% on the web' card, iOS shows a neutral 'prices include App Store fee' note (anti-steering compliant), web shows an 'unavailable — subscribe on web' state. Credits badge + Research 'Upgrade' now route to `/paywall` (removed the Stripe web-billing deep-links). Also hardened research.tsx initial loads with per-call `.catch`.
+- **Env**: backend `RC_WEBHOOK_AUTH` (set), `RC_SECRET_API_KEY` (empty placeholder); mobile `EXPO_PUBLIC_RC_APPLE_KEY` / `EXPO_PUBLIC_RC_GOOGLE_KEY` (empty placeholders).
+- **NOT testable in preview** (native-only): actual purchase, restore, and the store price strings — requires an Emergent Publish build + products configured in App Store Connect / Play Console / RevenueCat.
+- **Deferred (phase 2)**: marketplace AI-employee installs + enterprise storage packs still use backend-ledger endpoints (no Stripe redirect); variable/creator-set prices need their own IAP consumable mapping before they go through IAP.
+- Tests: `/app/backend/tests/test_iteration135_iap_revenuecat.py` (7/7). Report `/app/test_reports/iteration_135.json`. Reset helper `/app/scripts/reset_iter135_test_user.py`.
+
+
 ## Iteration 134 (Jun 2026) — Ringtone + Missed Call card + Recap→Task + Resend-from-Timeline (mobile+backend) — VERIFIED (backend 9/9 + mobile UI)
 Four follow-ups on the LiveKit calling / ringing / invite-timeline systems. testing_agent iteration_134 = PASS, no regressions.
 - **Ringtone Sound** (mobile `CallRingListener`): wired `expo-audio` (`useAudioPlayer` + `setAudioModeAsync({playsInSilentMode:true})`) with the shipped `assets/sounds/ringtone.wav` — an incoming-call banner now plays a **looping** ringtone (alongside vibration) and stops on Accept / Decline / `call_unring`. Also added a ~30s no-answer foreground timeout that auto-declines. (Ringtone audio + timer can't be audibly verified on Expo web preview — needs a native/Publish build.)

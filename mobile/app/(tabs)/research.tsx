@@ -36,8 +36,8 @@ export default function ResearchScreen() {
     (async () => {
       try {
         const [ms, chats, usage] = await Promise.all([
-          apiGet("/api/ai/models"),
-          apiGet("/api/chats"),
+          apiGet("/api/ai/models").catch(() => null),
+          apiGet("/api/chats").catch(() => null),
           apiGet("/api/billing/usage").catch(() => null),
         ]);
         // Only offer the 6 core research models.
