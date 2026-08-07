@@ -18,6 +18,7 @@
     "@livekit/react-native-expo-plugin": "1.0.2",
     "@livekit/react-native-webrtc": "144.1.2",
     "expo": "~54.0.35",
+    "expo-audio": "~1.1.1",
     "expo-blur": "15.0.8",
     "expo-constants": "18.0.13",
     "expo-contacts": "~15.0.11",

@@ -82,7 +82,8 @@
           "cameraPermission": "TeamNest uses your camera for video calls.",
           "microphonePermission": "TeamNest uses your microphone for calls."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
