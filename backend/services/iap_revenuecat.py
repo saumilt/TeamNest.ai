@@ -12,15 +12,17 @@ actual prices live in App Store Connect / Play Console.
 import os
 from datetime import datetime, timezone
 
-import httpx
 from pymongo.errors import DuplicateKeyError
 
 from deps import db, now_iso
 from services.billing import apply_plan_change
 
-RC_SECRET_API_KEY = os.environ.get("RC_SECRET_API_KEY") or ""
 RC_WEBHOOK_AUTH = os.environ.get("RC_WEBHOOK_AUTH") or ""
-RC_API_BASE = "https://api.revenuecat.com/v1"
+# Sandbox purchases hit the SAME webhook. Grant on SANDBOX only while testing;
+# set RC_ACCEPT_SANDBOX="false" in production so sandbox accounts can't grant
+# real entitlements. All grants come from the signed webhook — no secret key,
+# no client-trusted grants (purchasePackage() already returns CustomerInfo).
+RC_ACCEPT_SANDBOX = (os.environ.get("RC_ACCEPT_SANDBOX", "true").lower() == "true")
 
 # RevenueCat entitlement id -> our plan id.
 ENTITLEMENT_TO_PLAN = {"student": "student", "pro": "pro", "team": "team"}
@@ -60,6 +62,14 @@ def _ms_to_iso(ms) -> str | None:
         return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).isoformat()
     except Exception:
         return None
+
+
+def _norm_product(pid: str | None) -> str:
+    # Google Play sends the purchased SKU as "subId:basePlanId" (subs) or with an
+    # offer suffix; App Store sends the bare id. Strip any suffix so our product
+    # maps (credits/storage/marketplace) match on BOTH stores. Subscription->plan
+    # mapping never uses this — it uses entitlement_ids, which are store-agnostic.
+    return (pid or "").split(":")[0]
 
 
 def plan_from_entitlements(entitlement_ids) -> str | None:
@@ -173,58 +183,9 @@ async def handle_event(user: dict, e: dict) -> None:
     elif kind == "NON_RENEWING_PURCHASE":
         store = e.get("store") or "store"
         tid = e.get("transaction_id") or e.get("id")
-        await grant_credit_pack(user, e.get("product_id"), f"{store}:{tid}")
+        await grant_credit_pack(user, _norm_product(e.get("product_id")), f"{store}:{tid}")
 
 
-async def sync_from_revenuecat(user: dict) -> dict:
-    """Immediate post-purchase sync: read authoritative state from RevenueCat
-    (needs the secret key) and apply plan + grant credit packs. Falls back to a
-    no-op when the secret key isn't configured — the webhook reconciles shortly.
-    """
-    if not RC_SECRET_API_KEY:
-        return {"synced": False, "reason": "rc_secret_not_configured"}
-    app_user_id = user["id"]
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(
-                f"{RC_API_BASE}/subscribers/{app_user_id}",
-                headers={"Authorization": f"Bearer {RC_SECRET_API_KEY}"},
-            )
-    except Exception as ex:
-        return {"synced": False, "reason": f"request_failed:{ex}"[:120]}
-    if r.status_code != 200:
-        return {"synced": False, "reason": f"revenuecat_{r.status_code}"}
-
-    sub = (r.json() or {}).get("subscriber") or {}
-    now = datetime.now(timezone.utc)
-    active_ent_ids: list[str] = []
-    latest_expiry: datetime | None = None
-    for eid, ent in (sub.get("entitlements") or {}).items():
-        exp = ent.get("expires_date")
-        if exp:
-            try:
-                expd = datetime.fromisoformat(exp.replace("Z", "+00:00"))
-            except Exception:
-                expd = None
-            if expd and expd < now:
-                continue
-            if expd and (latest_expiry is None or expd > latest_expiry):
-                latest_expiry = expd
-        active_ent_ids.append(eid)
-
-    plan = plan_from_entitlements(active_ent_ids)
-    if plan:
-        await apply_subscription(
-            user, plan, status="active",
-            expires_at=latest_expiry.isoformat() if latest_expiry else None,
-        )
-
-    granted = 0
-    for product_id, purchases in (sub.get("non_subscriptions") or {}).items():
-        if product_id not in IAP_CREDIT_PACKS:
-            continue
-        for pur in (purchases or []):
-            tid = pur.get("id") or pur.get("store_transaction_id") or pur.get("purchase_date")
-            granted += await grant_credit_pack(user, product_id, f"rc:{product_id}:{tid}")
-
-    return {"synced": True, "plan": plan, "credits_granted": granted}
+# NOTE: no RevenueCat REST "sync" — purchasePackage() returns CustomerInfo to the
+# client synchronously, and the signed webhook is the single authoritative grant
+# path. We deliberately do NOT hold the RevenueCat secret key server-side.

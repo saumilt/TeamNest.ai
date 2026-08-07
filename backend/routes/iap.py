@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from deps import db, now_iso, require_user
 from services import iap_revenuecat as iap
+from services.billing import get_usage
 
 router = APIRouter()
 
@@ -35,11 +36,10 @@ async def iap_register(payload: dict | None = None, current=Depends(require_user
 
 @router.post("/billing/iap/sync")
 async def iap_sync(current=Depends(require_user)):
-    """Reconcile the current user's plan + credit packs from RevenueCat right
-    after a purchase, so the UI reflects it without waiting for the webhook."""
-    await iap.ensure_indexes()
-    full = await db.users.find_one({"id": current["id"]}, {"_id": 0}) or current
-    return await iap.sync_from_revenuecat(full)
+    """Return the user's current billing state so the paywall can refresh right
+    after a purchase. Entitlement grants come ONLY from the signed RevenueCat
+    webhook — never trusted from the client, and no secret key is held here."""
+    return await get_usage(current["workspace_id"])
 
 
 @router.post("/webhooks/revenuecat")
@@ -73,6 +73,12 @@ async def revenuecat_webhook(request: Request, authorization: str | None = Heade
         # Never create/grant on an untrusted arbitrary id — quarantine for review.
         await db.rc_events.update_one({"event_id": event_id}, {"$set": {"unmatched": True}})
         return {"ok": True, "unmatched": True}
+
+    # Sandbox events hit the same endpoint. Grant on SANDBOX only while testing.
+    env = (e.get("environment") or "PRODUCTION").upper()
+    if env == "SANDBOX" and not iap.RC_ACCEPT_SANDBOX:
+        await db.rc_events.update_one({"event_id": event_id}, {"$set": {"skipped_sandbox": True}})
+        return {"ok": True, "skipped": "sandbox"}
 
     await iap.handle_event(user, e)
     return {"ok": True}
