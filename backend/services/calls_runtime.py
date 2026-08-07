@@ -92,6 +92,33 @@ async def post_call_recap_card(call: dict, highlights: list) -> dict:
     return msg
 
 
+async def post_missed_call_card(call: dict) -> dict:
+    """Post a 'Missed call' card into the chat when a ring is declined or times
+    out with no one (other than the caller) joining. Includes a one-tap
+    call-back on the client."""
+    msg = {
+        "id": new_id(),
+        "chat_id": call["chat_id"],
+        "sender_id": "ai-system",
+        "message_type": "call_missed",
+        "body": "",
+        "parent_message_id": None,
+        "metadata": {
+            "call_id": call["id"],
+            "mode": call.get("mode"),
+            "from_id": call.get("started_by"),
+            "from_name": call.get("started_by_name") or "Someone",
+        },
+        "reactions": {},
+        "created_at": now_iso(),
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    await db.messages.insert_one(msg.copy())
+    await _broadcast_message(call["chat_id"], msg)
+    return msg
+
+
 async def generate_and_post_recap(call_id: str, workspace_id: str) -> list:
     """Generate call highlights then, if any, drop a recap card into the chat.
     Fire-and-forget friendly (swallows its own errors)."""

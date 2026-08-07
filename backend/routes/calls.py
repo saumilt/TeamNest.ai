@@ -22,6 +22,7 @@ from services.calls_runtime import (
     generate_and_post_recap,
     generate_and_store_highlights,
     post_call_card,
+    post_missed_call_card,
     public_call,
 )
 from services.billing import (
@@ -231,6 +232,38 @@ async def end_call(call_id: str, payload: CallEnd, current=Depends(require_user)
                 generate_and_post_recap(call_id, current["workspace_id"])
             )
     return public_call(call)
+
+
+@router.post("/calls/{call_id}/decline")
+async def decline_call(call_id: str, current=Depends(require_user)):
+    """Callee declined the ring (or the foreground ring timed out with no
+    answer). Stops the caller's ring for this user across their devices, and —
+    if nobody other than the caller joined — posts a one-time 'Missed call'
+    card into the chat with a one-tap call-back."""
+    call = await db.calls.find_one(
+        {"id": call_id, "workspace_id": current["workspace_id"]}, {"_id": 0}
+    )
+    if not call:
+        raise HTTPException(404, "Call not found")
+    # Stop this user's ring across their own devices.
+    await manager.send_to_user(current["id"], {"event": "call_unring", "data": {"call_id": call_id}})
+    # If someone other than the caller has actually joined, the call is being
+    # answered — don't post a missed card.
+    participants = call.get("participants") or []
+    others_joined = any(
+        (not p.get("left_at")) and p.get("id") != call.get("started_by")
+        for p in participants
+    )
+    if others_joined:
+        return {"ok": True, "answered_elsewhere": True}
+    # Atomically guard so concurrent declines/timeouts post at most one card.
+    guard = await db.calls.update_one(
+        {"id": call_id, "missed_card_posted": {"$ne": True}},
+        {"$set": {"missed_card_posted": True}},
+    )
+    if guard.modified_count == 1:
+        await post_missed_call_card(call)
+    return {"ok": True}
 
 
 @router.get("/calls/by-chat/{chat_id}")

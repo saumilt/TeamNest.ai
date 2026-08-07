@@ -711,7 +711,34 @@ export default function ChatScreen() {
     if (item.message_type === "call_recap") {
       return (
         <View testID={`message-${item.id}`}>
-          <CallRecapCard metadata={item.metadata || {}} />
+          <CallRecapCard metadata={item.metadata || {}} chatId={chatId} />
+        </View>
+      );
+    }
+
+    if (item.message_type === "call_missed") {
+      const md = item.metadata || {};
+      const callMode = md.mode === "video" ? "video" : "audio";
+      return (
+        <View style={styles.callCard} testID={`message-${item.id}`}>
+          <View style={[styles.callCardIcon, { backgroundColor: "rgba(248,113,113,0.15)" }]}>
+            <Ionicons name={callMode === "video" ? "videocam" : "call"} size={16} color={colors.danger} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.callCardTitle}>Missed call</Text>
+            <Text style={styles.callCardSub} numberOfLines={1}>
+              {md.from_name ? `From ${md.from_name}` : "No one answered"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            testID={`call-back-${md.call_id}`}
+            onPress={() => startCall(callMode)}
+            style={styles.callJoinBtn}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="call" size={12} color="#09090b" />
+            <Text style={styles.callJoinText}>Call back</Text>
+          </TouchableOpacity>
         </View>
       );
     }

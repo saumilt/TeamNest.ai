@@ -1,12 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import Animated, { SlideInUp, SlideOutUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiGet, getBase } from "@/src/api";
+import { apiGet, apiPost, getBase } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { colors, font, radius, spacing } from "@/src/theme";
+import { colors, font, spacing } from "@/src/theme";
+
+const RINGTONE = require("../../assets/sounds/ringtone.wav");
+// If no one accepts within this window, the ring is treated as a missed call.
+const RING_TIMEOUT_MS = 30000;
 
 type Incoming = {
   call_id: string;
@@ -18,14 +23,48 @@ type Incoming = {
 };
 
 // App-wide incoming-call ringer. Keeps a user WebSocket open while logged in and
-// shows a ring banner (with vibration) the moment someone starts a call in a
-// chat you're in. Foreground/in-app only — background ringing needs push + a
-// native build. Mounted once at the root, overlaying every screen.
+// shows a ring banner (with a looping ringtone + vibration) the moment someone
+// starts a call in a chat you're in. Foreground/in-app only — background ringing
+// needs push + a native build. Mounted once at the root, overlaying every screen.
 export function CallRingListener() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const [incoming, setIncoming] = useState<Incoming | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const timeoutRef = useRef<any>(null);
+  const player = useAudioPlayer(RINGTONE);
+
+  // Loop the ringtone + let it play through the iOS silent switch.
+  useEffect(() => {
+    try { player.loop = true; } catch { /* ignore */ }
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+  }, [player]);
+
+  const clearRing = () => {
+    Vibration.cancel();
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    setIncoming(null);
+  };
+
+  const declineCall = (inc: Incoming) => {
+    clearRing();
+    apiPost(`/api/calls/${inc.call_id}/decline`, {}).catch(() => { /* best-effort */ });
+  };
+
+  // Start/stop the ringtone + arm the no-answer timeout as the call changes.
+  useEffect(() => {
+    if (incoming) {
+      try { player.seekTo(0); player.play(); } catch { /* ignore */ }
+      const inc = incoming;
+      timeoutRef.current = setTimeout(() => declineCall(inc), RING_TIMEOUT_MS);
+    } else {
+      try { player.pause(); player.seekTo(0); } catch { /* ignore */ }
+    }
+    return () => {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming]);
 
   useEffect(() => {
     if (!token) return;
@@ -80,16 +119,10 @@ export function CallRingListener() {
     };
   }, [token]);
 
-  const dismiss = () => {
-    Vibration.cancel();
-    setIncoming(null);
-  };
-
   const accept = () => {
     if (!incoming) return;
-    Vibration.cancel();
     const inc = incoming;
-    setIncoming(null);
+    clearRing();
     router.push(`/call/${inc.call_id}?mode=${inc.mode}&title=${encodeURIComponent(inc.chat_name)}`);
   };
 
@@ -113,7 +146,7 @@ export function CallRingListener() {
           {incoming.chat_name} · {incoming.mode === "video" ? "Video" : "Audio"} call
         </Text>
       </View>
-      <Pressable testID="incoming-call-decline" onPress={dismiss} style={[styles.actionBtn, styles.decline]}>
+      <Pressable testID="incoming-call-decline" onPress={() => incoming && declineCall(incoming)} style={[styles.actionBtn, styles.decline]}>
         <Ionicons name="close" size={22} color="#fff" />
       </Pressable>
       <Pressable testID="incoming-call-accept" onPress={accept} style={[styles.actionBtn, styles.accept]}>

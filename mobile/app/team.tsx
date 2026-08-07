@@ -299,6 +299,25 @@ export default function TeamScreen() {
                 })}
               </ScrollView>
             )}
+
+            {timelineFor && canInvite && (timelineFor.status === "invited" || timelineFor.must_change_password) ? (
+              <TouchableOpacity
+                testID="invite-timeline-resend"
+                onPress={() => { const m = timelineFor; setTimelineFor(null); if (m) resend(m); }}
+                disabled={resendingId === timelineFor.id}
+                style={styles.tlResendBtn}
+                activeOpacity={0.85}
+              >
+                {resendingId === timelineFor.id ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <>
+                    <Ionicons name="mail-outline" size={15} color="#000" />
+                    <Text style={styles.tlResendText}>Resend invite</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -459,4 +478,15 @@ const styles = StyleSheet.create({
   tlLabel: { fontSize: font.small, fontWeight: "800" },
   tlTime: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1 },
   tlReason: { color: colors.textSecondary, fontSize: font.tiny, marginTop: 3, fontStyle: "italic" },
+  tlResendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingVertical: 13,
+    marginTop: spacing.md,
+  },
+  tlResendText: { color: "#000", fontWeight: "800", fontSize: font.body },
 });
