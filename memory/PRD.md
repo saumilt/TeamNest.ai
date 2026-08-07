@@ -13,6 +13,13 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 133 (Jun 2026) — Live Reactions, Call Recap, Invite Timeline, Call Ringing (mobile)
+- **Invite Timeline**: tappable team-member rows → sheet with the full Mailgun delivery timeline. Backend `GET /api/workspace/members/{id}/invite-timeline`.
+- **Reaction Overlay**: quick-react now broadcasts an ephemeral live reaction (`POST /api/chats/{id}/reactions`, WS `reaction` event, not persisted) that floats up for everyone via `ReactionOverlay` — no longer posted as a chat message.
+- **Call Recap**: `call_recap` card auto-posted after a call with a transcript (`generate_and_post_recap`); mobile `CallRecapCard` shows collapsible decision/action/risk/question highlights.
+- **Call Ringing (foreground)**: new user-level WS `/api/ws/user` (declared before `/api/ws/{chat_id}`) + `ws_manager.send_to_user`; `start_call` broadcasts `incoming_call`, end broadcasts `call_unring`; mobile `CallRingListener` (root-mounted) shows an incoming-call banner + vibration with Accept/Decline. Background ringing needs push + a Publish build.
+- testing_agent iteration_133 = PASS (backend 8/8 + mobile UI), no regressions.
+
 ### Iteration 132 (Jun 2026) — Phase 2 Mobile Calls (LiveKit) + Avatar Reactions
 - **Mobile Calls (LiveKit)** on Expo, reusing the existing `/api/calls` backend (no backend changes). Header audio/video call buttons (group/direct only), in-chat LIVE call card + Join (and "ended" variant), full-screen call route `app/call/[id].tsx`. Native LiveKit room UI (`CallScreen.tsx`: mic/camera toggles, participant tiles, Android screen-share, hang-up) is **platform-guarded** — the web bundle resolves `CallScreen.web.tsx` (placeholder) so `@livekit/react-native` never reaches web. Installed LiveKit RN + webrtc packages + config plugins; app.json permissions set.
 - ⚠️ Native calling only works in an Emergent **Publish** build (not Expo Go / web preview). iOS screen-share deferred (needs Broadcast Extension); screen-share control is Android-only.

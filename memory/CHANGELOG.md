@@ -3,6 +3,15 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 133 (Jun 2026) — Live Reactions, Call Recap, Invite Timeline, Call Ringing — VERIFIED (backend 8/8 + mobile UI)
+Four mobile features on the shared backend. testing_agent iteration_133 = PASS, no regressions.
+- **Invite Timeline** (mobile team screen): member rows are now tappable → a bottom sheet shows the full Mailgun delivery timeline (accepted→delivered→opened→clicked/failed, oldest→newest) via new `GET /api/workspace/members/{member_id}/invite-timeline` (uses `mailgun_service.fetch_events`). Empty/unconfigured states handled.
+- **Reaction Overlay** (ephemeral, replaces the old post-as-message behaviour): new `POST /api/chats/{chat_id}/reactions {emoji}` broadcasts `{event:'reaction'}` over the chat WS and does NOT persist. Mobile `ReactionOverlay` floats emojis up live for everyone in the chat (sender optimistic + others via WS, de-duped by user_id). `QuickReactBar` simplified to just the trigger.
+- **Call Recap** (mobile): after a call ends *with a transcript*, `generate_and_post_recap` posts a `call_recap` card; mobile `CallRecapCard` renders a collapsible list of decision/action/risk/question highlights. (No transcript ⇒ no card; empty transcript in Expo Go/web is expected.)
+- **Call Ringing** (foreground/in-app): new user-level WebSocket `GET /api/ws/user?token=` (declared BEFORE `/api/ws/{chat_id}` so 'user' isn't captured as a chat id — this ordering bug caused a 403 and was fixed). `ws_manager` gained `connect_user`/`disconnect_user`/`send_to_user`. On `POST /api/calls/start`, all other chat members get `{event:'incoming_call'}` on their user socket (plus the existing push); on call end they get `{event:'call_unring'}`. Mobile `CallRingListener` (mounted at root) shows an incoming-call banner + vibration → Accept navigates to `/call/{id}`, Decline dismisses. Background ringing (app closed) still needs push + a Publish build.
+- Helper scripts added under `/app/scripts/` (ring e2e test, demo recap seed, active-call cleanup, invite-code refill). Non-blocking code-review suggestions (reaction rate-limit, ring backoff jitter, WS fan-out) noted, not applied.
+
+
 ## Iteration 132 (Jun 2026) — Phase 2 Mobile Calls (LiveKit) + Avatar Reactions — VERIFIED (web-observable)
 - **Mobile Calls (LiveKit)** on Expo. Reused the existing backend `/api/calls` contract (POST `/api/calls/start` {chat_id, mode}, POST `/api/calls/{id}/join`, POST `/api/calls/{id}/end`, GET `/api/calls/by-chat/{chat_id}`) — no backend changes.
   - Installed `livekit-client@2.21`, `@livekit/react-native@2.12`, `@livekit/react-native-webrtc@144`, `@livekit/react-native-expo-plugin`, `@config-plugins/react-native-webrtc`. Configured `app.json` (LiveKit expo plugin with Android screen-share foreground service + audio type, webrtc config plugin, iOS camera/mic usage strings, Android CAMERA/RECORD_AUDIO/FOREGROUND_SERVICE_MEDIA_PROJECTION etc.).
