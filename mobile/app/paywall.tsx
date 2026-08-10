@@ -14,9 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import {
-  getCustomerInfo,
   getOfferings,
-  iapAvailable,
   purchasePackage,
   restorePurchases,
 } from "@/src/lib/revenuecat";
@@ -24,16 +22,31 @@ import { colors, font, radius, spacing } from "@/src/theme";
 
 const WEB_BILLING_URL = "https://teamnest.ai/billing";
 
+// Display catalog used when live RevenueCat offerings aren't available (web
+// preview / before store keys are wired). Prices are the marked-up store
+// prices; on a real build these are replaced by the store's priceStrings.
+const SAMPLE_PLANS = [
+  { plan: "student", title: "Student", monthly: "$8.49", annual: "$84.99", blurb: "Solo plan for students (.edu verified)." },
+  { plan: "pro", title: "Pro", monthly: "$11.99", annual: "$119.99", blurb: "Compare models, more credits & tools." },
+  { plan: "team", title: "Team", monthly: "$23.99", annual: "$239.99", blurb: "For whole teams. Unlimited transcription." },
+];
+const SAMPLE_CREDITS = [
+  { id: "credits_1000", title: "1,000 Credits", price: "$2.49" },
+  { id: "credits_5000", title: "5,000 Credits", price: "$9.99" },
+  { id: "credits_15000", title: "15,000 Credits", price: "$23.99" },
+];
+
+type Duration = "monthly" | "annual";
+
 export default function Paywall() {
   const insets = useSafeAreaInsets();
   const [offerings, setOfferings] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [duration, setDuration] = useState<Duration>("monthly");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
-  const available = iapAvailable();
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +56,6 @@ export default function Paywall() {
       ]);
       setOfferings(off);
       setUsage(u);
-      await getCustomerInfo();
     } finally {
       setLoading(false);
     }
@@ -53,8 +65,37 @@ export default function Paywall() {
 
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 3500); };
 
-  const buy = async (pkg: any) => {
-    setBusyId(pkg.identifier);
+  // ---- derive plan rows from live offerings, else fall back to sample ----
+  const livePkgs: any[] = offerings?.current?.availablePackages ?? [];
+  const liveByKey: Record<string, any> = {};
+  for (const p of livePkgs) {
+    const id: string = p.product?.identifier || p.identifier || "";
+    liveByKey[id] = p;
+  }
+  const usingSample = livePkgs.length === 0;
+
+  const planRows = SAMPLE_PLANS.map((s) => {
+    const mPkg = liveByKey[`${s.plan}_monthly`];
+    const aPkg = liveByKey[`${s.plan}_annual`];
+    return {
+      plan: s.plan,
+      title: s.title,
+      blurb: s.blurb,
+      monthly: { pkg: mPkg, price: mPkg?.product?.priceString || s.monthly },
+      annual: { pkg: aPkg, price: aPkg?.product?.priceString || s.annual },
+    };
+  });
+
+  const liveCredits: any[] = offerings?.all?.credits?.availablePackages ?? [];
+  const creditRows = liveCredits.length
+    ? liveCredits.map((p) => ({ id: p.product?.identifier || p.identifier, title: p.product?.title || p.identifier, price: p.product?.priceString || "", pkg: p }))
+    : SAMPLE_CREDITS.map((c) => ({ ...c, pkg: undefined as any }));
+
+  const currentPlan = usage?.plan_id || "free";
+
+  const buy = async (pkg: any, id: string) => {
+    if (!pkg) { flash("Available once the app is published to the store."); return; }
+    setBusyId(id);
     try {
       await purchasePackage(pkg);
       await apiPost("/api/billing/iap/sync", {}).catch(() => {});
@@ -88,37 +129,6 @@ export default function Paywall() {
     Linking.openURL(url).catch(() => {});
   };
 
-  const subs: any[] = offerings?.current?.availablePackages ?? [];
-  const creditPkgs: any[] = offerings?.all?.credits?.availablePackages ?? [];
-  const currentPlan = usage?.plan_id || "free";
-
-  const renderPackage = (pkg: any, kind: "sub" | "credit") => {
-    const p = pkg.product || {};
-    const active = kind === "sub" && p.identifier?.startsWith(currentPlan);
-    return (
-      <View key={pkg.identifier} style={styles.pkgRow} testID={`pkg-${pkg.identifier}`}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.pkgTitle}>{p.title || pkg.identifier}</Text>
-          {p.description ? <Text style={styles.pkgDesc} numberOfLines={2}>{p.description}</Text> : null}
-        </View>
-        <Text style={styles.pkgPrice}>{p.priceString || ""}</Text>
-        <TouchableOpacity
-          testID={`buy-${pkg.identifier}`}
-          onPress={() => buy(pkg)}
-          disabled={!!busyId || active}
-          style={[styles.buyBtn, (active) && styles.buyBtnActive]}
-          activeOpacity={0.85}
-        >
-          {busyId === pkg.identifier ? (
-            <ActivityIndicator size="small" color="#09090b" />
-          ) : (
-            <Text style={styles.buyText}>{active ? "Current" : kind === "sub" ? "Subscribe" : "Buy"}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <View style={styles.header}>
@@ -135,11 +145,84 @@ export default function Paywall() {
         <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
+          <Text style={styles.hero}>Do more with TeamNest</Text>
           <Text style={styles.currentPlan} testID="paywall-current-plan">
-            Current plan: <Text style={{ color: colors.accent }}>{String(currentPlan).toUpperCase()}</Text>
+            {"You're on "}<Text style={{ color: colors.accent, fontWeight: "800" }}>{String(currentPlan).toUpperCase()}</Text>
           </Text>
 
-          {/* Pricing-context message — per store policy */}
+          {/* Monthly / Yearly toggle */}
+          <View style={styles.toggle} testID="paywall-duration-toggle">
+            {(["monthly", "annual"] as Duration[]).map((d) => (
+              <TouchableOpacity
+                key={d}
+                testID={`paywall-toggle-${d}`}
+                onPress={() => setDuration(d)}
+                style={[styles.toggleBtn, duration === d && styles.toggleBtnActive]}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.toggleText, duration === d && styles.toggleTextActive]}>
+                  {d === "monthly" ? "Monthly" : "Yearly"}
+                </Text>
+                {d === "annual" ? (
+                  <View style={styles.saveTag}><Text style={styles.saveTagText}>2 MONTHS FREE</Text></View>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Plan cards */}
+          {planRows.map((row) => {
+            const opt = duration === "monthly" ? row.monthly : row.annual;
+            const isCurrent = currentPlan === row.plan;
+            const id = `${row.plan}_${duration}`;
+            return (
+              <View key={row.plan} style={[styles.planCard, row.plan === "pro" && styles.planCardHighlight]} testID={`plan-${row.plan}`}>
+                {row.plan === "pro" ? <View style={styles.popular}><Text style={styles.popularText}>MOST POPULAR</Text></View> : null}
+                <View style={styles.planTop}>
+                  <Text style={styles.planTitle}>{row.title}</Text>
+                  <Text style={styles.planPrice}>{opt.price}<Text style={styles.planPer}>{duration === "monthly" ? " /mo" : " /yr"}</Text></Text>
+                </View>
+                <Text style={styles.planBlurb}>{row.blurb}</Text>
+                <TouchableOpacity
+                  testID={`buy-${id}`}
+                  onPress={() => buy(opt.pkg, id)}
+                  disabled={!!busyId || isCurrent}
+                  style={[styles.planBtn, (row.plan === "pro") && styles.planBtnPrimary, isCurrent && styles.planBtnCurrent]}
+                  activeOpacity={0.85}
+                >
+                  {busyId === id ? (
+                    <ActivityIndicator size="small" color={row.plan === "pro" ? "#09090b" : colors.textPrimary} />
+                  ) : (
+                    <Text style={[styles.planBtnText, row.plan === "pro" && { color: "#09090b" }]}>
+                      {isCurrent ? "Current plan" : `Choose ${row.title}`}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+
+          {/* Credit packs */}
+          <Text style={styles.section}>ONE-TIME CREDIT PACKS</Text>
+          <View style={styles.card}>
+            {creditRows.map((c) => (
+              <View key={c.id} style={styles.creditRow} testID={`credit-${c.id}`}>
+                <Text style={styles.creditTitle}>{c.title}</Text>
+                <Text style={styles.creditPrice}>{c.price}</Text>
+                <TouchableOpacity
+                  testID={`buy-${c.id}`}
+                  onPress={() => buy(c.pkg, c.id)}
+                  disabled={!!busyId}
+                  style={styles.creditBtn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.creditBtnText}>Buy</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          {/* Pricing-context note per store policy */}
           {Platform.OS === "android" ? (
             <TouchableOpacity
               testID="paywall-web-discount"
@@ -147,62 +230,28 @@ export default function Paywall() {
               activeOpacity={0.85}
               style={[styles.noteCard, styles.discountCard]}
             >
-              <Ionicons name="pricetag" size={18} color={colors.success} />
-              <Text style={styles.discountText}>
-                Save ~20% — the same plans are cheaper on <Text style={{ fontWeight: "800" }}>teamnest.ai</Text>. Tap to open the web checkout.
-              </Text>
+              <Ionicons name="pricetag" size={16} color={colors.success} />
+              <Text style={styles.discountText}>Save ~20% — the same plans are cheaper on teamnest.ai.</Text>
             </TouchableOpacity>
           ) : Platform.OS === "ios" ? (
             <View style={[styles.noteCard, styles.feeCard]} testID="paywall-fee-note">
-              <Ionicons name="information-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="information-circle" size={16} color={colors.textMuted} />
               <Text style={styles.feeText}>Prices shown include the App Store fee.</Text>
             </View>
           ) : null}
 
-          {!available ? (
-            <View style={styles.unavailable} testID="paywall-unavailable">
-              <Ionicons name="phone-portrait-outline" size={22} color={colors.textMuted} />
-              <Text style={styles.unavailableTitle}>In-app purchases open in the app</Text>
-              <Text style={styles.unavailableSub}>
-                Subscriptions are available in the TeamNest iOS / Android app. You can also subscribe on the web for the discounted price.
-              </Text>
-              <TouchableOpacity
-                testID="paywall-open-web"
-                onPress={() => Linking.openURL(WEB_BILLING_URL).catch(() => {})}
-                style={styles.webBtn}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.webBtnText}>Subscribe on the web</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.section}>PLANS</Text>
-              <View style={styles.card}>
-                {subs.length === 0 ? (
-                  <Text style={styles.empty}>No plans available right now.</Text>
-                ) : (
-                  subs.map((p) => renderPackage(p, "sub"))
-                )}
-              </View>
+          {usingSample ? (
+            <Text style={styles.previewNote} testID="paywall-preview-note">
+              Preview pricing — live store prices appear in the published app.
+            </Text>
+          ) : null}
 
-              {creditPkgs.length > 0 ? (
-                <>
-                  <Text style={styles.section}>CREDIT PACKS</Text>
-                  <View style={styles.card}>
-                    {creditPkgs.map((p) => renderPackage(p, "credit"))}
-                  </View>
-                </>
-              ) : null}
-
-              <TouchableOpacity testID="paywall-restore" onPress={restore} disabled={restoring} style={styles.secondaryBtn}>
-                {restoring ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.secondaryText}>Restore purchases</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity testID="paywall-manage" onPress={manage} style={styles.linkBtn}>
-                <Text style={styles.linkText}>Manage subscription</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <TouchableOpacity testID="paywall-restore" onPress={restore} disabled={restoring} style={styles.secondaryBtn}>
+            {restoring ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.secondaryText}>Restore purchases</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity testID="paywall-manage" onPress={manage} style={styles.linkBtn}>
+            <Text style={styles.linkText}>Manage subscription</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
     </View>
@@ -211,62 +260,50 @@ export default function Paywall() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.textPrimary, fontSize: font.h2, fontWeight: "800" },
   flash: { color: colors.accent, fontSize: font.small, textAlign: "center", paddingVertical: 8, backgroundColor: colors.accentDim },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  currentPlan: { color: colors.textSecondary, fontSize: font.body, fontWeight: "700", marginBottom: spacing.md },
-  noteCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-  },
+  hero: { color: colors.textPrimary, fontSize: 24, fontWeight: "900", marginBottom: 2 },
+  currentPlan: { color: colors.textSecondary, fontSize: font.small, marginBottom: spacing.lg },
+  toggle: { flexDirection: "row", backgroundColor: colors.bgElevated, borderRadius: radius.pill, padding: 4, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  toggleBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: radius.pill },
+  toggleBtnActive: { backgroundColor: colors.accent },
+  toggleText: { color: colors.textSecondary, fontWeight: "800", fontSize: font.small },
+  toggleTextActive: { color: "#09090b" },
+  saveTag: { backgroundColor: "rgba(9,9,11,0.18)", borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
+  saveTagText: { color: "#09090b", fontSize: 9, fontWeight: "900" },
+  planCard: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginBottom: spacing.md },
+  planCardHighlight: { borderColor: colors.accent },
+  popular: { alignSelf: "flex-start", backgroundColor: colors.accentDim, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 8 },
+  popularText: { color: colors.accent, fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
+  planTop: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  planTitle: { color: colors.textPrimary, fontSize: font.h2, fontWeight: "800" },
+  planPrice: { color: colors.textPrimary, fontSize: 22, fontWeight: "900" },
+  planPer: { color: colors.textMuted, fontSize: font.small, fontWeight: "700" },
+  planBlurb: { color: colors.textMuted, fontSize: font.small, marginTop: 4, marginBottom: spacing.md },
+  planBtn: { alignItems: "center", paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.accentBorder },
+  planBtnPrimary: { backgroundColor: colors.accent, borderColor: colors.accent },
+  planBtnCurrent: { backgroundColor: colors.surfaceHover, borderColor: colors.border },
+  planBtnText: { color: colors.textPrimary, fontWeight: "800", fontSize: font.body },
+  section: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm },
+  card: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  creditRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  creditTitle: { flex: 1, color: colors.textPrimary, fontSize: font.body, fontWeight: "700" },
+  creditPrice: { color: colors.textSecondary, fontSize: font.small, fontWeight: "800" },
+  creditBtn: { backgroundColor: colors.accentDim, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8 },
+  creditBtnText: { color: colors.accent, fontWeight: "800", fontSize: font.small },
+  noteCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg, borderWidth: 1 },
   discountCard: { backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.35)" },
-  discountText: { flex: 1, color: colors.textSecondary, fontSize: font.small, lineHeight: 18 },
+  discountText: { flex: 1, color: colors.textSecondary, fontSize: font.small },
   feeCard: { backgroundColor: colors.bgElevated, borderColor: colors.border },
   feeText: { flex: 1, color: colors.textMuted, fontSize: font.small },
-  unavailable: { alignItems: "center", gap: spacing.sm, padding: spacing.xl },
-  unavailableTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800", marginTop: spacing.sm },
-  unavailableSub: { color: colors.textMuted, fontSize: font.small, textAlign: "center", lineHeight: 20 },
-  webBtn: { marginTop: spacing.md, backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 22, paddingVertical: 12 },
-  webBtnText: { color: "#09090b", fontWeight: "800", fontSize: font.body },
-  section: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 1, marginBottom: spacing.sm, marginTop: spacing.sm },
-  card: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-    marginBottom: spacing.lg,
-  },
-  empty: { color: colors.textMuted, fontSize: font.small, padding: spacing.md, fontStyle: "italic" },
-  pkgRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  pkgTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "700" },
-  pkgDesc: { color: colors.textMuted, fontSize: font.tiny, marginTop: 2 },
-  pkgPrice: { color: colors.textSecondary, fontSize: font.small, fontWeight: "800" },
-  buyBtn: { backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 9, minWidth: 84, alignItems: "center" },
-  buyBtnActive: { backgroundColor: colors.surfaceHover },
-  buyText: { color: "#09090b", fontWeight: "800", fontSize: font.small },
-  secondaryBtn: { alignItems: "center", paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, marginTop: spacing.sm },
+  previewNote: { color: colors.textMuted, fontSize: font.tiny, fontStyle: "italic", textAlign: "center", marginTop: spacing.md },
+  secondaryBtn: { alignItems: "center", paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, marginTop: spacing.lg },
   secondaryText: { color: colors.textSecondary, fontWeight: "700", fontSize: font.small },
   linkBtn: { alignItems: "center", paddingVertical: 14 },
   linkText: { color: colors.textMuted, fontSize: font.small, textDecorationLine: "underline" },
