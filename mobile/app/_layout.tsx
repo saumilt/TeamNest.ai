@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/src/auth";
 import { CallRingListener } from "@/src/components/CallRingListener";
+import { RestorePrompt } from "@/src/components/RestorePrompt";
 import { RevenueCatBoot } from "@/src/components/RevenueCatBoot";
 import { colors } from "@/src/theme";
 
@@ -35,6 +36,7 @@ export default function RootLayout() {
           </Stack>
           <CallRingListener />
           <RevenueCatBoot />
+          <RestorePrompt />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

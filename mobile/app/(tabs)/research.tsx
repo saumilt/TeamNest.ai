@@ -115,7 +115,7 @@ export default function ResearchScreen() {
             </Text>
             <TouchableOpacity
               testID="research-upgrade-btn"
-              onPress={() => router.push("/paywall")}
+              onPress={() => router.push({ pathname: "/paywall", params: { highlight: "pro", reason: "comparing multiple AI models" } })}
               style={styles.upgradeBtn}
             >
               <Text style={styles.upgradeBtnText}>Upgrade</Text>

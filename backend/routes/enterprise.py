@@ -557,18 +557,24 @@ class StoragePackIn(BaseModel):
     pack_id: str
 
 
+async def grant_storage_pack_to_workspace(ws: str, pack_id: str, actor: dict, via: str = "web") -> dict:
+    """Add a storage pack to a workspace (shared by the web purchase route and
+    the mobile IAP webhook fulfillment). Returns the created pack doc."""
+    pack = next((p for p in STORAGE_PACKS if p["id"] == pack_id), None)
+    if not pack:
+        raise HTTPException(404, "Unknown storage pack")
+    doc = {"id": new_id(), "workspace_id": ws, "pack_id": pack["id"], "name": pack["name"],
+           "gb": pack["gb"], "price_usd": pack["price_usd"], "source": via, "purchased_at": now_iso()}
+    await db.enterprise_storage_packs.insert_one(doc.copy())
+    await _audit(ws, actor, "storage_pack_purchased", "storage", pack["id"],
+                 {"gb": pack["gb"], "price_usd": pack["price_usd"], "via": via})
+    return doc
+
+
 @router.post("/enterprise/storage/packs/purchase")
 async def purchase_storage_pack(payload: StoragePackIn, current=Depends(require_user)):
     _owner_only(current)
-    pack = next((p for p in STORAGE_PACKS if p["id"] == payload.pack_id), None)
-    if not pack:
-        raise HTTPException(404, "Unknown storage pack")
-    ws = current["workspace_id"]
-    doc = {"id": new_id(), "workspace_id": ws, "pack_id": pack["id"], "name": pack["name"],
-           "gb": pack["gb"], "price_usd": pack["price_usd"], "purchased_at": now_iso()}
-    await db.enterprise_storage_packs.insert_one(doc.copy())
-    await _audit(ws, current, "storage_pack_purchased", "storage", pack["id"],
-                 {"gb": pack["gb"], "price_usd": pack["price_usd"]})
+    doc = await grant_storage_pack_to_workspace(current["workspace_id"], payload.pack_id, current, via="web")
     return {"ok": True, "pack": doc}
 
 

@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { iapConsumablesAvailable, purchaseConsumableIap } from "@/src/lib/iap";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { ContinuityBar, FlagChip, Freshness, RiskBadge, SectionTitle, Stat, eui } from "@/src/components/enterprise/ui";
 
@@ -34,6 +35,7 @@ export default function EnterpriseDashboard() {
   const [pending, setPending] = useState(0);
   const [openRole, setOpenRole] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, any>>({});
+  const [packBusy, setPackBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
     apiGet("/api/enterprise/overview").then(setOv).catch((e) => { if (e.status === 403) setGate(true); });
@@ -60,10 +62,19 @@ export default function EnterpriseDashboard() {
   };
 
   const buyPack = async (packId: string) => {
+    setPackBusy(packId);
     try {
-      await apiPost("/api/enterprise/storage/packs/purchase", { pack_id: packId });
+      // Mobile digital goods must go through native IAP; the web preview (no
+      // IAP) falls back to the direct backend grant so the flow stays testable.
+      if (iapConsumablesAvailable()) {
+        await purchaseConsumableIap("storage_pack", packId);
+      } else {
+        await apiPost("/api/enterprise/storage/packs/purchase", { pack_id: packId });
+      }
       const b = await apiGet("/api/enterprise/billing"); setBilling(b);
-    } catch {}
+    } catch {} finally {
+      setPackBusy(null);
+    }
   };
 
   if (gate) {
@@ -245,7 +256,9 @@ export default function EnterpriseDashboard() {
                   <Text style={styles.rowTitle}>{p.gb} GB</Text>
                   <Text style={styles.rowMeta}>${p.price_usd}/mo add-on</Text>
                 </View>
-                <TouchableOpacity testID={`ent-buy-${p.id}`} onPress={() => buyPack(p.id)} style={styles.miniBtn}><Ionicons name="add" size={14} color="#09090b" /><Text style={styles.miniBtnText}>Add</Text></TouchableOpacity>
+                <TouchableOpacity testID={`ent-buy-${p.id}`} onPress={() => buyPack(p.id)} disabled={!!packBusy} style={[styles.miniBtn, packBusy === p.id && { opacity: 0.6 }]}>
+                  {packBusy === p.id ? <ActivityIndicator size="small" color="#09090b" /> : <><Ionicons name="add" size={14} color="#09090b" /><Text style={styles.miniBtnText}>Add</Text></>}
+                </TouchableOpacity>
               </View>
             ))}
           </View>

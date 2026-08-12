@@ -13,6 +13,17 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 136 (Aug 2026) — Mobile IAP: variable/one-time consumables (pending-order pattern), Restore Prompt, Smart Upsell
+- **Pending-order pattern** for consumables whose store product id doesn't identify the target (marketplace installs = variable price; storage packs). Client calls `POST /api/billing/iap/order {kind, ref_id}` → backend records a pending order + returns the store `product_id`; client buys it via RevenueCat; the signed webhook `NON_RENEWING_PURCHASE` matches (product_id + user) to the OLDEST pending order and fulfills it server-side (grants ONLY via webhook — no RevenueCat secret key). Client polls `GET /api/billing/iap/order/{id}` until `fulfilled`.
+  - Storage packs map 1:1: `storage_10/50/100` → `pack-10/50/100`. Marketplace listings round UP to nearest tier: `marketplace_5/10/25/50/100` = 4.99/9.99/24.99/49.99/99.99.
+  - Refactored shared grant helpers: `grant_storage_pack_to_workspace` (enterprise.py) + `install_listing_for_workspace` (ai_employee_marketplace.py), used by both the web routes and webhook fulfillment. Idempotent via atomic pending→processing claim + rc_events event-id dedupe (verified: 5→55 GB, duplicate = no double grant).
+- **RevenueCat Apple public key** wired into `mobile/.env` (`EXPO_PUBLIC_RC_APPLE_KEY`). Bundle id = `ai.teamnest.app` (iOS + Android).
+- **Restore Prompt** (`src/components/RestorePrompt.tsx`, root-mounted): first-launch one-tap "Restore my purchase" nudge for returning users with no active entitlement. Native-only (no-op in Expo Go / web preview).
+- **Smart Upsell**: Pro-walls deep-link `/paywall?highlight=<plan>&reason=<text>` → contextual banner + "UNLOCKS THIS FEATURE" tag on the targeted plan card. Wired on the research tab Pro-wall.
+- Mobile fallback: on web preview (no IAP) storage/free-marketplace fall back to the direct backend routes so the flow stays testable.
+- testing_agent iteration_136 = PASS (backend 17/17 + mobile UI). NOT testable in preview: real RevenueCat purchases + LiveKit — require a Publish (TestFlight) build.
+
+
 ### Iteration 133 (Jun 2026) — Live Reactions, Call Recap, Invite Timeline, Call Ringing (mobile)
 - **Invite Timeline**: tappable team-member rows → sheet with the full Mailgun delivery timeline. Backend `GET /api/workspace/members/{id}/invite-timeline`.
 - **Reaction Overlay**: quick-react now broadcasts an ephemeral live reaction (`POST /api/chats/{id}/reactions`, WS `reaction` event, not persisted) that floats up for everyone via `ReactionOverlay` — no longer posted as a chat message.

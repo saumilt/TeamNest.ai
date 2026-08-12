@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
+import { iapConsumablesAvailable, purchaseConsumableIap } from "@/src/lib/iap";
 import { colors, font, radius, spacing } from "@/src/theme";
 
 const TABS = [{ id: "browse", label: "Browse" }, { id: "mine", label: "My listings" }, { id: "installed", label: "Installed" }];
@@ -149,8 +150,28 @@ function ListingModal({ id, onClose }: any) {
   useEffect(() => { apiGet(`/api/ai-builder/marketplace/${id}`).then(setL).catch(() => { onClose(); }); }, [id]);
   const install = async () => {
     setInstalling(true);
-    try { const d = await apiPost(`/api/ai-builder/marketplace/${id}/install`); onClose(); router.push(`/builder/${d.employee_id}`); }
-    catch (e: any) { Alert.alert("Error", e.message); setInstalling(false); }
+    try {
+      const paid = (l?.price_usd || 0) > 0;
+      // Paid listings on a native build must be bought via App Store IAP
+      // (pending-order pattern). Free listings — and the web preview — install
+      // directly through the backend.
+      if (paid && iapConsumablesAvailable()) {
+        const r = await purchaseConsumableIap("marketplace_install", id);
+        onClose();
+        if (r.fulfilled && r.result?.employee_id) {
+          router.push(`/builder/${r.result.employee_id}`);
+        } else {
+          router.push("/marketplace");
+        }
+      } else {
+        const d = await apiPost(`/api/ai-builder/marketplace/${id}/install`);
+        onClose();
+        router.push(`/builder/${d.employee_id}`);
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+      setInstalling(false);
+    }
   };
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>

@@ -12,6 +12,7 @@ actual prices live in App Store Connect / Play Console.
 import os
 from datetime import datetime, timezone
 
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from deps import db, now_iso
@@ -37,6 +38,42 @@ IAP_CREDIT_PACKS = {
     "credits_5000": 5000,
     "credits_15000": 15000,
 }
+
+# ── Consumable one-time products via the PENDING-ORDER pattern ───────────────
+# The store product id alone doesn't say WHICH storage pack / marketplace
+# listing was bought, so the client records a pending order first; the signed
+# webhook then matches (product_id + user) to that order and fulfills it once.
+# We deliberately do NOT hold the RevenueCat secret key.
+IAP_STORAGE_PRODUCTS = {  # store product id -> enterprise storage pack id
+    "storage_10": "pack-10",
+    "storage_50": "pack-50",
+    "storage_100": "pack-100",
+}
+# Marketplace listings are variable-priced; each listing's price is rounded UP
+# to the nearest fixed store tier at order time (owner sets ~+20% store prices).
+IAP_MARKETPLACE_TIERS = [
+    ("marketplace_5", 4.99),
+    ("marketplace_10", 9.99),
+    ("marketplace_25", 24.99),
+    ("marketplace_50", 49.99),
+    ("marketplace_100", 99.99),
+]
+IAP_MARKETPLACE_PRODUCTS = {pid for pid, _ in IAP_MARKETPLACE_TIERS}
+
+
+def storage_product_for_pack(pack_id: str) -> str | None:
+    for pid, pk in IAP_STORAGE_PRODUCTS.items():
+        if pk == pack_id:
+            return pid
+    return None
+
+
+def marketplace_product_for_price(price_usd: float) -> str:
+    for pid, ceiling in IAP_MARKETPLACE_TIERS:
+        if price_usd <= ceiling:
+            return pid
+    return IAP_MARKETPLACE_TIERS[-1][0]  # cap at the highest tier
+
 
 _indexes_ready = False
 
@@ -164,6 +201,41 @@ async def grant_credit_pack(user: dict, product_id: str | None, txn_key: str) ->
     return credits
 
 
+async def fulfill_pending_consumable(user: dict, product_id: str, txn_key: str) -> bool:
+    """Match the caller's OLDEST pending order for this consumable product and
+    fulfill it exactly once. The atomic pending->processing claim + the webhook
+    event-id dedupe together make this idempotent across retries/duplicates."""
+    order = await db.iap_pending_orders.find_one_and_update(
+        {"user_id": user["id"], "product_id": product_id, "status": "pending"},
+        {"$set": {"status": "processing", "txn_key": txn_key, "claimed_at": now_iso()}},
+        sort=[("created_at", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if not order:
+        return False
+    result: dict = {}
+    try:
+        if order["kind"] == "storage_pack":
+            from routes.enterprise import grant_storage_pack_to_workspace
+            pack = await grant_storage_pack_to_workspace(
+                order["workspace_id"], order["ref_id"], user, via="iap")
+            result = {"pack_id": order["ref_id"], "gb": pack.get("gb")}
+        elif order["kind"] == "marketplace_install":
+            from routes.ai_employee_marketplace import install_listing_for_workspace
+            result = await install_listing_for_workspace(
+                order["ref_id"], user, order["workspace_id"],
+                price_paid=(order.get("meta") or {}).get("price_usd"))
+    except Exception:
+        # Release the claim so a later reconcile can retry; don't fail the webhook.
+        await db.iap_pending_orders.update_one(
+            {"id": order["id"]}, {"$set": {"status": "pending", "txn_key": None}})
+        return False
+    await db.iap_pending_orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"status": "fulfilled", "fulfilled_at": now_iso(), "result": result}})
+    return True
+
+
 async def handle_event(user: dict, e: dict) -> None:
     """Dispatch a single RevenueCat webhook event to plan/credit changes."""
     kind = e.get("type")
@@ -183,7 +255,12 @@ async def handle_event(user: dict, e: dict) -> None:
     elif kind == "NON_RENEWING_PURCHASE":
         store = e.get("store") or "store"
         tid = e.get("transaction_id") or e.get("id")
-        await grant_credit_pack(user, _norm_product(e.get("product_id")), f"{store}:{tid}")
+        pid = _norm_product(e.get("product_id"))
+        txn_key = f"{store}:{tid}"
+        if pid in IAP_CREDIT_PACKS:
+            await grant_credit_pack(user, pid, txn_key)
+        elif pid in IAP_STORAGE_PRODUCTS or pid in IAP_MARKETPLACE_PRODUCTS:
+            await fulfill_pending_consumable(user, pid, txn_key)
 
 
 # NOTE: no RevenueCat REST "sync" — purchasePackage() returns CustomerInfo to the

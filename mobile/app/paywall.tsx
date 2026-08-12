@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -40,6 +40,9 @@ type Duration = "monthly" | "annual";
 
 export default function Paywall() {
   const insets = useSafeAreaInsets();
+  // Smart Upsell: a Pro-walled feature can deep-link here with the plan to
+  // pre-highlight + the reason it's locked.
+  const { highlight, reason } = useLocalSearchParams<{ highlight?: string; reason?: string }>();
   const [offerings, setOfferings] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -150,6 +153,16 @@ export default function Paywall() {
             {"You're on "}<Text style={{ color: colors.accent, fontWeight: "800" }}>{String(currentPlan).toUpperCase()}</Text>
           </Text>
 
+          {highlight ? (
+            <View style={styles.upsellBanner} testID="paywall-upsell-banner">
+              <Ionicons name="lock-open" size={16} color={colors.accent} />
+              <Text style={styles.upsellText}>
+                Upgrade to <Text style={styles.upsellPlan}>{String(highlight).toUpperCase()}</Text>
+                {reason ? ` to unlock ${reason}.` : "."}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Monthly / Yearly toggle */}
           <View style={styles.toggle} testID="paywall-duration-toggle">
             {(["monthly", "annual"] as Duration[]).map((d) => (
@@ -174,10 +187,13 @@ export default function Paywall() {
           {planRows.map((row) => {
             const opt = duration === "monthly" ? row.monthly : row.annual;
             const isCurrent = currentPlan === row.plan;
+            const isTargeted = highlight === row.plan;
             const id = `${row.plan}_${duration}`;
             return (
-              <View key={row.plan} style={[styles.planCard, row.plan === "pro" && styles.planCardHighlight]} testID={`plan-${row.plan}`}>
-                {row.plan === "pro" ? <View style={styles.popular}><Text style={styles.popularText}>MOST POPULAR</Text></View> : null}
+              <View key={row.plan} style={[styles.planCard, row.plan === "pro" && styles.planCardHighlight, isTargeted && styles.planCardTargeted]} testID={`plan-${row.plan}`}>
+                {isTargeted ? (
+                  <View style={styles.targetTag}><Text style={styles.targetTagText}>UNLOCKS THIS FEATURE</Text></View>
+                ) : row.plan === "pro" ? <View style={styles.popular}><Text style={styles.popularText}>MOST POPULAR</Text></View> : null}
                 <View style={styles.planTop}>
                   <Text style={styles.planTitle}>{row.title}</Text>
                   <Text style={styles.planPrice}>{opt.price}<Text style={styles.planPer}>{duration === "monthly" ? " /mo" : " /yr"}</Text></Text>
@@ -279,6 +295,12 @@ const styles = StyleSheet.create({
   saveTagText: { color: "#09090b", fontSize: 9, fontWeight: "900" },
   planCard: { backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginBottom: spacing.md },
   planCardHighlight: { borderColor: colors.accent },
+  planCardTargeted: { borderColor: colors.accent, borderWidth: 2 },
+  upsellBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accentBorder, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+  upsellText: { flex: 1, color: colors.textSecondary, fontSize: font.small, lineHeight: 19 },
+  upsellPlan: { color: colors.accent, fontWeight: "900" },
+  targetTag: { alignSelf: "flex-start", backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 8 },
+  targetTagText: { color: "#09090b", fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
   popular: { alignSelf: "flex-start", backgroundColor: colors.accentDim, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 8 },
   popularText: { color: colors.accent, fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
   planTop: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },

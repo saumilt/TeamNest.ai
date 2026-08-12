@@ -27,3 +27,7 @@ export async function purchasePackage(_pkg: any): Promise<any> {
 export async function restorePurchases(): Promise<any | null> {
   return null;
 }
+
+export async function findPackageByProductId(_productId: string): Promise<any | null> {
+  return null;
+}

@@ -236,12 +236,15 @@ async def listing_detail(listing_id: str, current=Depends(require_user)):
 
 
 # ── Install ────────────────────────────────────────────────────────────────
-@router.post("/ai-builder/marketplace/{listing_id}/install")
-async def install_listing(listing_id: str, current=Depends(require_user)):
+async def install_listing_for_workspace(listing_id: str, user: dict, ws: str,
+                                        price_paid: float | None = None) -> dict:
+    """Clone a published listing's snapshot into a workspace and record a
+    license. Shared by the web/free install route and the mobile IAP webhook
+    fulfillment (which passes the store-charged price_paid). Returns
+    {employee_id, employee}."""
     lst = await db.ai_employee_marketplace_listings.find_one({"id": listing_id}, {"_id": 0})
     if not lst or lst.get("status") != "Published":
         raise HTTPException(404, "Listing not found")
-    ws = current["workspace_id"]
     if await db.ai_employee_marketplace_licenses.find_one(
             {"listing_id": listing_id, "installer_workspace_id": ws}, {"_id": 1}):
         raise HTTPException(400, "Already installed in this workspace")
@@ -251,7 +254,7 @@ async def install_listing(listing_id: str, current=Depends(require_user)):
     now = now_iso()
     new_eid = new_id()
     emp = {
-        "id": new_eid, "workspace_id": ws, "creator_user_id": current["id"],
+        "id": new_eid, "workspace_id": ws, "creator_user_id": user["id"],
         "name": prof.get("name") or lst["title"], "job_title": prof.get("job_title", ""),
         "department": prof.get("department", ""), "reports_to": prof.get("reports_to", ""),
         "description": prof.get("description", ""),
@@ -303,12 +306,18 @@ async def install_listing(listing_id: str, current=Depends(require_user)):
                 "rationale": e.get("rationale", ""), "apply_as_rule": False,
                 "private_only": True, "created_at": now})
 
-    price = float(lst.get("price_usd", 0) or 0)
+    price = float(price_paid if price_paid is not None else (lst.get("price_usd", 0) or 0))
     await db.ai_employee_marketplace_licenses.insert_one({
         "id": new_id(), "listing_id": listing_id, "listing_title": lst["title"],
         "creator_user_id": lst.get("creator_user_id"),
-        "installer_workspace_id": ws, "installer_user_id": current["id"],
+        "installer_workspace_id": ws, "installer_user_id": user["id"],
         "installed_employee_id": new_eid, "price_paid": price, "created_at": now})
     await db.ai_employee_marketplace_listings.update_one(
         {"id": listing_id}, {"$inc": {"install_count": 1}})
-    return {"ok": True, "employee_id": new_eid, "employee": _public(emp)}
+    return {"employee_id": new_eid, "employee": _public(emp)}
+
+
+@router.post("/ai-builder/marketplace/{listing_id}/install")
+async def install_listing(listing_id: str, current=Depends(require_user)):
+    res = await install_listing_for_workspace(listing_id, current, current["workspace_id"])
+    return {"ok": True, **res}

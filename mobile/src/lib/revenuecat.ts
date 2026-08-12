@@ -64,3 +64,22 @@ export async function restorePurchases(): Promise<any | null> {
   if (!iapAvailable()) return null;
   return Purchases.restorePurchases();
 }
+
+// Find a package across every offering (current + all named) by its store
+// product identifier — used by the pending-order consumable flow, where the
+// backend tells us which product tier to buy.
+export async function findPackageByProductId(productId: string): Promise<any | null> {
+  const off = await getOfferings();
+  const buckets: any[][] = [];
+  if (off?.current?.availablePackages) buckets.push(off.current.availablePackages);
+  const all = off?.all || {};
+  for (const k of Object.keys(all)) {
+    if (all[k]?.availablePackages) buckets.push(all[k].availablePackages);
+  }
+  for (const pkgs of buckets) {
+    for (const p of pkgs) {
+      if ((p.product?.identifier || p.identifier) === productId) return p;
+    }
+  }
+  return null;
+}
