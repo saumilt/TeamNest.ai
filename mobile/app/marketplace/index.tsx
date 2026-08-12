@@ -2,13 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput,
+  ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPost } from "@/src/api";
 import { iapConsumablesAvailable, purchaseConsumableIap } from "@/src/lib/iap";
 import { colors, font, radius, spacing } from "@/src/theme";
+import { useToast } from "@/src/components/Toast";
 
 const TABS = [{ id: "browse", label: "Browse" }, { id: "mine", label: "My listings" }, { id: "installed", label: "Installed" }];
 
@@ -145,11 +146,13 @@ function Installed() {
 }
 
 function ListingModal({ id, onClose }: any) {
+  const { show } = useToast();
   const [l, setL] = useState<any>(null);
   const [installing, setInstalling] = useState(false);
   useEffect(() => { apiGet(`/api/ai-builder/marketplace/${id}`).then(setL).catch(() => { onClose(); }); }, [id]);
   const install = async () => {
     setInstalling(true);
+    const label = l?.title || "AI employee";
     try {
       const paid = (l?.price_usd || 0) > 0;
       // Paid listings on a native build must be bought via App Store IAP
@@ -159,17 +162,20 @@ function ListingModal({ id, onClose }: any) {
         const r = await purchaseConsumableIap("marketplace_install", id);
         onClose();
         if (r.fulfilled && r.result?.employee_id) {
+          show(`${label} installed`);
           router.push(`/builder/${r.result.employee_id}`);
         } else {
+          show("Purchase received — installing your AI employee…", "info");
           router.push("/marketplace");
         }
       } else {
         const d = await apiPost(`/api/ai-builder/marketplace/${id}/install`);
         onClose();
+        show(`${label} installed`);
         router.push(`/builder/${d.employee_id}`);
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      show(e?.message || "Install failed", "error");
       setInstalling(false);
     }
   };

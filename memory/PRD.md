@@ -21,7 +21,9 @@ invite-your-friends flows.
 - **Restore Prompt** (`src/components/RestorePrompt.tsx`, root-mounted): first-launch one-tap "Restore my purchase" nudge for returning users with no active entitlement. Native-only (no-op in Expo Go / web preview).
 - **Smart Upsell**: Pro-walls deep-link `/paywall?highlight=<plan>&reason=<text>` → contextual banner + "UNLOCKS THIS FEATURE" tag on the targeted plan card. Wired on the research tab Pro-wall.
 - Mobile fallback: on web preview (no IAP) storage/free-marketplace fall back to the direct backend routes so the flow stays testable.
-- testing_agent iteration_136 = PASS (backend 17/17 + mobile UI). NOT testable in preview: real RevenueCat purchases + LiveKit — require a Publish (TestFlight) build.
+- **Post-purchase Toast** (`src/components/Toast.tsx`, `ToastProvider` root-mounted, `useToast().show()`): success toasts on storage-pack add ("N GB storage added") + marketplace install ("<name> installed"); marketplace errors now use the toast instead of `Alert`. Subscriptions/credits keep the paywall `flash` banner.
+- **App display name** set to "TeamNest" in app.json (bundle id unchanged `ai.teamnest.app`; slug kept `mobile`).
+- testing_agent iteration_136 = PASS (backend 17/17 + mobile UI). Toast + rename verified via screenshot (toast fired on storage add; login shows TeamNest branding). NOT testable in preview: real RevenueCat purchases + LiveKit — require a Publish (TestFlight) build.
 
 
 ### Iteration 133 (Jun 2026) — Live Reactions, Call Recap, Invite Timeline, Call Ringing (mobile)

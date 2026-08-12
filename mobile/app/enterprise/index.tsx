@@ -10,6 +10,7 @@ import { useAuth } from "@/src/auth";
 import { iapConsumablesAvailable, purchaseConsumableIap } from "@/src/lib/iap";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { ContinuityBar, FlagChip, Freshness, RiskBadge, SectionTitle, Stat, eui } from "@/src/components/enterprise/ui";
+import { useToast } from "@/src/components/Toast";
 
 const TABS = ["Overview", "People", "Roles", "Risk", "Review", "Billing"];
 
@@ -24,6 +25,7 @@ function fmtBytes(b: number) {
 export default function EnterpriseDashboard() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
+  const { show } = useToast();
   const [tab, setTab] = useState("Overview");
   const [gate, setGate] = useState(false);
   const [ov, setOv] = useState<any>(null);
@@ -61,7 +63,7 @@ export default function EnterpriseDashboard() {
     } catch {}
   };
 
-  const buyPack = async (packId: string) => {
+  const buyPack = async (packId: string, gb?: number) => {
     setPackBusy(packId);
     try {
       // Mobile digital goods must go through native IAP; the web preview (no
@@ -72,7 +74,10 @@ export default function EnterpriseDashboard() {
         await apiPost("/api/enterprise/storage/packs/purchase", { pack_id: packId });
       }
       const b = await apiGet("/api/enterprise/billing"); setBilling(b);
-    } catch {} finally {
+      show(gb ? `${gb} GB storage added` : "Storage added");
+    } catch {
+      show("Purchase didn't complete", "error");
+    } finally {
       setPackBusy(null);
     }
   };
@@ -256,7 +261,7 @@ export default function EnterpriseDashboard() {
                   <Text style={styles.rowTitle}>{p.gb} GB</Text>
                   <Text style={styles.rowMeta}>${p.price_usd}/mo add-on</Text>
                 </View>
-                <TouchableOpacity testID={`ent-buy-${p.id}`} onPress={() => buyPack(p.id)} disabled={!!packBusy} style={[styles.miniBtn, packBusy === p.id && { opacity: 0.6 }]}>
+                <TouchableOpacity testID={`ent-buy-${p.id}`} onPress={() => buyPack(p.id, p.gb)} disabled={!!packBusy} style={[styles.miniBtn, packBusy === p.id && { opacity: 0.6 }]}>
                   {packBusy === p.id ? <ActivityIndicator size="small" color="#09090b" /> : <><Ionicons name="add" size={14} color="#09090b" /><Text style={styles.miniBtnText}>Add</Text></>}
                 </TouchableOpacity>
               </View>
