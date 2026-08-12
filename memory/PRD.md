@@ -23,6 +23,7 @@ invite-your-friends flows.
 - Mobile fallback: on web preview (no IAP) storage/free-marketplace fall back to the direct backend routes so the flow stays testable.
 - **Post-purchase Toast** (`src/components/Toast.tsx`, `ToastProvider` root-mounted, `useToast().show()`): success toasts on storage-pack add ("N GB storage added") + marketplace install ("<name> installed"); marketplace errors now use the toast instead of `Alert`. Subscriptions/credits keep the paywall `flash` banner.
 - **App display name** set to "TeamNest" in app.json (bundle id unchanged `ai.teamnest.app`; slug kept `mobile`).
+- **Store-ready assets & metadata**: branded amber "nest" emblem icon (icon.png, adaptive-icon.png, favicon.png) + splash lockup (splash-image.png, imageWidth 220) on zinc-950 black. Set `version 1.0.0`, iOS `buildNumber "1"`, Android `versionCode 1`. (Icons/splash only render in a native Publish build, not the Expo web preview.)
 - testing_agent iteration_136 = PASS (backend 17/17 + mobile UI). Toast + rename verified via screenshot (toast fired on storage add; login shows TeamNest branding). NOT testable in preview: real RevenueCat purchases + LiveKit — require a Publish (TestFlight) build.
 
 
