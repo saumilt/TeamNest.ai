@@ -65,6 +65,28 @@ async def workspace_members(current=Depends(require_user)):
     return [public_user(u) for u in members]
 
 
+@router.get("/workspace/contacts/frequent")
+async def frequent_contacts(current=Depends(require_user)):
+    """Rank workspace members by how often they share chats with the current
+    user (recent chats weigh more). Used to surface top contacts in pickers."""
+    from collections import defaultdict
+
+    ws, uid = current["workspace_id"], current["id"]
+    chats = await db.chats.find(
+        {"workspace_id": ws, "member_ids": uid},
+        {"_id": 0, "member_ids": 1, "updated_at": 1, "created_at": 1},
+    ).to_list(length=1000)
+    chats.sort(key=lambda c: c.get("updated_at") or c.get("created_at") or "", reverse=True)
+    scores = defaultdict(float)
+    for rank, c in enumerate(chats):
+        weight = 1.0 / (1 + rank * 0.1)  # decays for staler chats
+        for m in (c.get("member_ids") or []):
+            if m != uid:
+                scores[m] += weight
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    return {"contact_ids": [m for m, _ in ranked]}
+
+
 @router.post("/workspace/invite")
 async def invite_member(payload: InviteMember, current=Depends(require_user)):
     if current.get("role") not in ("owner", "admin"):

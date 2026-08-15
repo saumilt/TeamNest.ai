@@ -31,6 +31,17 @@ const MODELS = [
   { key: "grok", name: "Grok" },
 ];
 
+// Split a pasted blob into unique, plausible emails (commas / spaces / newlines / semicolons).
+const parseEmails = (raw) =>
+  Array.from(
+    new Set(
+      (raw || "")
+        .split(/[\s,;]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.includes("@") && s.includes(".")),
+    ),
+  );
+
 export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -47,7 +58,9 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const [avatar, setAvatar] = useState({});
   const [memberQuery, setMemberQuery] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
   const [inviting, setInviting] = useState(false);
+  const [contactIds, setContactIds] = useState([]);
   const { user } = useAuth();
   const canInvite = ["owner", "admin"].includes(user?.role);
 
@@ -55,10 +68,13 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
     if (open) {
       api.get("/workspace/members").then(({ data }) => setMembers(data));
       api.get("/folders").then(({ data }) => setFolders(data));
+      api.get("/workspace/contacts/frequent")
+        .then(({ data }) => setContactIds(data.contact_ids || []))
+        .catch(() => setContactIds([]));
       setName(""); setDescription(""); setSelected([]); setFolderId(""); setType("group");
       setPostingPolicy("all");
       setAvatar({});
-      setMemberQuery(""); setInviteEmail("");
+      setMemberQuery(""); setInviteEmail(""); setInviteRole("member");
       setCreatingFolder(false); setNewFolderName("");
     }
   }, [open]);
@@ -87,33 +103,70 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   };
 
   const inviteByEmail = async () => {
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email || !email.includes("@")) return toast.error("Enter a valid email");
+    const emails = parseEmails(inviteEmail);
+    if (emails.length === 0) return toast.error("Enter one or more valid emails");
+    if (emails.length > 20) return toast.error("Please invite at most 20 people at a time");
     setInviting(true);
     try {
-      const derivedName = email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-      const { data } = await api.post("/workspace/invite", { name: derivedName, email, role: "member" });
-      // Add the invited/added teammate to the pick list and auto-select them.
-      setMembers((prev) => (prev.some((m) => m.id === data.id) ? prev : [{ id: data.id, name: data.name, email: data.email }, ...prev]));
-      setSelected((prev) => (prev.includes(data.id) ? prev : [...prev, data.id]));
-      setInviteEmail("");
-      setMemberQuery("");
-      toast.success(
-        data.added_to_existing_user
-          ? `Added ${data.name} to your workspace`
-          : `Invite sent to ${email} — added to this group`
+      const results = await Promise.allSettled(
+        emails.map((email) => {
+          const derivedName = email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          return api.post("/workspace/invite", { name: derivedName, email, role: inviteRole });
+        }),
       );
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not invite");
+      const added = [];
+      let failed = 0;
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const d = r.value.data;
+          added.push({ id: d.id, name: d.name, email: d.email });
+        } else {
+          failed += 1;
+        }
+      });
+      if (added.length) {
+        setMembers((prev) => {
+          const byId = new Map(prev.map((m) => [m.id, m]));
+          added.forEach((a) => { if (!byId.has(a.id)) byId.set(a.id, a); });
+          return Array.from(byId.values());
+        });
+        setSelected((prev) => Array.from(new Set([...prev, ...added.map((a) => a.id)])));
+        // Float freshly-invited people to the top of the picker.
+        setContactIds((prev) => Array.from(new Set([...added.map((a) => a.id), ...prev])));
+        setInviteEmail("");
+        setMemberQuery("");
+        toast.success(
+          `Added ${added.length} ${added.length === 1 ? "person" : "people"} to this group${failed ? ` · ${failed} failed` : ""}`,
+        );
+      } else {
+        toast.error(`Could not invite${failed ? ` (${failed} failed)` : ""}`);
+      }
     } finally {
       setInviting(false);
     }
   };
 
+  // Order teammates: most-frequent contacts first, then the rest.
   const q = memberQuery.trim().toLowerCase();
-  const visibleMembers = q
-    ? members.filter((m) => (m.name || "").toLowerCase().includes(q) || (m.email || "").toLowerCase().includes(q))
-    : members;
+  const rank = new Map(contactIds.map((id, i) => [id, i]));
+  const ordered = [...members].sort((a, b) => {
+    const ra = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
+    const rb = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
+    return ra - rb;
+  });
+  const filtered = q
+    ? ordered.filter((m) => (m.name || "").toLowerCase().includes(q) || (m.email || "").toLowerCase().includes(q))
+    : ordered;
+  const frequentList = q ? [] : filtered.filter((m) => rank.has(m.id)).slice(0, 6);
+  const frequentIds = new Set(frequentList.map((m) => m.id));
+  const othersList = q ? filtered : filtered.filter((m) => !frequentIds.has(m.id));
+
+  const renderMemberRow = (m) => (
+    <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
+      <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
+      <div className="text-sm flex-1 min-w-0 truncate">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
+    </label>
+  );
 
   const toggleModel = (k) => {
     setDefaultModels((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
@@ -306,44 +359,69 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
                 className="bg-[#121214] border-white/10 rounded-sm pl-9 h-9"
               />
             </div>
-            <div className="space-y-2">
-              {visibleMembers.length === 0 ? (
+            <div className="space-y-1">
+              {filtered.length === 0 ? (
                 <div className="text-xs text-zinc-500 px-2 py-3" data-testid="new-chat-members-empty">
                   {memberQuery ? `No teammates match “${memberQuery}”.` : "No teammates yet — invite someone below."}
                 </div>
               ) : (
-                visibleMembers.map((m) => (
-                  <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
-                    <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
-                    <div className="text-sm">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
-                  </label>
-                ))
+                <>
+                  {frequentList.length > 0 && (
+                    <>
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-yellow-500/80 px-1 pt-0.5 pb-1" data-testid="members-frequent-label">
+                        Frequently contacted
+                      </div>
+                      {frequentList.map(renderMemberRow)}
+                      {othersList.length > 0 && (
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 px-1 pt-2 pb-1">
+                          All teammates
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {othersList.map(renderMemberRow)}
+                </>
               )}
             </div>
             {canInvite && (
               <div className="mt-3 pt-3 border-t border-white/5" data-testid="new-chat-invite-row">
                 <div className="label-mono mb-2">INVITE SOMEONE NEW</div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    data-testid="new-chat-invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); inviteByEmail(); } }}
-                    placeholder="name@company.com"
-                    className="bg-[#121214] border-white/10 rounded-sm flex-1 h-9"
-                  />
+                <Textarea
+                  data-testid="new-chat-invite-email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); inviteByEmail(); } }}
+                  placeholder="Paste one or more emails — separate with commas, spaces, or new lines"
+                  className="bg-[#121214] border-white/10 rounded-sm min-h-[40px] text-sm"
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-1" data-testid="new-chat-invite-role">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mr-1">Role</span>
+                    {["member", "viewer"].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        data-testid={`invite-role-${r}`}
+                        onClick={() => setInviteRole(r)}
+                        className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest rounded-sm border ${inviteRole === r ? "bg-white text-black border-white" : "border-white/10 text-zinc-400"}`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
                   <Button
                     type="button"
                     onClick={inviteByEmail}
-                    disabled={inviting || !inviteEmail.includes("@")}
+                    disabled={inviting || parseEmails(inviteEmail).length === 0}
                     data-testid="new-chat-invite-btn"
-                    className="bg-yellow-500 text-black hover:bg-yellow-400 rounded-sm font-mono uppercase text-[10px] tracking-widest h-9 px-3 shrink-0"
+                    className="ml-auto bg-yellow-500 text-black hover:bg-yellow-400 rounded-sm font-mono uppercase text-[10px] tracking-widest h-8 px-3 shrink-0"
                   >
-                    {inviting ? "…" : <><UserPlus className="w-3.5 h-3.5 mr-1" /> Invite</>}
+                    {inviting ? "…" : (
+                      <><UserPlus className="w-3.5 h-3.5 mr-1" /> Invite{parseEmails(inviteEmail).length > 1 ? ` ${parseEmails(inviteEmail).length}` : ""}</>
+                    )}
                   </Button>
                 </div>
-                <div className="text-[10px] text-zinc-600 mt-1.5">They&apos;ll be emailed an invite and added to this group automatically.</div>
+                <div className="text-[10px] text-zinc-600 mt-1.5">They&apos;ll be emailed an invite and added to this group as <span className="text-zinc-400">{inviteRole}s</span>. Tip: ⌘/Ctrl + Enter to send.</div>
               </div>
             )}
           </div>

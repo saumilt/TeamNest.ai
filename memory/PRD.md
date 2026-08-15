@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 139 (web) — Group form: bulk invite, role picker, recent-contacts ordering
+- **Bulk Invite** (`NewChatDialog.jsx`): the invite field is now a Textarea; paste multiple emails (comma/space/newline/semicolon separated), parsed + deduped by `parseEmails`. Invite button shows the count ("Invite 3"), fires `POST /workspace/invite` per email via `Promise.allSettled`, adds+selects all successes, floats them to the top of the picker, and toasts "Added N people · M failed". ⌘/Ctrl+Enter submits. Capped at 20/batch.
+- **Role On Invite**: MEMBER / VIEWER toggle (`invite-role-member` / `invite-role-viewer`) next to the field; the chosen role is passed to `/workspace/invite`. Verified end-to-end: invite-as-viewer creates the user with role=viewer.
+- **Recent Contacts**: new backend `GET /workspace/contacts/frequent` ranks workspace members by shared-chat count with recency decay (`weight = 1/(1+rank*0.1)`). The dialog groups the list into "Frequently contacted" (top 6, `members-frequent-label`) and "All teammates" when not searching; a flat filtered list while searching.
+- Verified via screenshot (all 3 render + function: grouping shows Priya/Qa on top, "INVITE 3", viewer toggle) and curl (frequent endpoint + role propagation). Testing agent NOT run this round (self-tested; builds on iter138's tested invite/create flow). Web-only — redeploy for teamnest.ai.
+
 ### Iteration 138 (web) — Group form: member search + invite-by-email; sticky footers on Add Member & Group Info
 - **Member Search** (`NewChatDialog.jsx`): search box (`new-chat-member-search`) filters the member list by name/email; no-match empty state (`new-chat-members-empty`); a "N selected" counter on the MEMBERS label.
 - **Invite In Create** (`NewChatDialog.jsx`, owner/admin only via `useAuth().user.role`): `new-chat-invite-row` with email field + Invite button calls `POST /workspace/invite`, then auto-adds the returned user to the member list AND checks them, so they're included when the group is created. Handles existing-user ("added to workspace") vs new-email (invite emailed). Hidden for member/viewer roles.
