@@ -354,6 +354,17 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
           </>
           )}
         </div>
+        {tab === "members" && isAdmin && (
+          <div className="px-4 py-3 border-t border-hairline bg-bg shrink-0" data-testid="group-info-footer">
+            <button
+              data-testid="group-info-add-footer"
+              onClick={handleAddOpen}
+              className="w-full h-10 rounded-md bg-brand text-black font-medium text-[13px] inline-flex items-center justify-center gap-1.5 hover:bg-yellow-300"
+            >
+              <UserPlus className="w-4 h-4" /> Add member
+            </button>
+          </div>
+        )}
       </aside>
       <AddMemberDialog
         open={showAdd}

@@ -13,6 +13,13 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 138 (web) — Group form: member search + invite-by-email; sticky footers on Add Member & Group Info
+- **Member Search** (`NewChatDialog.jsx`): search box (`new-chat-member-search`) filters the member list by name/email; no-match empty state (`new-chat-members-empty`); a "N selected" counter on the MEMBERS label.
+- **Invite In Create** (`NewChatDialog.jsx`, owner/admin only via `useAuth().user.role`): `new-chat-invite-row` with email field + Invite button calls `POST /workspace/invite`, then auto-adds the returned user to the member list AND checks them, so they're included when the group is created. Handles existing-user ("added to workspace") vs new-email (invite emailed). Hidden for member/viewer roles.
+- **Sticky footer — AddMemberDialog**: converted to flex-col fixed-header/scroll-body with an always-visible `add-member-done-footer` (Done) bar.
+- **Sticky footer — GroupInfo** (slide-over already had sticky header + scroll body): promoted the admin "Add member" action to a pinned bottom bar (`group-info-add-footer`), members tab + admin only.
+- testing_agent iteration_138 = PASS (backend 3/3: invite new/existing/403-for-member; frontend 6/6 at 700px). Non-blocking: Sonner toast may briefly overlap the GroupInfo footer right after creation. Web-only change (redeploy to reach teamnest.ai).
+
 ### Iteration 137 (web) — Modal overflow fix: group-creation form + all popups
 - **Bug**: On shorter laptop viewports the "New Chat" group-creation dialog was taller than the screen; the shadcn `DialogContent` had no height cap and no scroll, so the header + Create button + member controls overflowed off-screen and were unreachable. Reported on production (teamnest.ai) — same code in both envs.
 - **Global fix** (`components/ui/dialog.jsx`): base `DialogContent` now `max-h-[90vh] overflow-y-auto` → no dialog can exceed the viewport; every popup scrolls to reveal its actions. (tailwind-merge lets individual dialogs override.)

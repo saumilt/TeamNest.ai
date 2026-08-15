@@ -172,12 +172,13 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0a0a0a] border-white/10 rounded-sm max-w-lg" data-testid="add-member-dialog">
-        <DialogHeader>
+      <DialogContent className="bg-[#0a0a0a] border-white/10 rounded-sm max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0" data-testid="add-member-dialog">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-white/10 shrink-0 text-left">
           <DialogTitle className="font-display tracking-tight">Add members to this chat</DialogTitle>
         </DialogHeader>
 
-        <div className="text-xs text-zinc-500 leading-relaxed -mt-1 mb-1">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="text-xs text-zinc-500 leading-relaxed mb-3">
           Members are full teammates — they can see this workspace and participate in <span className="text-zinc-200">{chatName || "this chat"}</span>.
         </div>
 
@@ -355,6 +356,18 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
               </form>
               <div className="text-[10px] text-zinc-600 mt-2">We&apos;ll create a member account with a one-time password you can share with them.</div>
             </div>
+          </div>
+        )}
+        </div>
+        {!createdMember && (
+          <div className="shrink-0 px-5 py-4 border-t border-white/10 bg-[#0a0a0a]">
+            <Button
+              data-testid="add-member-done-footer"
+              onClick={() => onOpenChange(false)}
+              className="w-full bg-white text-black hover:bg-zinc-200 rounded-sm font-mono uppercase text-xs tracking-widest h-10"
+            >
+              Done
+            </Button>
           </div>
         )}
       </DialogContent>

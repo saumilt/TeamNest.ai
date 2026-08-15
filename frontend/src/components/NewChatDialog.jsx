@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { FolderPlus, Plus, Check, X } from "lucide-react";
+import { FolderPlus, Plus, Check, X, Search, UserPlus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,11 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const [type, setType] = useState("group");
   const [postingPolicy, setPostingPolicy] = useState("all");
   const [avatar, setAvatar] = useState({});
+  const [memberQuery, setMemberQuery] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const { user } = useAuth();
+  const canInvite = ["owner", "admin"].includes(user?.role);
 
   useEffect(() => {
     if (open) {
@@ -52,6 +58,7 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
       setName(""); setDescription(""); setSelected([]); setFolderId(""); setType("group");
       setPostingPolicy("all");
       setAvatar({});
+      setMemberQuery(""); setInviteEmail("");
       setCreatingFolder(false); setNewFolderName("");
     }
   }, [open]);
@@ -78,6 +85,35 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const toggleMember = (id) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const inviteByEmail = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !email.includes("@")) return toast.error("Enter a valid email");
+    setInviting(true);
+    try {
+      const derivedName = email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      const { data } = await api.post("/workspace/invite", { name: derivedName, email, role: "member" });
+      // Add the invited/added teammate to the pick list and auto-select them.
+      setMembers((prev) => (prev.some((m) => m.id === data.id) ? prev : [{ id: data.id, name: data.name, email: data.email }, ...prev]));
+      setSelected((prev) => (prev.includes(data.id) ? prev : [...prev, data.id]));
+      setInviteEmail("");
+      setMemberQuery("");
+      toast.success(
+        data.added_to_existing_user
+          ? `Added ${data.name} to your workspace`
+          : `Invite sent to ${email} — added to this group`
+      );
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not invite");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const q = memberQuery.trim().toLowerCase();
+  const visibleMembers = q
+    ? members.filter((m) => (m.name || "").toLowerCase().includes(q) || (m.email || "").toLowerCase().includes(q))
+    : members;
 
   const toggleModel = (k) => {
     setDefaultModels((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
@@ -256,15 +292,60 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
             </>
           )}
           <div>
-            <div className="label-mono mb-2">MEMBERS</div>
-            <div className="space-y-2">
-              {members.map((m) => (
-                <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
-                  <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
-                  <div className="text-sm">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
-                </label>
-              ))}
+            <div className="label-mono mb-2 flex items-center justify-between">
+              <span>MEMBERS</span>
+              <span className="text-[10px] text-zinc-500 normal-case tracking-normal">{selected.length} selected</span>
             </div>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
+              <Input
+                data-testid="new-chat-member-search"
+                value={memberQuery}
+                onChange={(e) => setMemberQuery(e.target.value)}
+                placeholder="Search teammates by name or email"
+                className="bg-[#121214] border-white/10 rounded-sm pl-9 h-9"
+              />
+            </div>
+            <div className="space-y-2">
+              {visibleMembers.length === 0 ? (
+                <div className="text-xs text-zinc-500 px-2 py-3" data-testid="new-chat-members-empty">
+                  {memberQuery ? `No teammates match “${memberQuery}”.` : "No teammates yet — invite someone below."}
+                </div>
+              ) : (
+                visibleMembers.map((m) => (
+                  <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
+                    <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
+                    <div className="text-sm">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
+                  </label>
+                ))
+              )}
+            </div>
+            {canInvite && (
+              <div className="mt-3 pt-3 border-t border-white/5" data-testid="new-chat-invite-row">
+                <div className="label-mono mb-2">INVITE SOMEONE NEW</div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    data-testid="new-chat-invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); inviteByEmail(); } }}
+                    placeholder="name@company.com"
+                    className="bg-[#121214] border-white/10 rounded-sm flex-1 h-9"
+                  />
+                  <Button
+                    type="button"
+                    onClick={inviteByEmail}
+                    disabled={inviting || !inviteEmail.includes("@")}
+                    data-testid="new-chat-invite-btn"
+                    className="bg-yellow-500 text-black hover:bg-yellow-400 rounded-sm font-mono uppercase text-[10px] tracking-widest h-9 px-3 shrink-0"
+                  >
+                    {inviting ? "…" : <><UserPlus className="w-3.5 h-3.5 mr-1" /> Invite</>}
+                  </Button>
+                </div>
+                <div className="text-[10px] text-zinc-600 mt-1.5">They&apos;ll be emailed an invite and added to this group automatically.</div>
+              </div>
+            )}
           </div>
         </div>
         <div className="shrink-0 px-5 py-4 border-t border-white/10 flex items-center gap-2 bg-[#0a0a0a]">
