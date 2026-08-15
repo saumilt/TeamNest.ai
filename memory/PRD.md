@@ -13,6 +13,11 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 140 (web) — "Invited" pending badge on member lists
+- Added a small amber "invited" pill next to any member whose `status === "invited"` (created via invite, not yet accepted; flips to `active` on redeem/first login). `public_user` and the chat-members projection already expose `status`, so no backend change.
+- Shown in three places: NewChatDialog member rows (`member-invited-{id}`), GroupInfo `MemberRow` meta (`member-invited-{id}`), and AddMemberDialog workspace quick-add rows (`ws-member-invited-{id}`).
+- Verified: 3 invited badges render in the picker for the QA test invitees; active users show none. Web-only — redeploy for teamnest.ai.
+
 ### Iteration 139 (web) — Group form: bulk invite, role picker, recent-contacts ordering
 - **Bulk Invite** (`NewChatDialog.jsx`): the invite field is now a Textarea; paste multiple emails (comma/space/newline/semicolon separated), parsed + deduped by `parseEmails`. Invite button shows the count ("Invite 3"), fires `POST /workspace/invite` per email via `Promise.allSettled`, adds+selects all successes, floats them to the top of the picker, and toasts "Added N people · M failed". ⌘/Ctrl+Enter submits. Capped at 20/batch.
 - **Role On Invite**: MEMBER / VIEWER toggle (`invite-role-member` / `invite-role-viewer`) next to the field; the chosen role is passed to `/workspace/invite`. Verified end-to-end: invite-as-viewer creates the user with role=viewer.

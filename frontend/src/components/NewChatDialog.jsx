@@ -165,6 +165,11 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
     <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
       <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
       <div className="text-sm flex-1 min-w-0 truncate">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
+      {m.status === "invited" && (
+        <span data-testid={`member-invited-${m.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
+          invited
+        </span>
+      )}
     </label>
   );
 

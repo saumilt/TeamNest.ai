@@ -415,6 +415,11 @@ function MemberRow({ member, isSelf, canManage, busy, onRemove, onToggleAdmin })
           {isSelf && <span className="text-[10px] text-ink-dim">(you)</span>}
         </div>
         <div className="text-[10px] text-ink-dim flex items-center gap-1.5 flex-wrap">
+          {member.status === "invited" && (
+            <span data-testid={`member-invited-${member.id}`} className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono uppercase tracking-widest" title="Invited — hasn't accepted yet">
+              invited
+            </span>
+          )}
           {member.is_creator && (
             <span className="inline-flex items-center gap-0.5 text-amber-300">
               <Crown className="w-3 h-3" /> creator

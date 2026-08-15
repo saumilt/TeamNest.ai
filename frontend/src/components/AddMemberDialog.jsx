@@ -291,7 +291,14 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
                     >
                       <Avatar name={u.name} src={u.avatar} size={28} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px] truncate">{u.name}</div>
+                        <div className="text-[13px] truncate flex items-center gap-1.5">
+                          {u.name}
+                          {u.status === "invited" && (
+                            <span data-testid={`ws-member-invited-${u.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
+                              invited
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-zinc-500 truncate">{u.email}</div>
                       </div>
                       <span className="text-emerald-400 text-[11px] font-mono uppercase tracking-widest inline-flex items-center gap-1">
