@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { FolderPlus, Plus, Check, X, Search, UserPlus } from "lucide-react";
+import { FolderPlus, Plus, Check, X, Search, UserPlus, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +61,8 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
   const [inviteRole, setInviteRole] = useState("member");
   const [inviting, setInviting] = useState(false);
   const [contactIds, setContactIds] = useState([]);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [resendingId, setResendingId] = useState(null);
   const { user } = useAuth();
   const canInvite = ["owner", "admin"].includes(user?.role);
 
@@ -75,6 +77,7 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
       setPostingPolicy("all");
       setAvatar({});
       setMemberQuery(""); setInviteEmail(""); setInviteRole("member");
+      setPendingOnly(false);
       setCreatingFolder(false); setNewFolderName("");
     }
   }, [open]);
@@ -146,29 +149,56 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
     }
   };
 
+  const resendInvite = async (m) => {
+    setResendingId(m.id);
+    try {
+      const { data } = await api.post(`/workspace/invite/${m.id}/resend`);
+      toast.success(`Invite re-sent to ${data.email || m.email}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not resend invite");
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   // Order teammates: most-frequent contacts first, then the rest.
   const q = memberQuery.trim().toLowerCase();
+  const flat = !!q || pendingOnly;
   const rank = new Map(contactIds.map((id, i) => [id, i]));
   const ordered = [...members].sort((a, b) => {
     const ra = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
     const rb = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
     return ra - rb;
   });
-  const filtered = q
+  let filtered = q
     ? ordered.filter((m) => (m.name || "").toLowerCase().includes(q) || (m.email || "").toLowerCase().includes(q))
     : ordered;
-  const frequentList = q ? [] : filtered.filter((m) => rank.has(m.id)).slice(0, 6);
+  if (pendingOnly) filtered = filtered.filter((m) => m.status === "invited");
+  const frequentList = flat ? [] : filtered.filter((m) => rank.has(m.id)).slice(0, 6);
   const frequentIds = new Set(frequentList.map((m) => m.id));
-  const othersList = q ? filtered : filtered.filter((m) => !frequentIds.has(m.id));
+  const othersList = flat ? filtered : filtered.filter((m) => !frequentIds.has(m.id));
 
   const renderMemberRow = (m) => (
     <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
       <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
       <div className="text-sm flex-1 min-w-0 truncate">{m.name} <span className="text-zinc-500 text-xs">· {m.email}</span></div>
       {m.status === "invited" && (
-        <span data-testid={`member-invited-${m.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
-          invited
-        </span>
+        canInvite ? (
+          <button
+            type="button"
+            data-testid={`member-invited-${m.id}`}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); resendInvite(m); }}
+            disabled={resendingId === m.id}
+            title="Invited — click to re-send the invite email"
+            className="shrink-0 inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 disabled:opacity-60"
+          >
+            <RefreshCw className={`w-2.5 h-2.5 ${resendingId === m.id ? "animate-spin" : ""}`} /> invited
+          </button>
+        ) : (
+          <span data-testid={`member-invited-${m.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
+            invited
+          </span>
+        )
       )}
     </label>
   );
@@ -352,7 +382,20 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
           <div>
             <div className="label-mono mb-2 flex items-center justify-between">
               <span>MEMBERS</span>
-              <span className="text-[10px] text-zinc-500 normal-case tracking-normal">{selected.length} selected</span>
+              <div className="flex items-center gap-2">
+                {members.some((m) => m.status === "invited") && (
+                  <button
+                    type="button"
+                    data-testid="members-pending-filter"
+                    onClick={() => setPendingOnly((v) => !v)}
+                    className={`text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${pendingOnly ? "bg-amber-400 text-black border-amber-400" : "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"}`}
+                    title="Show only people who haven't accepted yet"
+                  >
+                    Pending
+                  </button>
+                )}
+                <span className="text-[10px] text-zinc-500 normal-case tracking-normal">{selected.length} selected</span>
+              </div>
             </div>
             <div className="relative mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />

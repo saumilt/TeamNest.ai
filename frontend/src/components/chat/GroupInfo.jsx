@@ -6,6 +6,7 @@ import Avatar from "@/components/ui-v2/Avatar";
 import {
   X,
   UserPlus,
+  RefreshCw,
   Shield,
   ShieldOff,
   Trash2,
@@ -34,6 +35,8 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   const [showAdd, setShowAdd] = useState(false);
   const [aiEmployees, setAiEmployees] = useState([]);
   const [tab, setTab] = useState("members");
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [resendingId, setResendingId] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -71,6 +74,8 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   const members = chat?.members || [];
   const memberIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
   const policy = chat?.posting_policy || "all";
+  const pendingCount = members.filter((m) => m.status === "invited").length;
+  const shownMembers = pendingOnly ? members.filter((m) => m.status === "invited") : members;
 
   const handleRemove = async (uid, name) => {
     if (!window.confirm(`Remove ${name} from this chat?`)) return;
@@ -100,6 +105,18 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
   };
 
   const handleAddOpen = () => setShowAdd(true);
+
+  const resendInvite = async (uid, email) => {
+    setResendingId(uid);
+    try {
+      const { data } = await api.post(`/workspace/invite/${uid}/resend`);
+      toast.success(`Invite re-sent to ${data.email || email}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not resend invite");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const handlePolicyChange = async (next, selectedIds) => {
     setBusy(true);
@@ -287,26 +304,42 @@ export default function GroupInfo({ chatId, open, onClose, onChatChange }) {
                   <span className="ml-1 text-violet-400">+ {aiEmployees.length} AI</span>
                 )}
               </div>
-              {isAdmin && (
-                <button
-                  data-testid="open-add-member-btn"
-                  onClick={handleAddOpen}
-                  className="inline-flex items-center gap-1 text-[11px] text-brand hover:underline"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Add
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {pendingCount > 0 && (
+                  <button
+                    type="button"
+                    data-testid="group-info-pending-filter"
+                    onClick={() => setPendingOnly((v) => !v)}
+                    className={`text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${pendingOnly ? "bg-amber-400 text-black border-amber-400" : "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"}`}
+                    title="Show only members who haven't accepted yet"
+                  >
+                    Pending {pendingCount}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    data-testid="open-add-member-btn"
+                    onClick={handleAddOpen}
+                    className="inline-flex items-center gap-1 text-[11px] text-brand hover:underline"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Add
+                  </button>
+                )}
+              </div>
             </div>
 
             <ul className="space-y-1" data-testid="members-list">
-              {members.map((m) => (
+              {shownMembers.map((m) => (
                 <MemberRow
                   key={m.id}
                   member={m}
                   isSelf={m.id === user?.id}
                   canManage={isAdmin && m.id !== user?.id && !m.is_creator}
+                  isAdmin={isAdmin}
                   busy={busy}
+                  resending={resendingId === m.id}
+                  onResend={() => resendInvite(m.id, m.email)}
                   onRemove={() => handleRemove(m.id, m.name)}
                   onToggleAdmin={() => handleToggleAdmin(m.id, m.name, !m.is_chat_admin)}
                 />
@@ -402,7 +435,7 @@ function PolicyRow({ active, icon, title, subtitle, onClick, busy, testid }) {
   );
 }
 
-function MemberRow({ member, isSelf, canManage, busy, onRemove, onToggleAdmin }) {
+function MemberRow({ member, isSelf, canManage, isAdmin, busy, resending, onResend, onRemove, onToggleAdmin }) {
   return (
     <li
       data-testid={`member-row-${member.id}`}
@@ -416,9 +449,22 @@ function MemberRow({ member, isSelf, canManage, busy, onRemove, onToggleAdmin })
         </div>
         <div className="text-[10px] text-ink-dim flex items-center gap-1.5 flex-wrap">
           {member.status === "invited" && (
-            <span data-testid={`member-invited-${member.id}`} className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono uppercase tracking-widest" title="Invited — hasn't accepted yet">
-              invited
-            </span>
+            isAdmin ? (
+              <button
+                type="button"
+                data-testid={`member-invited-${member.id}`}
+                onClick={onResend}
+                disabled={resending}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono uppercase tracking-widest hover:bg-amber-500/30 disabled:opacity-60"
+                title="Invited — click to re-send the invite email"
+              >
+                <RefreshCw className={`w-2.5 h-2.5 ${resending ? "animate-spin" : ""}`} /> invited
+              </button>
+            ) : (
+              <span data-testid={`member-invited-${member.id}`} className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono uppercase tracking-widest" title="Invited — hasn't accepted yet">
+                invited
+              </span>
+            )
           )}
           {member.is_creator && (
             <span className="inline-flex items-center gap-0.5 text-amber-300">

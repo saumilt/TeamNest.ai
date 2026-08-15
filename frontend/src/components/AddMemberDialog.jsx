@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,21 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
 
   const [wsMembers, setWsMembers] = useState([]);
   const [addingId, setAddingId] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
+  const { user } = useAuth();
+  const canInvite = ["owner", "admin"].includes(user?.role);
+
+  const resendInvite = async (u) => {
+    setResendingId(u.id);
+    try {
+      const { data } = await api.post(`/workspace/invite/${u.id}/resend`);
+      toast.success(`Invite re-sent to ${data.email || u.email}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not resend invite");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -294,9 +310,22 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
                         <div className="text-[13px] truncate flex items-center gap-1.5">
                           {u.name}
                           {u.status === "invited" && (
-                            <span data-testid={`ws-member-invited-${u.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
-                              invited
-                            </span>
+                            canInvite ? (
+                              <button
+                                type="button"
+                                data-testid={`ws-member-invited-${u.id}`}
+                                onClick={() => resendInvite(u)}
+                                disabled={resendingId === u.id}
+                                title="Invited — click to re-send the invite email"
+                                className="shrink-0 inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 disabled:opacity-60"
+                              >
+                                <RefreshCw className={`w-2.5 h-2.5 ${resendingId === u.id ? "animate-spin" : ""}`} /> invited
+                              </button>
+                            ) : (
+                              <span data-testid={`ws-member-invited-${u.id}`} className="shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" title="Invited — hasn't accepted yet">
+                                invited
+                              </span>
+                            )
                           )}
                         </div>
                         <div className="text-[11px] text-zinc-500 truncate">{u.email}</div>

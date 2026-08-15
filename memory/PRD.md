@@ -13,6 +13,11 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 141 (web) — Resend-from-badge + Pending filter
+- **Resend from badge**: the "invited" badge is now a clickable button for owners/admins that calls `POST /workspace/invite/{user_id}/resend` (existing endpoint; re-issues the set-password link + emails it) and toasts "Invite re-sent to …". Applied in NewChatDialog member rows, GroupInfo `MemberRow`, and AddMemberDialog workspace quick-add rows (RefreshCw icon + spin while sending; non-admins keep a static badge). Per-list `resendingId` guards the in-flight row.
+- **Pending filter**: a "Pending" toggle shows only `status === "invited"` members. In NewChatDialog (`members-pending-filter`, disables frequent grouping while active) and GroupInfo members tab (`group-info-pending-filter`, shows the pending count). Only rendered when a workspace has ≥1 pending member.
+- Verified: curl (resend → 200 ok, email returned) + screenshot (pending filter reduced 5→3 rows all invited; clicking a badge showed the re-sent toast). Web-only — redeploy for teamnest.ai.
+
 ### Iteration 140 (web) — "Invited" pending badge on member lists
 - Added a small amber "invited" pill next to any member whose `status === "invited"` (created via invite, not yet accepted; flips to `active` on redeem/first login). `public_user` and the chat-members projection already expose `status`, so no backend change.
 - Shown in three places: NewChatDialog member rows (`member-invited-{id}`), GroupInfo `MemberRow` meta (`member-invited-{id}`), and AddMemberDialog workspace quick-add rows (`ws-member-invited-{id}`).
