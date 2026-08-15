@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 137 (web) — Modal overflow fix: group-creation form + all popups
+- **Bug**: On shorter laptop viewports the "New Chat" group-creation dialog was taller than the screen; the shadcn `DialogContent` had no height cap and no scroll, so the header + Create button + member controls overflowed off-screen and were unreachable. Reported on production (teamnest.ai) — same code in both envs.
+- **Global fix** (`components/ui/dialog.jsx`): base `DialogContent` now `max-h-[90vh] overflow-y-auto` → no dialog can exceed the viewport; every popup scrolls to reveal its actions. (tailwind-merge lets individual dialogs override.)
+- **Group form redesign** (`components/NewChatDialog.jsx`): converted to a flex column with a fixed header, a scrollable body (`new-chat-scroll`), and a **sticky footer** holding Cancel + Create (always visible). Removed the nested members inner-scroll in favour of one body scroll. Verified at 700px viewport: dialog 35→665, Create btn bottom 648, body scrollable — all within view.
+- Note: the create dialog adds existing workspace members via checkboxes; inviting people OUTSIDE the workspace remains in Team → Invite / guest invite (unchanged). Fix is in preview — redeploy to push to teamnest.ai.
+
 ### Iteration 136 (Aug 2026) — Mobile IAP: variable/one-time consumables (pending-order pattern), Restore Prompt, Smart Upsell
 - **Pending-order pattern** for consumables whose store product id doesn't identify the target (marketplace installs = variable price; storage packs). Client calls `POST /api/billing/iap/order {kind, ref_id}` → backend records a pending order + returns the store `product_id`; client buys it via RevenueCat; the signed webhook `NON_RENEWING_PURCHASE` matches (product_id + user) to the OLDEST pending order and fulfills it server-side (grants ONLY via webhook — no RevenueCat secret key). Client polls `GET /api/billing/iap/order/{id}` until `fulfilled`.
   - Storage packs map 1:1: `storage_10/50/100` → `pack-10/50/100`. Marketplace listings round UP to nearest tier: `marketplace_5/10/25/50/100` = 4.99/9.99/24.99/49.99/99.99.

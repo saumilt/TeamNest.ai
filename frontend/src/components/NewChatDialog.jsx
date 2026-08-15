@@ -108,11 +108,11 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0a0a0a] border-white/10 rounded-sm max-w-lg" data-testid="new-chat-dialog">
-        <DialogHeader>
+      <DialogContent className="bg-[#0a0a0a] border-white/10 rounded-sm max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0" data-testid="new-chat-dialog">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-white/10 shrink-0 text-left">
           <DialogTitle className="font-display tracking-tight">New Chat</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4" data-testid="new-chat-scroll">
           <div className="flex gap-2">
             <button onClick={() => setType("group")} className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest rounded-sm border ${type === "group" ? "bg-white text-black border-white" : "border-white/10 text-zinc-400"}`}>
               Group
@@ -257,7 +257,7 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
           )}
           <div>
             <div className="label-mono mb-2">MEMBERS</div>
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            <div className="space-y-2">
               {members.map((m) => (
                 <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 cursor-pointer rounded-sm">
                   <Checkbox data-testid={`add-member-${m.id}`} checked={selected.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
@@ -266,7 +266,18 @@ export default function NewChatDialog({ open, onOpenChange, onCreated }) {
               ))}
             </div>
           </div>
-          <Button data-testid="create-chat-confirm" onClick={submit} className="w-full bg-white text-black hover:bg-zinc-200 rounded-sm font-mono uppercase text-xs tracking-widest h-10">
+        </div>
+        <div className="shrink-0 px-5 py-4 border-t border-white/10 flex items-center gap-2 bg-[#0a0a0a]">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            data-testid="create-chat-cancel"
+            className="rounded-sm font-mono uppercase text-xs tracking-widest h-10 border border-white/10 text-zinc-300 hover:bg-white/5 hover:text-white px-4"
+          >
+            Cancel
+          </Button>
+          <Button data-testid="create-chat-confirm" onClick={submit} className="flex-1 bg-white text-black hover:bg-zinc-200 rounded-sm font-mono uppercase text-xs tracking-widest h-10">
             Create
           </Button>
         </div>
