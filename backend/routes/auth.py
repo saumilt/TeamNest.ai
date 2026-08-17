@@ -4,7 +4,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ai_service import MODEL_CONFIG
@@ -25,6 +25,7 @@ from deps import (
     now_iso,
     public_user,
     require_user,
+    resolve_app_base,
 )
 from models import OnboardingUpdate, UserLogin, UserPreferences, UserSignup
 from services.workspace_membership import ensure_membership, list_user_workspaces
@@ -143,7 +144,7 @@ def _hash_reset_token(raw: str) -> str:
 
 
 @router.post("/auth/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest):
+async def forgot_password(payload: ForgotPasswordRequest, request: Request):
     """Email a single-use, 1-hour reset link. Always returns a generic success
     so the endpoint can't be used to enumerate registered emails."""
     generic = {
@@ -168,7 +169,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
         "expires_at": now + timedelta(minutes=RESET_TOKEN_TTL_MINUTES),
     })
 
-    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    base = resolve_app_base(request)
     link = f"{base}/reset-password?token={raw}"
     import asyncio
     from services.password_reset_email import send_reset_email

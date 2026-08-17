@@ -29,7 +29,7 @@ def _app_base() -> str:
     return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
 
 
-async def mint_invite_link(user_id: str) -> str:
+async def mint_invite_link(user_id: str, base: str | None = None) -> str:
     """Mint a single-use, 7-day set-password token (password_reset_tokens,
     kind="invite") and return the absolute set-password URL the invitee clicks.
     Shared by the invite endpoint and the expiry-reminder loop."""
@@ -44,7 +44,8 @@ async def mint_invite_link(user_id: str) -> str:
         "expires_at": now + timedelta(days=INVITE_TOKEN_TTL_DAYS),
         "kind": "invite",
     })
-    return f"{_app_base()}/reset-password?token={raw}"
+    app_base = (base or _app_base()).rstrip("/")
+    return f"{app_base}/reset-password?token={raw}"
 
 _INVITE_HTML = """\
 <html><body style="background:#0F0F12;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#e5e5e5;padding:32px 16px;">

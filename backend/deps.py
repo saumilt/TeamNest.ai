@@ -24,6 +24,49 @@ from ws_manager import manager  # noqa: E402
 
 logger = logging.getLogger("teamnest")
 
+
+# ── Public app base URL for emailed links (reset / invite) ───────────────────
+# Prefer the CALLER's own origin (so a request from https://teamnest.ai mints a
+# teamnest.ai link, and a preview request mints a preview link) — but only when
+# the host is allow-listed, so a forged Origin can't inject a phishing domain
+# into a reset email. Falls back to PUBLIC_BACKEND_URL when there's no request
+# (e.g. background reminder loops) or the origin isn't trusted.
+_ALLOWED_LINK_HOSTS = ("teamnest.ai", "emergent.host", "emergentagent.com", "localhost", "127.0.0.1")
+
+
+def _link_host_allowed(host: str) -> bool:
+    host = (host or "").split(":")[0].lower()
+    if not host:
+        return False
+    extra = [h for h in (os.environ.get("APP_URL_ALLOWLIST", "") or "").replace(" ", "").split(",") if h]
+    for a in list(_ALLOWED_LINK_HOSTS) + extra:
+        base = a[1:] if a.startswith(".") else a
+        if host == base or host.endswith("." + base):
+            return True
+    return False
+
+
+def resolve_app_base(request=None) -> str:
+    """Absolute public origin for building emailed links. Trusts the request's
+    Origin/Referer when allow-listed; otherwise falls back to PUBLIC_BACKEND_URL."""
+    from urllib.parse import urlsplit
+
+    candidates = []
+    if request is not None:
+        origin = request.headers.get("origin")
+        if origin:
+            candidates.append(origin)
+        ref = request.headers.get("referer")
+        if ref:
+            p = urlsplit(ref)
+            if p.scheme and p.netloc:
+                candidates.append(f"{p.scheme}://{p.netloc}")
+    for c in candidates:
+        p = urlsplit(c)
+        if p.scheme in ("http", "https") and p.netloc and _link_host_allowed(p.hostname):
+            return f"{p.scheme}://{p.netloc}".rstrip("/")
+    return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+
 _mongo_url = os.environ["MONGO_URL"]
 client: AsyncIOMotorClient = AsyncIOMotorClient(_mongo_url)
 db = client[os.environ["DB_NAME"]]

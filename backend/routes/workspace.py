@@ -3,7 +3,7 @@ import asyncio
 import os
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from auth_utils import hash_password
@@ -17,6 +17,7 @@ from deps import (
     now_iso,
     public_user,
     require_user,
+    resolve_app_base,
 )
 from models import AddExistingMember, InviteMember, WorkspaceCreate, WorkspaceSwitch, WorkspaceTransferOwnership
 from services.invite_email import mint_invite_link, send_added_email, send_invite_email
@@ -29,12 +30,8 @@ from services.workspace_membership import (
 router = APIRouter()
 
 
-def _app_base() -> str:
-    return (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
-
-
-async def _issue_invite_link(user_id: str) -> str:
-    return await mint_invite_link(user_id)
+async def _issue_invite_link(user_id: str, base: str | None = None) -> str:
+    return await mint_invite_link(user_id, base)
 
 
 @router.get("/workspace")
@@ -88,9 +85,10 @@ async def frequent_contacts(current=Depends(require_user)):
 
 
 @router.post("/workspace/invite")
-async def invite_member(payload: InviteMember, current=Depends(require_user)):
+async def invite_member(payload: InviteMember, request: Request, current=Depends(require_user)):
     if current.get("role") not in ("owner", "admin"):
         raise HTTPException(403, "Only owner/admin can invite")
+    app_base = resolve_app_base(request)
     email_lower = payload.email.lower()
     ws = await db.workspaces.find_one({"id": current["workspace_id"]}, {"_id": 0, "name": 1})
     ws_name = (ws or {}).get("name", "the workspace")
@@ -116,7 +114,7 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
         )
         asyncio.create_task(send_added_email(
             name=existing.get("name"), email=email_lower, workspace=ws_name,
-            inviter=inviter_name, link=f"{_app_base()}/login",
+            inviter=inviter_name, link=f"{app_base}/login",
         ))
         await db.users.update_one(
             {"id": existing["id"]}, {"$set": {"last_invite_sent_at": now_iso()}}
@@ -149,7 +147,7 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
     await ensure_membership(user["id"], current["workspace_id"], role=payload.role, status="invited")
     await ensure_personal_ai_chat(user["id"], current["workspace_id"])
 
-    link = await _issue_invite_link(user["id"])
+    link = await _issue_invite_link(user["id"], app_base)
     asyncio.create_task(send_invite_email(
         name=payload.name, email=email_lower, workspace=ws_name,
         inviter=inviter_name, link=link,
@@ -158,10 +156,11 @@ async def invite_member(payload: InviteMember, current=Depends(require_user)):
 
 
 @router.post("/workspace/invite/{user_id}/resend")
-async def resend_invite(user_id: str, current=Depends(require_user)):
+async def resend_invite(user_id: str, request: Request, current=Depends(require_user)):
     """Re-send the invitation email to a member who hasn't accepted yet."""
     if current.get("role") not in ("owner", "admin"):
         raise HTTPException(403, "Only owner/admin can resend invites")
+    app_base = resolve_app_base(request)
     member = await db.workspace_members.find_one(
         {"user_id": user_id, "workspace_id": current["workspace_id"]}, {"_id": 0},
     )
@@ -177,7 +176,7 @@ async def resend_invite(user_id: str, current=Depends(require_user)):
     # Only pending/provisioned accounts get a fresh set-password link; users who
     # already own a password just get the "you've been added" nudge.
     if user.get("must_change_password") or user.get("status") == "invited":
-        link = await _issue_invite_link(user_id)
+        link = await _issue_invite_link(user_id, app_base)
         res = await send_invite_email(
             name=user.get("name"), email=user["email"], workspace=ws_name,
             inviter=inviter_name, link=link,
@@ -185,7 +184,7 @@ async def resend_invite(user_id: str, current=Depends(require_user)):
     else:
         res = await send_added_email(
             name=user.get("name"), email=user["email"], workspace=ws_name,
-            inviter=inviter_name, link=f"{_app_base()}/login",
+            inviter=inviter_name, link=f"{app_base}/login",
         )
     if not res.get("ok") and res.get("reason") == "not_configured":
         raise HTTPException(503, "Email is not configured — set MAILGUN_* env vars to send invites.")
