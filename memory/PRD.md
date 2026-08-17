@@ -13,6 +13,11 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 144 (web + backend) — First-time welcome + login rate-limit
+- **Login rate-limit** (`services/login_throttle.py`, MongoDB-backed, no Redis): per `(client-ip + email)`, `LOGIN_MAX_FAILS=7` fails / `LOGIN_WINDOW_MIN=15` min → `LOGIN_LOCK_MIN=15` min lock; `/auth/login` (now takes `request`) returns **429** with a friendly "Too many sign-in attempts. Please try again in about N minutes." + `Retry-After` header. Success clears the counter; wrong password → 401 (unchanged) until lock. TTL-cleaned `login_attempts` collection. Verified via curl: 6×401 → 7th=429 (`Retry-After: 899`); valid login unaffected. Frontend already renders `err.response.data.detail`, so the message shows automatically. (integration_expert consulted per auth rule.)
+- **First-time welcome** (`components/WelcomeTour.jsx`): added a short 3-slide "welcome" variant (Chat with your team → Compare AIs side-by-side → Invite your teammates, jump to `/chats?new=group`) shown once per real user via `localStorage["tn:welcomed:<uid>"]`. The existing demo-login sales tour (`demoSlides`, sessionStorage flag) is unchanged; `variant` selects between them.
+- Verified via screenshot (welcome card slides 1→"Invite your teammates" + jump button; login regression ok). Web + backend — redeploy for teamnest.ai.
+
 ### Iteration 143 (web) — Self-recovery on sign-in + reset pages
 - The `/login` page already had a visible "Forgot password?" link (`auth-forgot-link`) → working reset-request `ForgotForm`. Added deep-linking: `/login?forgot=1` opens that form directly.
 - ResetPassword self-recovery for stuck invitees (expired / wrong-domain links): invalid/no-token branch now says "missing, malformed, or expired" with a "Request a new link" button → `/login?forgot=1` (`reset-request-new`); the set-password form gained an inline "Link expired? Request a new one" link (`reset-request-new-inline`).

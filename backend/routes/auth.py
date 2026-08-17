@@ -97,10 +97,24 @@ async def signup(payload: UserSignup, response: Response):
 
 
 @router.post("/auth/login")
-async def login(payload: UserLogin, response: Response):
+async def login(payload: UserLogin, request: Request, response: Response):
+    from services.login_throttle import check_locked, clear, record_failure
+
+    def _throttle_msg(secs: int) -> str:
+        mins = max(1, round(secs / 60))
+        return f"Too many sign-in attempts. Please try again in about {mins} minute{'s' if mins != 1 else ''}."
+
+    locked = await check_locked(request, payload.email)
+    if locked > 0:
+        raise HTTPException(429, _throttle_msg(locked), headers={"Retry-After": str(locked)})
+
     user = await db.users.find_one({"email": payload.email.lower()})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        locked = await record_failure(request, payload.email)
+        if locked > 0:
+            raise HTTPException(429, _throttle_msg(locked), headers={"Retry-After": str(locked)})
         raise HTTPException(401, "Invalid credentials")
+    await clear(request, payload.email)
     # Provisioned accounts that never completed first login expire their
     # temporary password after the workspace-configured window.
     from services.workspace_settings import temp_password_expired

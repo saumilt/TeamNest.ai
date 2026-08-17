@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
  * auto-dismisses the tour.
  */
 const SESSION_FLAG = "tn:show-welcome-tour";
+const seenKey = (uid) => `tn:welcomed:${uid}`;
 
 function SlideHero({ icon: Icon, accent = "bg-amber-400/15 text-amber-200" }) {
   return (
@@ -45,25 +46,28 @@ export default function WelcomeTour() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+  // "demo" = the sales walkthrough after a demo-login; "welcome" = the short
+  // first-time nudge (chat / AI compare / invite) shown once per real user.
+  const [variant, setVariant] = useState("demo");
 
-  // Show only when AuthContext flagged a fresh demo-login this session.
   useEffect(() => {
     if (!user) return;
     if (typeof window === "undefined") return;
     if (window.sessionStorage.getItem(SESSION_FLAG) === "1") {
+      setVariant("demo");
       setOpen(true);
       setStep(0);
+      return;
     }
+    try {
+      if (!window.localStorage.getItem(seenKey(user.id))) {
+        setVariant("welcome");
+        setOpen(true);
+        setStep(0);
+      }
+    } catch { /* ignore */ }
   }, [user]);
 
-  // Auto-dismiss whenever the user navigates somewhere. Users explore the
-  // app by clicking around; the tour should make way without ceremony.
-  // Once the user is past login, the tour shouldn't re-fire on the next
-  // mount. Clear the session flag the first time we render — keeps the
-  // tour scoped to "first screen after a fresh demo-login". We DELIBERATELY
-  // do not auto-close the visible card on route changes: the card is a
-  // non-blocking bottom-right floating panel, so it's safe to leave open
-  // while the user explores. They dismiss it with the X or "Got it" button.
   useEffect(() => {
     if (!open) return;
     try { window.sessionStorage.removeItem(SESSION_FLAG); } catch { /* ignore */ }
@@ -73,10 +77,83 @@ export default function WelcomeTour() {
     setOpen(false);
     if (markSeen && typeof window !== "undefined") {
       try { window.sessionStorage.removeItem(SESSION_FLAG); } catch { /* ignore */ }
+      if (variant === "welcome" && user?.id) {
+        try { window.localStorage.setItem(seenKey(user.id), "1"); } catch { /* ignore */ }
+      }
     }
   };
 
-  const slides = useMemo(() => [
+  // Short first-time welcome for real sign-ups/invitees: the three things that
+  // matter on day one — team chat, comparing AIs, and inviting teammates.
+  const welcomeSlides = useMemo(() => [
+    {
+      key: "w-welcome",
+      hero: <SlideHero icon={Sparkles} />,
+      eyebrow: "Welcome",
+      title: "Welcome to TeamNest",
+      body: (
+        <>
+          Your team&apos;s chat with AI built in. Here are the three things worth
+          knowing on day one.
+        </>
+      ),
+      cta: "Show me",
+    },
+    {
+      key: "w-chat",
+      hero: <SlideHero icon={MessageSquareText} accent="bg-cyan-400/15 text-cyan-200" />,
+      eyebrow: "1 of 3",
+      title: "Chat with your team",
+      body: (
+        <>
+          Create group or direct chats, organise them in folders, and start
+          calls — all in real time from the <b>Chats</b> tab.
+        </>
+      ),
+      cta: "Next",
+      jumpLabel: "Open chats",
+      jumpTo: "/chats",
+    },
+    {
+      key: "w-ai",
+      hero: <SlideHero icon={MessageSquareText} accent="bg-emerald-400/15 text-emerald-200" />,
+      eyebrow: "2 of 3",
+      title: "Compare AIs side-by-side",
+      body: (
+        <>
+          Type <code className="px-1 py-0.5 rounded bg-surface-2 text-amber-200 text-[12px]">@ai</code> in
+          any chat and pick <b>ChatGPT</b>, <b>Claude</b>, and <b>Gemini</b> — get
+          all three answers in the same thread to compare.
+        </>
+      ),
+      mock: (
+        <div className="flex gap-2 mt-3">
+          <MockBubble name="ChatGPT" color="text-emerald-300" text="Use Postgres with row-level security for multi-tenant data." />
+          <MockBubble name="Claude" color="text-orange-300" text="Postgres + RLS is solid — split write paths early." />
+          <MockBubble name="Gemini" color="text-blue-300" text="RLS for tenant scoping, then read replicas as you grow." />
+        </div>
+      ),
+      cta: "Next",
+    },
+    {
+      key: "w-invite",
+      hero: <SlideHero icon={Users} accent="bg-fuchsia-400/15 text-fuchsia-200" />,
+      eyebrow: "3 of 3",
+      title: "Invite your teammates",
+      body: (
+        <>
+          Start a <b>New Chat</b> and use <b>Invite someone new</b> to email
+          teammates an invite — they&apos;re added to the group automatically. You
+          can paste several emails at once.
+        </>
+      ),
+      cta: "Got it — let's go",
+      jumpLabel: "Invite teammates",
+      jumpTo: "/chats?new=group",
+    },
+  ], []);
+
+  const demoSlides = useMemo(() => [
     {
       key: "welcome",
       hero: <SlideHero icon={Sparkles} />,
@@ -209,6 +286,7 @@ export default function WelcomeTour() {
     },
   ], []);
 
+  const slides = variant === "demo" ? demoSlides : welcomeSlides;
   const slide = slides[step];
   const isFirst = step === 0;
   const isLast = step === slides.length - 1;
