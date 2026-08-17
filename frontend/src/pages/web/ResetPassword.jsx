@@ -66,10 +66,10 @@ export default function ResetPassword() {
               <div data-testid="reset-invalid">
                 <h2 className="text-[26px] font-bold tracking-[-0.02em] mb-3">Invalid reset link.</h2>
                 <p className="text-[14px] text-[var(--w-text-dim)] mb-6">
-                  This link is missing or malformed. Request a new one from the sign-in page.
+                  This link is missing, malformed, or expired. Request a fresh one and we&apos;ll email you a new link.
                 </p>
-                <PrimaryButton as={Link} to="/login" className="w-full justify-center" data-testid="reset-request-new">
-                  Back to sign in <ArrowRight className="w-4 h-4" />
+                <PrimaryButton as={Link} to="/login?forgot=1" className="w-full justify-center" data-testid="reset-request-new">
+                  Request a new link <ArrowRight className="w-4 h-4" />
                 </PrimaryButton>
               </div>
             ) : done ? (
@@ -119,6 +119,13 @@ export default function ResetPassword() {
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
                     Update password
                   </PrimaryButton>
+                  <Link
+                    to="/login?forgot=1"
+                    className="block text-center text-[13px] text-[var(--w-text-dim)] hover:text-[var(--w-brand)] mt-1"
+                    data-testid="reset-request-new-inline"
+                  >
+                    Link expired? Request a new one
+                  </Link>
                 </form>
               </>
             )}

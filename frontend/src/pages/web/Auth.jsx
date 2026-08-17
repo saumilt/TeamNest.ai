@@ -349,9 +349,11 @@ function AuthForm({ mode, setMode }) {
 
 export default function WebAuth({ defaultMode }) {
   const { pathname } = useLocation();
-  const initial = defaultMode || (pathname.endsWith("/signup") ? "signup" : "login");
-  const [mode, setMode] = useState(initial);
   const [params] = useSearchParams();
+  const initial = params.get("forgot") === "1"
+    ? "forgot"
+    : defaultMode || (pathname.endsWith("/signup") ? "signup" : "login");
+  const [mode, setMode] = useState(initial);
   const { demoLogin } = useAuth();
   const nav = useNavigate();
 

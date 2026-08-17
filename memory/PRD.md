@@ -13,6 +13,11 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 143 (web) — Self-recovery on sign-in + reset pages
+- The `/login` page already had a visible "Forgot password?" link (`auth-forgot-link`) → working reset-request `ForgotForm`. Added deep-linking: `/login?forgot=1` opens that form directly.
+- ResetPassword self-recovery for stuck invitees (expired / wrong-domain links): invalid/no-token branch now says "missing, malformed, or expired" with a "Request a new link" button → `/login?forgot=1` (`reset-request-new`); the set-password form gained an inline "Link expired? Request a new one" link (`reset-request-new-inline`).
+- Verified via screenshots: forgot deep-link renders the email form; reset page shows the inline recover link with a token, and the invalid-link page shows "Request a new link" → `/login?forgot=1`. Web-only — redeploy for teamnest.ai.
+
 ### Iteration 142 (backend) — FIX: invite/reset links pointed to wrong domain (prod) → couldn't reset password / sign in
 - **Root cause (production):** invite & password-reset emails built links from `PUBLIC_BACKEND_URL`, which in the deployed env was `https://emergent-ai-teams.emergent.host` (raw deploy host) instead of `https://teamnest.ai`. Invitees landed on the wrong domain → "invalid/expired reset link" + "could not sign in". Confirmed via the actual email link the user pasted. Auth code itself was correct (reset→login verified 200/200 in preview).
 - **Fix (code hardening, `deps.resolve_app_base`)**: link domain now derives from the request's Origin/Referer, **allow-listed** to `teamnest.ai / emergent.host / emergentagent.com / localhost` (forged/untrusted origins fall back to `PUBLIC_BACKEND_URL`, so no phishing-domain injection). Wired into `/workspace/invite`, `/workspace/invite/{id}/resend` (both now take `request`), the "added" login link, and `/auth/forgot-password`. `mint_invite_link(user_id, base=None)` accepts the resolved base; the reminder loop still uses the env fallback.
