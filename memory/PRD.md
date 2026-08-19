@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 152 (web) — Hero polish + enterprise proof + demo band
+- **Two-line accent headline** (`Hero.jsx`): `HERO_COPY` now has `headline` + `headlineAccent`; the accent line renders as a `block` in brand yellow (`--w-brand`). Default: "…think together —" / "so your intelligence never leaves." Alt (sharper enterprise angle for A/B): "Every conversation, decision, and insight —" / "kept, even after people leave." (governance/SSO/institutional-memory framing).
+- **Enterprise proof strip** (`components/web/home/HeroProof.jsx`, mounted right under `<Hero/>` in HomeV2): honest capability stats — 5+ AI models · 100% retained · Zero knowledge lost · SSO + Audit. `data-testid="home-hero-proof"`.
+- **Enterprise demo band** (`components/web/home/EnterpriseCTABand.jsx`, mounted between Capabilities and Plans): prominent "Request a Demo" primary CTA + "Explore TeamNest for Business", with governance/permissions/onboarding points. `data-testid="home-enterprise-cta"`, `enterprise-demo-cta`, `enterprise-explore-cta`.
+- Verified via screenshots (default + `?hero=alt`). Copy/layout only, no backend. Redeploy (Publish) for production.
+
 ### Iteration 151 (web) — Unified marketing hero messaging
 - Blended the enterprise hook into the homepage hero (`components/web/home/Hero.jsx`, default + alt variants). Headline: "Where people and AI think together — so your intelligence never leaves." Sub now leads with "Your organization's knowledge shouldn't disappear when people move on." + the connected-workspace + audience-breadth copy.
 - `AudienceSections.jsx` BusinessSection headline changed to "Built for organizations that can't afford to lose what they know." to avoid duplicating the hero verbatim.

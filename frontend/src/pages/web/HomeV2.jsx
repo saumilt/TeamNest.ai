@@ -5,6 +5,7 @@ import SeoHelmet from "@/components/web/SeoHelmet";
 import NavV2 from "@/components/web/home/NavV2";
 import FooterV2 from "@/components/web/home/FooterV2";
 import Hero from "@/components/web/home/Hero";
+import HeroProof from "@/components/web/home/HeroProof";
 import AudienceCards from "@/components/web/home/AudienceCards";
 import ProblemSection from "@/components/web/home/ProblemSection";
 import MultiModelSection from "@/components/web/home/MultiModelSection";
@@ -14,6 +15,7 @@ import {
 } from "@/components/web/home/AudienceSections";
 import { UseCasesSection, CapabilitiesSection } from "@/components/web/home/UseCasesSection";
 import PlansSection from "@/components/web/home/PlansSection";
+import EnterpriseCTABand from "@/components/web/home/EnterpriseCTABand";
 import FinalCTASection from "@/components/web/home/FinalCTASection";
 
 /* ============================================================================
@@ -80,6 +82,7 @@ export default function WebHomeV2() {
         <NavV2 />
         <main className="pt-16">
           <Hero variant={heroVariant} />
+          <HeroProof />
           <AudienceCards />
           <ProblemSection />
           <MultiModelSection />
@@ -90,6 +93,7 @@ export default function WebHomeV2() {
           <BusinessSection />
           <UseCasesSection />
           <CapabilitiesSection />
+          <EnterpriseCTABand />
           <PlansSection />
           <FinalCTASection />
         </main>
