@@ -6,6 +6,7 @@ import NotificationBell from "@/components/NotificationBell";
 import ResizableEdge from "@/components/ui-v2/ResizableEdge";
 import safeStorage from "@/lib/safeStorage";
 import { toast } from "sonner";
+import { openShowMeHow } from "@/lib/showMeHow";
 import {
         MessageSquare,
         LayoutDashboard,
@@ -23,6 +24,7 @@ import {
         Bot,
         ShieldCheck,
         LifeBuoy,
+        Compass,
         PanelLeftClose,
         Pin,
 } from "lucide-react";
@@ -357,6 +359,16 @@ export default function Sidebar() {
 
       {/* Credits + user */}
       <div className="border-t border-white/5 pt-3 pb-4">
+        <button
+          type="button"
+          data-testid="nav-show-me-how"
+          onClick={openShowMeHow}
+          title="Show Me How"
+          className={`w-full flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors mb-1 text-ink-dim hover:bg-white/[0.03] hover:text-ink`}
+        >
+          <Compass className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+          {!collapsed && <span className="truncate">Show Me How</span>}
+        </button>
         <NavLink
           to="/help"
           data-testid="nav-help"

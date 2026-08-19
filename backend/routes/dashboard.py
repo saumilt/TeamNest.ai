@@ -89,6 +89,48 @@ async def home_summary(current=Depends(require_user)):
     }
 
 
+@router.get("/home/checklist")
+async def home_checklist(current=Depends(require_user)):
+    """Data-derived 'get more from TeamNest' checklist — each flag flips true
+    once the user has actually done the thing."""
+    uid = current["id"]
+    ws_id = current["workspace_id"]
+    chat_ids = [
+        c["id"]
+        async for c in db.chats.find(
+            {"workspace_id": ws_id, "member_ids": uid}, {"id": 1, "_id": 0}
+        )
+    ]
+
+    first_chat = await db.messages.count_documents({"sender_id": uid}) > 0
+
+    threads = (
+        await db.ai_threads.find(
+            {"chat_id": {"$in": chat_ids}}, {"selected_models": 1, "_id": 0}
+        ).to_list(1000)
+        if chat_ids
+        else []
+    )
+    started_research = len(threads) > 0
+    compared_models = any(len(t.get("selected_models") or []) > 1 for t in threads)
+
+    hosted_meeting = await db.calls.count_documents({"started_by": uid}) > 0
+    uploaded_document = await db.knowledge_sources.count_documents({"workspace_id": ws_id}) > 0
+    created_task = await db.tasks.count_documents({"created_by": uid}) > 0
+    saved_memory = await db.memory_items.count_documents({"workspace_id": ws_id}) > 0
+
+    items = {
+        "first_chat": first_chat,
+        "started_research": started_research,
+        "compared_models": compared_models,
+        "hosted_meeting": hosted_meeting,
+        "uploaded_document": uploaded_document,
+        "created_task": created_task,
+        "saved_memory": saved_memory,
+    }
+    return {"items": items, "complete": sum(1 for v in items.values() if v), "total": len(items)}
+
+
 @router.post("/standup/generate")
 async def generate_standup(payload: StandupRequest, current=Depends(require_user)):
     """Generate a Daily Standup Digest for the workspace and optionally post it

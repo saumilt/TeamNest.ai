@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import TopActionBar from "@/components/TopActionBar";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import SetupChecklist from "@/components/SetupChecklist";
 import {
   MessageSquare,
   Sparkles,
@@ -136,6 +137,8 @@ export default function Dashboard({ variant, onChangeLook }) {
       <div className="mb-6">
         <IntelligenceBanner />
       </div>
+
+      <SetupChecklist />
 
       <div className="mb-8">
         <TopActionBar items={["standup", "hire-ai", "new-chat", "my-ai", "invite"]} />

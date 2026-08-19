@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import SetupChecklist from "@/components/SetupChecklist";
+import { personaConfig } from "@/lib/persona";
 
 const CARDS = [
   { key: "chat", title: "Start or Join a Chat", desc: "Message your team or an AI assistant.", icon: MessageSquare, to: "/chats?new=chat" },
@@ -77,6 +79,15 @@ export default function StartCenterHome({ variant, onChangeLook }) {
     api.get("/dashboard").then(({ data }) => setData(data)).catch(() => {});
   }, []);
 
+  const cfg = personaConfig(user?.persona);
+  const cards = cfg
+    ? [...CARDS].sort((a, b) => {
+        const ia = cfg.cardOrder.indexOf(a.key);
+        const ib = cfg.cardOrder.indexOf(b.key);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      })
+    : CARDS;
+
   return (
     <div className="p-6 lg:p-10 max-w-[1600px]" data-testid="home-start-center">
       {/* Header */}
@@ -94,6 +105,7 @@ export default function StartCenterHome({ variant, onChangeLook }) {
       </div>
 
       <IntelligenceBanner />
+      <SetupChecklist />
 
       {/* Featured — AI Research */}
       <div className="label-mono mb-3">START SOMETHING</div>
@@ -136,7 +148,7 @@ export default function StartCenterHome({ variant, onChangeLook }) {
 
       {/* Other actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
-        {CARDS.map((c) => (
+        {cards.map((c) => (
           <ActionCard key={c.key} card={c} onClick={() => nav(c.to)} />
         ))}
       </div>

@@ -5,8 +5,10 @@ import { useAuth } from "@/context/AuthContext";
 import { Sparkles, MessageSquare, Layers, ArrowRight } from "lucide-react";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import SetupChecklist from "@/components/SetupChecklist";
 import HomeComposer from "@/components/HomeComposer";
 import FeatureShortcuts from "@/components/FeatureShortcuts";
+import { personaConfig } from "@/lib/persona";
 
 const CHIPS = [
   "Help me plan my week",
@@ -30,6 +32,7 @@ export default function FocusHome({ variant, onChangeLook }) {
   const nav = useNavigate();
   const [data, setData] = useState(null);
   const first = user?.name?.split(" ")[0];
+  const cfg = personaConfig(user?.persona);
 
   useEffect(() => {
     api.get("/dashboard").then(({ data }) => setData(data)).catch(() => {});
@@ -42,6 +45,7 @@ export default function FocusHome({ variant, onChangeLook }) {
       </div>
 
       <IntelligenceBanner />
+      <SetupChecklist />
 
       <div className="mb-3">
         <h1 className="font-display text-3xl lg:text-4xl font-bold tracking-tight">
@@ -49,7 +53,7 @@ export default function FocusHome({ variant, onChangeLook }) {
         </h1>
         <p className="text-zinc-500 mt-2">What would you like to think through today?</p>
       </div>
-      <HomeComposer chips={CHIPS} placeholder="Ask, research, or draft — I'll bring the right AI." />
+      <HomeComposer chips={cfg?.chips || CHIPS} placeholder="Ask, research, or draft — I'll bring the right AI." />
 
       <div className="grid lg:grid-cols-2 gap-4 mt-10">
         {/* Jump back in */}
@@ -106,7 +110,7 @@ export default function FocusHome({ variant, onChangeLook }) {
         {/* Everything TeamNest can do */}
         <div className="rounded-2xl border border-white/10 bg-[#0c0c0e] p-5">
           <h3 className="font-display text-base font-bold tracking-tight mb-4">Everything you can do</h3>
-          <FeatureShortcuts />
+          <FeatureShortcuts order={cfg?.featureOrder} />
         </div>
       </div>
     </div>

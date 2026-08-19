@@ -9,6 +9,7 @@ import CreditSplash from "@/components/CreditSplash";
 import CreditsBadge from "@/components/CreditsBadge";
 import BudgetNudge from "@/components/BudgetNudge";
 import ForcePasswordChange from "@/components/ForcePasswordChange";
+import ShowMeHow from "@/components/ShowMeHow";
 import useUnreadTitle from "@/hooks/useUnreadTitle";
 
 /** App shell for authenticated routes.
@@ -54,6 +55,7 @@ export default function AppShell() {
       <CreditSplash />
       <CreditsBadge />
       <BudgetNudge />
+      <ShowMeHow />
     </div>
   );
 }
