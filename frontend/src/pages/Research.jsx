@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Sparkles } from "lucide-react";
+import TopActionBar from "@/components/TopActionBar";
 
 export default function Research() {
   const [threads, setThreads] = useState([]);
@@ -17,6 +18,9 @@ export default function Research() {
 
   return (
     <div className="p-6 lg:p-10">
+      <div className="mb-8">
+        <TopActionBar />
+      </div>
       <div className="mb-10">
         <div className="label-mono mb-3">WORKSPACE / AI RESEARCH</div>
         <h1 className="font-display text-4xl lg:text-5xl font-bold tracking-tighter">
