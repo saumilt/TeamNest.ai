@@ -135,10 +135,6 @@ async def chat_preview_viewers(chat_id: str, current=Depends(require_user)):
 # working preview of their project. No auth — anyone with the URL sees it
 # (this is the same model Vercel uses for preview branches). The project id
 # is the only secret; share_tokens layer in a future iteration if needed.
-from fastapi import Response
-from fastapi.routing import APIRoute
-
-
 _MIME_BY_EXT = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
