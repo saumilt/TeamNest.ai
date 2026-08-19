@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import TopActionBar from "@/components/TopActionBar";
 import {
   MessageSquare,
   Sparkles,
@@ -115,6 +116,10 @@ export default function Dashboard() {
             <Sunrise className="w-4 h-4 mr-2" /> {standupBusy ? "Generating…" : "Daily Standup"}
           </Button>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <TopActionBar />
       </div>
 
       {/* Standup result */}

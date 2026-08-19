@@ -14,6 +14,7 @@ import AIComparison from "@/components/AIComparison";
 import AIComparisonInline from "@/components/aicompare/AIComparisonInline";
 import AskAIDrawer from "@/components/AskAIDrawer";
 import NewChatDialog from "@/components/NewChatDialog";
+import TopActionBar from "@/components/TopActionBar";
 import WhatsAppStyleNewChatSheet from "@/components/WhatsAppStyleNewChatSheet";
 import SuggestTasksDialog from "@/components/SuggestTasksDialog";
 import {
@@ -178,13 +179,26 @@ export default function Chats() {
   const { chatId } = useParams();
   const nav = useNavigate();
   const { user, workspaces, switchWorkspace } = useAuth();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
 
   const [chats, setChats] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const [showNew, setShowNew] = useState(params.get("new") === "group");
+  const [showNew, setShowNew] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
+
+  // Open the right creation surface when the action bar (or a deep link) sets
+  // ?new=chat|group, then strip the param so it doesn't re-trigger.
+  useEffect(() => {
+    const n = params.get("new");
+    if (!n) return;
+    if (n === "group") setShowNew(true);
+    else if (n === "chat") setShowSheet(true);
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
   const [listLeaveChat, setListLeaveChat] = useState(null);
   const [listDeleteChat, setListDeleteChat] = useState(null);
   // When a chat is open, the list auto-collapses to a slim 72px avatars rail
@@ -252,7 +266,13 @@ export default function Chats() {
   const otherChats = filtered.filter((c) => c.type !== "personal_ai");
 
   return (
-    <div className="flex h-[100dvh] bg-bg">
+    <div className="flex flex-col h-[100dvh] bg-bg">
+      {!chatId && (
+        <div className="px-4 md:px-6 pt-4 shrink-0">
+          <TopActionBar />
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0 w-full">
       {/* Chat List */}
       <div
         data-testid="chat-list-panel"
@@ -447,6 +467,7 @@ export default function Chats() {
             sub="Select a chat from the left to start."
           />
         )}
+      </div>
       </div>
 
       {/* FAB (mobile only, only on the list view) */}

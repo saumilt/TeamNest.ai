@@ -240,6 +240,36 @@ export default function Profile() {
       </section>
 
       <MfaSettings />
+
+      {/* Preferences */}
+      <section className="border border-white/5 bg-[#0a0a0a] mb-6 mt-6" data-testid="profile-preferences">
+        <header className="px-6 py-4 border-b border-white/5">
+          <h2 className="font-display text-lg font-bold tracking-tight">Preferences</h2>
+        </header>
+        <div className="p-6 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm text-zinc-200 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Welcome tour
+            </div>
+            <div className="text-[13px] text-zinc-500 mt-0.5">
+              Replay the quick intro to chat, comparing AIs, and inviting teammates.
+            </div>
+          </div>
+          <Button
+            type="button"
+            data-testid="replay-welcome-btn"
+            onClick={() => {
+              try { if (user?.id) window.localStorage.removeItem(`tn:welcomed:${user.id}`); } catch { /* ignore */ }
+              window.dispatchEvent(new Event("tn:replay-welcome"));
+              toast.success("Here's the welcome tour again");
+            }}
+            variant="outline"
+            className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-xs h-10 px-5 shrink-0"
+          >
+            Show welcome again
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

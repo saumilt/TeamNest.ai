@@ -73,6 +73,13 @@ export default function WelcomeTour() {
     try { window.sessionStorage.removeItem(SESSION_FLAG); } catch { /* ignore */ }
   }, [open]);
 
+  // Allow replaying the intro on demand (Profile → "Show welcome again").
+  useEffect(() => {
+    const replay = () => { setVariant("welcome"); setStep(0); setOpen(true); };
+    window.addEventListener("tn:replay-welcome", replay);
+    return () => window.removeEventListener("tn:replay-welcome", replay);
+  }, []);
+
   const close = (markSeen = true) => {
     setOpen(false);
     if (markSeen && typeof window !== "undefined") {

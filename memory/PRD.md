@@ -13,6 +13,15 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 146 (web) — "What do you want to do next?" Top Action Bar
+- New reusable `components/TopActionBar.jsx`: a prominent, collapsible quick-action card with 5 actions — **New Chat** (opens the WhatsApp-style chat sheet), **New Group** (opens the group-create dialog), **Compare AI Models** (→ `/research`), **Invite Teammates** (→ `/team`), **Upload Documents** (→ `/knowledge`). Collapse state persisted in `localStorage["tn:quickbar:collapsed"]`. Test ids: `top-action-bar`, `quickbar-toggle`, `quickbar-{new-chat|new-group|compare|invite|upload}`.
+- Placed on the two landing surfaces: **Chats list view** (top of the split, only when no chat is open — wrapped the layout in a flex column so full-height panes still fit) and the **Dashboard/Home** (card under the welcome header). NOT rendered globally in `AppShell` on purpose — ~50 app pages use `h-[100dvh]`, so a global bar above `Outlet` would cause app-wide scroll regressions.
+- New Chat/New Group wire through the `?new=chat|group` query param, which `Chats.jsx` now reacts to via a `useEffect` (opens the sheet/dialog then strips the param) so it works whether navigating in or already on `/chats`.
+- Self-verified via screenshots: bar renders on Chats + Dashboard, New Chat→sheet, New Group→dialog, collapse/expand persist. Web-only — redeploy for teamnest.ai. (testing_agent NOT run — contained additive UI feature.)
+
+### Iteration 145 (web) — "Show welcome again" replay
+- Profile (`/profile`) gained a **Preferences** section with a "Show welcome again" button (`replay-welcome-btn`) that clears `tn:welcomed:<uid>` and dispatches a `tn:replay-welcome` window event. `WelcomeTour` listens for that event and re-opens the short welcome variant on demand. Verified via screenshot (tour reappears + toast). Web-only.
+
 ### Iteration 144 (web + backend) — First-time welcome + login rate-limit
 - **Login rate-limit** (`services/login_throttle.py`, MongoDB-backed, no Redis): per `(client-ip + email)`, `LOGIN_MAX_FAILS=7` fails / `LOGIN_WINDOW_MIN=15` min → `LOGIN_LOCK_MIN=15` min lock; `/auth/login` (now takes `request`) returns **429** with a friendly "Too many sign-in attempts. Please try again in about N minutes." + `Retry-After` header. Success clears the counter; wrong password → 401 (unchanged) until lock. TTL-cleaned `login_attempts` collection. Verified via curl: 6×401 → 7th=429 (`Retry-After: 899`); valid login unaffected. Frontend already renders `err.response.data.detail`, so the message shows automatically. (integration_expert consulted per auth rule.)
 - **First-time welcome** (`components/WelcomeTour.jsx`): added a short 3-slide "welcome" variant (Chat with your team → Compare AIs side-by-side → Invite your teammates, jump to `/chats?new=group`) shown once per real user via `localStorage["tn:welcomed:<uid>"]`. The existing demo-login sales tour (`demoSlides`, sessionStorage flag) is unchanged; `variant` selects between them.
