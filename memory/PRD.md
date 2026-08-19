@@ -13,6 +13,10 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 154 (web) — Super Admin "Link Domain Guard"
+- `pages/superadmin/UsersTab.jsx`: added `linkDomainIssue()` + `<LinkDomainWarning>` — after generating a reset link, if the link's origin ≠ the admin's current origin (a `PUBLIC_BACKEND_URL` mismatch), an amber warning shows the wrong vs expected domain and offers a one-click **corrected link** (domain swapped to the current origin). Test ids `sa-link-domain-warning`, `sa-copy-corrected-link`. Verified on preview: modal intact, no warning when domains match (correct); warning path triggers on mismatch (the production bug scenario).
+
+
 ### Iteration 153 (backend) — Prod password-reset/welcome links use request origin (login incident)
 - **Incident:** a provisioned prod user couldn't sign in; generic "could not sign in". Root cause: production env var `PUBLIC_BACKEND_URL` = `https://emergent-ai-teams.emergent.host` (not `https://teamnest.ai`), so Super Admin reset links / welcome emails pointed users to the internal Emergent host where sign-in fails. teamnest.ai login itself works correctly (verified: wrong pw → clean 401 "Invalid credentials").
 - **Fix (superadmin.py):** `generate_reset_link`, `reset_user_password` (temp-pw email) and `create_user` (`_send_credentials_email`) now build link base via `resolve_app_base(request)` (trusts allow-listed request Origin/Referer; falls back to `PUBLIC_BACKEND_URL`). Threaded `request: Request` into those endpoints. Mirrors the existing `forgot_password` pattern. Verified on preview: with a teamnest.ai Referer the reset link → `https://teamnest.ai/...`; without → env fallback. Proxy strips `Origin` but passes `Referer`, so real browsers on teamnest.ai resolve correctly.

@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
   UserPlus, Trash2, Ban, CheckCircle2, ShieldCheck, KeyRound, X,
-  Copy, Mail, Link2, RefreshCw, ChevronRight,
+  Copy, Mail, Link2, RefreshCw, ChevronRight, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { PasswordInput } from "@/components/ui-v2/PasswordInput";
@@ -358,12 +358,50 @@ function UserDetailModal({ userId, isSelf, onClose, onSaved }) {
                 <code className="flex-1 bg-black/30 rounded px-2 py-1 font-mono text-ink break-all">{linkResult.reset_link}</code>
                 <button type="button" onClick={() => copy(linkResult.reset_link, "Reset link")} className="p-1.5 rounded hover:bg-white/10 text-ink-dim hover:text-ink" data-testid="sa-copy-link"><Copy className="w-3.5 h-3.5" /></button>
               </div>
+              <LinkDomainWarning link={linkResult.reset_link} onCopy={copy} />
               {!linkResult.email_sent && <p className="text-ink-mute mt-1">Email not sent ({linkResult.email_reason}). Share this link with the user directly.</p>}
             </div>
           )}
         </div>
       </div>
     </Modal>
+  );
+}
+
+function linkDomainIssue(link) {
+  // Warn when a generated link's domain differs from the domain the admin is
+  // currently on (the custom domain), which signals a PUBLIC_BACKEND_URL mismatch.
+  try {
+    const here = window.location.origin;
+    if (!link) return null;
+    if (!/^https?:\/\//i.test(link)) {
+      return { actual: "(no domain)", expected: here, corrected: here + (link.startsWith("/") ? link : "/" + link) };
+    }
+    const u = new URL(link);
+    if (u.origin !== here) {
+      return { actual: u.origin, expected: here, corrected: here + u.pathname + u.search + u.hash };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function LinkDomainWarning({ link, onCopy }) {
+  const issue = linkDomainIssue(link);
+  if (!issue) return null;
+  return (
+    <div className="mt-2 rounded-md bg-amber-500/10 ring-1 ring-amber-500/40 p-2 text-[11px] text-amber-200" data-testid="sa-link-domain-warning">
+      <div className="flex items-center gap-1.5 font-semibold text-amber-300 mb-1">
+        <AlertTriangle className="w-3.5 h-3.5" /> This link uses the wrong domain
+      </div>
+      Points to <span className="font-mono">{issue.actual}</span>, not your current domain{" "}
+      <span className="font-mono">{issue.expected}</span>. Your <span className="font-mono">PUBLIC_BACKEND_URL</span> may be misconfigured — send this corrected link instead:
+      <div className="flex items-center gap-2 mt-1.5">
+        <code className="flex-1 bg-black/30 rounded px-2 py-1 font-mono break-all">{issue.corrected}</code>
+        <button type="button" onClick={() => onCopy(issue.corrected, "Corrected link")} className="p-1.5 rounded hover:bg-white/10 text-amber-200" data-testid="sa-copy-corrected-link"><Copy className="w-3.5 h-3.5" /></button>
+      </div>
+    </div>
   );
 }
 
