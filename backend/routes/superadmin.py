@@ -12,10 +12,10 @@ from typing import Literal, Optional
 
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from deps import db, is_super_admin, new_id, now_iso, require_super_admin
+from deps import db, is_super_admin, new_id, now_iso, require_super_admin, resolve_app_base
 from services import mailgun_service
 from services.platform_settings import (
     BOOL_DEFAULTS,
@@ -285,7 +285,7 @@ class NewUser(BaseModel):
 
 
 async def _send_credentials_email(name: str, email: str, password: str,
-                                  user_id: str, cc: Optional[list]) -> None:
+                                  user_id: str, cc: Optional[list], base: str) -> None:
     """Email a newly-provisioned user their login + a single-use reset link."""
     import hashlib
     import secrets
@@ -299,7 +299,7 @@ async def _send_credentials_email(name: str, email: str, password: str,
         "used": False, "created_at": now,
         "expires_at": now + timedelta(minutes=60),
     })
-    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    base = (base or os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
     link = f"{base}/reset-password?token={raw}"
     html = f"""
       <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;color:#18181b">
@@ -322,7 +322,7 @@ async def _send_credentials_email(name: str, email: str, password: str,
 
 
 @router.post("/superadmin/users")
-async def create_user(payload: NewUser, current=Depends(require_super_admin)):
+async def create_user(payload: NewUser, request: Request, current=Depends(require_super_admin)):
     from auth_utils import hash_password, password_complexity_error
     from deps import ensure_personal_ai_chat
     from services.workspace_membership import ensure_membership
@@ -374,7 +374,7 @@ async def create_user(payload: NewUser, current=Depends(require_super_admin)):
     emailed = False
     if payload.send_credentials:
         try:
-            await _send_credentials_email(payload.name.strip(), email, payload.password, uid, payload.cc)
+            await _send_credentials_email(payload.name.strip(), email, payload.password, uid, payload.cc, resolve_app_base(request))
             emailed = True
         except Exception:
             emailed = False
@@ -488,8 +488,8 @@ def _generate_temp_password() -> str:
             return pw
 
 
-async def _send_new_password_email(name: str, email: str, password: str) -> dict:
-    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+async def _send_new_password_email(name: str, email: str, password: str, base: str) -> dict:
+    base = (base or os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
     html = f"""
       <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;color:#18181b">
         <h2 style="margin:0 0 12px">Your TeamNest password was reset</h2>
@@ -510,7 +510,7 @@ async def _send_new_password_email(name: str, email: str, password: str) -> dict
 
 
 @router.post("/superadmin/users/{uid}/reset-password")
-async def reset_user_password(uid: str, payload: ResetPassword, current=Depends(require_super_admin)):
+async def reset_user_password(uid: str, payload: ResetPassword, request: Request, current=Depends(require_super_admin)):
     """Set (or auto-generate) a temporary password for a user, flag it for a
     forced change on next login, and — by default — EMAIL the new password to
     the user. Returns the password so an admin can share it manually if the
@@ -536,7 +536,7 @@ async def reset_user_password(uid: str, payload: ResetPassword, current=Depends(
     )
     email_result = {"ok": False, "reason": "skipped"}
     if payload.send_email:
-        email_result = await _send_new_password_email(user.get("name"), user["email"], new_password)
+        email_result = await _send_new_password_email(user.get("name"), user["email"], new_password, resolve_app_base(request))
     return {
         "ok": True, "email": user["email"], "password": new_password,
         "email_sent": bool(email_result.get("ok")),
@@ -550,7 +550,7 @@ class ResetLinkRequest(BaseModel):
 
 
 @router.post("/superadmin/users/reset-link")
-async def generate_reset_link(payload: ResetLinkRequest, current=Depends(require_super_admin)):
+async def generate_reset_link(payload: ResetLinkRequest, request: Request, current=Depends(require_super_admin)):
     """Mint a single-use, 1-hour password-reset link for a user, optionally
     email it, and ALWAYS return the link so an admin can copy/share it directly
     when email delivery is unreliable (e.g. corporate spam filters)."""
@@ -576,7 +576,7 @@ async def generate_reset_link(payload: ResetLinkRequest, current=Depends(require
         "used": False, "created_at": now,
         "expires_at": now + timedelta(minutes=60),
     })
-    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
+    base = (resolve_app_base(request) or os.environ.get("PUBLIC_BACKEND_URL") or "").rstrip("/")
     link = f"{base}/reset-password?token={raw}"
 
     email_result = {"ok": False, "reason": "skipped"}

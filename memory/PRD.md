@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 153 (backend) — Prod password-reset/welcome links use request origin (login incident)
+- **Incident:** a provisioned prod user couldn't sign in; generic "could not sign in". Root cause: production env var `PUBLIC_BACKEND_URL` = `https://emergent-ai-teams.emergent.host` (not `https://teamnest.ai`), so Super Admin reset links / welcome emails pointed users to the internal Emergent host where sign-in fails. teamnest.ai login itself works correctly (verified: wrong pw → clean 401 "Invalid credentials").
+- **Fix (superadmin.py):** `generate_reset_link`, `reset_user_password` (temp-pw email) and `create_user` (`_send_credentials_email`) now build link base via `resolve_app_base(request)` (trusts allow-listed request Origin/Referer; falls back to `PUBLIC_BACKEND_URL`). Threaded `request: Request` into those endpoints. Mirrors the existing `forgot_password` pattern. Verified on preview: with a teamnest.ai Referer the reset link → `https://teamnest.ai/...`; without → env fallback. Proxy strips `Origin` but passes `Referer`, so real browsers on teamnest.ai resolve correctly.
+- **Still recommended:** set `PUBLIC_BACKEND_URL=https://teamnest.ai` in the PRODUCTION deployment env — fixes background reminder emails + OAuth connector redirects too (those have no request context).
+
+
 ### Iteration 152 (web) — Hero polish + enterprise proof + demo band
 - **Two-line accent headline** (`Hero.jsx`): `HERO_COPY` now has `headline` + `headlineAccent`; the accent line renders as a `block` in brand yellow (`--w-brand`). Default: "…think together —" / "so your intelligence never leaves." Alt (sharper enterprise angle for A/B): "Every conversation, decision, and insight —" / "kept, even after people leave." (governance/SSO/institutional-memory framing).
 - **Enterprise proof strip** (`components/web/home/HeroProof.jsx`, mounted right under `<Hero/>` in HomeV2): honest capability stats — 5+ AI models · 100% retained · Zero knowledge lost · SSO + Audit. `data-testid="home-hero-proof"`.
