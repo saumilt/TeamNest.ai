@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles } from "lucide-react";
+import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles, Zap } from "lucide-react";
 import MfaSettings from "@/components/MfaSettings";
+import safeStorage from "@/lib/safeStorage";
+import { QUICKBAR_HIDDEN_KEY } from "@/components/TopActionBar";
 
 export default function Profile() {
   const { user, refresh } = useAuth();
@@ -267,6 +269,28 @@ export default function Profile() {
             className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-xs h-10 px-5 shrink-0"
           >
             Show welcome again
+          </Button>
+        </div>
+        <div className="p-6 flex items-center justify-between gap-4 border-t border-white/5">
+          <div>
+            <div className="text-sm text-zinc-200 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-yellow-300" /> Quick actions bar
+            </div>
+            <div className="text-[13px] text-zinc-500 mt-0.5">
+              Show the "What do you want to do next?" shortcuts on Chats, Home, Tasks, and AI.
+            </div>
+          </div>
+          <Button
+            type="button"
+            data-testid="show-quickbar-btn"
+            onClick={() => {
+              safeStorage.set(QUICKBAR_HIDDEN_KEY, "0");
+              toast.success("Quick actions bar is back on");
+            }}
+            variant="outline"
+            className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-xs h-10 px-5 shrink-0"
+          >
+            Show quick actions
           </Button>
         </div>
       </section>

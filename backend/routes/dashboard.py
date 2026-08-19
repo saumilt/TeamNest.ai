@@ -62,6 +62,33 @@ async def dashboard(current=Depends(require_user)):
     }
 
 
+@router.get("/home/summary")
+async def home_summary(current=Depends(require_user)):
+    """Lightweight counts for the "TeamNest remembers" zone on the new Home."""
+    ws_id = current["workspace_id"]
+    chat_ids = [
+        c["id"]
+        async for c in db.chats.find(
+            {"workspace_id": ws_id, "member_ids": current["id"]}, {"id": 1, "_id": 0}
+        )
+    ]
+    research_threads = (
+        await db.ai_threads.count_documents({"chat_id": {"$in": chat_ids}}) if chat_ids else 0
+    )
+    documents = await db.knowledge_sources.count_documents({"workspace_id": ws_id})
+    active = {"$in": ["active", "outdated"]}
+    saved_facts = await db.memory_items.count_documents({"workspace_id": ws_id, "status": active})
+    decisions = await db.memory_items.count_documents(
+        {"workspace_id": ws_id, "memory_type": "decision", "status": active}
+    )
+    return {
+        "saved_facts": saved_facts,
+        "decisions": decisions,
+        "research_threads": research_threads,
+        "documents": documents,
+    }
+
+
 @router.post("/standup/generate")
 async def generate_standup(payload: StandupRequest, current=Depends(require_user)):
     """Generate a Daily Standup Digest for the workspace and optionally post it

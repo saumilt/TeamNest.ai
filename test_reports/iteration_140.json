@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only regression + new-feature test for TeamNest.ai Home 'looks'. Verified all 4 Home looks (classic / start / ask / focus) render at /dashboard with the HomeLookSwitcher (data-testid home-look-btn) and persist selection via localStorage key 'tn:tn:home:variant' (safeStorage double-namespaces to 'tn:tn:home:variant'). Verified IntelligenceBanner (data-testid intelligence-banner) at the TOP of ALL FOUR looks, with headline 'Your organization's intelligence shouldn't disappear when people move on.', counts from /api/home/summary (11 saved facts, 4 decisions, 87 research, 7 documents), and CTAs intel-ask-memory, intel-knowledge, intel-role (intel-role visible for super admin sam@funasia.net). Verified HomeComposer routing: single → /my-ai?ask=... redirects to /chats/<personal_ai_id> with data-testid message-input prefilled '@ai Compare pricing of three CRM tools'; compare toggle → prefilled '@ai ask all Best project management approach'. Verified post-login landing helper homeLanding(): variant=ask → /dashboard, variant=focus → /dashboard, variant=classic → /chats (all clean-cookie logins verified). Regression: /my-ai with no query still redirects to personal AI chat. Classic dashboard still renders (data-testid dashboard) with stats, standup quick action, banner, and page-aware TopActionBar (NEW GROUP / NEW FOLDER / DAILY STANDUP visible). Start Center still shows feature cards (start-card-task, start-card-research, etc.) and no longer has the old bottom 'remembers' block (banner moved to top). All target selectors present and clickable. No console errors beyond expected 401s from unauth polling before login.",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "homeVariant.js:5 — comment claims new accounts default to 'start', but getHomeVariant defaults to 'classic' unless the account is brand new (created within 7 days). Behavior matches request ('classic default for existing users, non-classic if user chose one'), just noting the code comment on line 3 is slightly misleading vs the actual isBrandNew() check.",
+    "MyAI.jsx:16 — .then() has no .catch(); if /chats fetch fails, the user is stuck on the 'Opening your personal AI assistant…' screen with no error. Consider a catch to setErr('Failed to load chats')."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super admin, role owner) — used for all flows including intel-role visibility.",
+  "seed_data_creation": "None. Used existing personal_ai chat (id bdef4bf2-8ba7-42f3-bf96-e1ef3b98763a).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The safeStorage key double-namespaces: to force a Home look via localStorage use 'tn:tn:home:variant' (not 'tn:home:variant'). The UI switcher (home-look-btn → home-look-<value>) is the safest way to set variant in tests. Composer prefill lands on /chats/<personal_ai_id>?compose=<encoded> and the target input is data-testid='message-input'. If /logout is used to test post-login landing, it may return to '/' — instead clear cookies via context.clear_cookies() and navigate to /login for a clean re-auth.",
+  "rca of the issue": "N/A — no bugs found in this scope."
+}

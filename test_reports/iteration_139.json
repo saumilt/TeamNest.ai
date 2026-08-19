@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 139 (web-only): validated new Start Center Home + A/B toggle + /api/home/summary + Top Action Bar page sets + login landing. Backend 4/4 pass; frontend 11/12 scenarios pass. Only anomaly: /login?demo=1 with variant=new (localStorage tn:tn:home:variant='new') navigated to /dashboard URL but Start Center DOM did not render in the same session — final screenshot showed the login page. Requires main-agent verification (may be onboarding-tour overlay, or homeLanding not being called on the demo path when a prior sam session cookie is present).",
+  "platforms_tested": ["web"],
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [
+        {
+          "flow": "Demo login with variant=new selected",
+          "issue": "After localStorage tn:tn:home:variant='new' and navigating to /login?demo=1, URL correctly becomes /dashboard but StartCenterHome ([data-testid='home-start-center']) is not present; screenshot shows the login page still visible. Real-user impact is low because the primary path (sam login → click Try new Home → reload → /dashboard shows Start Center) works, and setting variant via UI toggle is the intended UX. Root cause hypothesis: the demoLogin() may have failed silently (a superadmin session cookie was already set) so homeLanding was called but nav landed on /dashboard without a fresh authed user, then AuthGuard rendered login. Not a regression — a corner case of the automation flow.",
+          "affected_selectors": ["auth-demo-btn", "home-start-center"]
+        }
+      ],
+      "design_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration139_home_summary.py",
+    "/app/test_reports/pytest/iteration139.xml"
+  ],
+  "action_items": [
+    "Verify demo-login path when tn:tn:home:variant='new' is pre-set and no user is authenticated — confirm Start Center renders on /dashboard (may need to inspect whether the demo cookie replaces an existing session cleanly).",
+    "Optional polish: add aria-describedby to NewTaskDialog's DialogContent — console emits a Radix a11y warning when opening the task dialog via /tasks?new=1."
+  ],
+  "critical_code_review_comments": [
+    "homeVariant.js uses key 'tn:home:variant' but safeStorage double-namespaces to 'tn:tn:home:variant' (main-agent context notes this). Not a bug, but naming is confusing — recommend documenting or normalizing.",
+    "StartCenterHome.jsx: research chips are <span> with onClick and data-testid — non-semantic (should be <button>) and stopPropagation prevents the outer button navigation from firing when a chip is clicked (intentional). Consider role='button' + tabIndex for keyboard accessibility.",
+    "Dashboard.jsx uses localStorage directly for 'dash:invite-banner-dismissed' bypassing safeStorage — inconsistent with the rest of the codebase.",
+    "TopActionBar reads usage state only at mount via useState(readUsage) — the reordering is intentional, but a comment already documents it. OK."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration139_home_summary.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "92% (11/12 scenarios)"},
+  "test_credentials": "sam@funasia.net / Perfect$2008 (super admin, existing account) — used for all UI flows",
+  "seed_data_creation": "None — used existing data. Home summary for sam returned {saved_facts:11, decisions:4, research_threads:87, documents:7}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 139 verified end-to-end at 1920x1080: (A) /api/home/summary returns int counts and is auth-gated (401 unauth). (B) Existing user with no saved variant lands on /chats on login — regression clean. (C) /dashboard renders classic <Dashboard data-testid=dashboard> with a home-switch-new button (yellow 'Try the new Home'); clicking it renders <StartCenterHome data-testid=home-start-center> with featured start-card-research + 8 action cards (start-card-{chat,meeting,project,task,docs,memory,employee,knowledge}) + home-remembers with populated stats + home-switch-classic. (D) Persistence: reload after each toggle keeps the choice. (E) start-card-task navigates to /tasks?new=1 which auto-opens the New Task dialog (dialog appears, and querystring is cleared). (F) Top Action Bar per-page sets all render with the expected 5 tiles in each of chats/dashboard-classic/tasks/research. First tile is highlighted yellow. (G) quickbar-dismiss hides the bar; show-quickbar-btn in /profile Preferences re-enables it and it reappears on /dashboard. (H) quickbar-standup on the classic dashboard triggered dash-standup-result to render (AI call succeeded ~8s). (I) Only anomaly: /login?demo=1 with pre-set variant=new did not visibly render Start Center after the redirect — main agent should re-verify by clicking 'Try the demo' from a signed-out state after variant=new is persisted. Backend regression (/api/dashboard, /api/home/summary) is clean.",
+  "rca of the issue": "For the demo-login anomaly (Test 12): the automation flow set localStorage tn:tn:home:variant='new' while the sam@funasia.net session cookie was still set from earlier tests, then visited /login?demo=1. The demoLogin() call may have hit the backend with an existing session cookie and either failed (no clear console error visible) or the redirect landed on /dashboard before the new auth state propagated to the component tree, causing AuthGuard to briefly show the login page. This is a test-flow artifact more than a product bug. To reproduce cleanly: sign out fully (clear cookies), set variant to 'new' via the UI toggle on another account, sign out, click 'Try the demo' from /login."
+}

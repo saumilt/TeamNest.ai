@@ -19,7 +19,7 @@ export default function Research() {
   return (
     <div className="p-6 lg:p-10">
       <div className="mb-8">
-        <TopActionBar />
+        <TopActionBar items={["my-ai", "compare", "upload", "new-chat", "hire-ai"]} />
       </div>
       <div className="mb-10">
         <div className="label-mono mb-3">WORKSPACE / AI RESEARCH</div>

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArrowRight, ChevronLeft, Loader2, Sparkles, Shield } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { homeLanding } from "@/lib/homeVariant";
 import { WebThemeProvider } from "@/context/WebThemeContext";
 import SeoHelmet from "@/components/web/SeoHelmet";
 import { PasswordInput } from "@/components/ui-v2/PasswordInput";
@@ -178,12 +179,13 @@ function AuthForm({ mode, setMode }) {
           setMfa({ mfaToken: result.mfaToken, email: result.email });
           return;
         }
+        nav(homeLanding(result));
+        return;
       } else {
         await signup(form.name || form.email.split("@")[0], form.email, form.password);
         nav("/onboarding");
         return;
       }
-      nav("/chats");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not sign in");
     } finally {
@@ -192,15 +194,15 @@ function AuthForm({ mode, setMode }) {
   };
 
   const onMfaSuccess = (data) => {
-    completeMfaLogin(data);
-    nav("/chats");
+    const u = completeMfaLogin(data);
+    nav(homeLanding(u));
   };
 
   const onDemo = async () => {
     setBusy(true);
     try {
-      await demoLogin();
-      nav("/chats");
+      const u = await demoLogin();
+      nav(homeLanding(u));
     } catch {
       toast.error("Demo login failed");
     } finally {
@@ -361,7 +363,7 @@ export default function WebAuth({ defaultMode }) {
   useEffect(() => {
     if (params.get("demo") === "1") {
       (async () => {
-        try { await demoLogin(); nav("/chats"); }
+        try { const u = await demoLogin(); nav(homeLanding(u)); }
         catch { toast.error("Demo login failed"); }
       })();
     }

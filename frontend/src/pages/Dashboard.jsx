@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import TopActionBar from "@/components/TopActionBar";
+import HomeLookSwitcher from "@/components/HomeLookSwitcher";
+import IntelligenceBanner from "@/components/IntelligenceBanner";
 import {
   MessageSquare,
   Sparkles,
@@ -42,7 +44,7 @@ function relativeTime(iso) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ variant, onChangeLook }) {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [memberCount, setMemberCount] = useState(null);
@@ -52,6 +54,7 @@ export default function Dashboard() {
     try { return localStorage.getItem("dash:invite-banner-dismissed") === "1"; } catch { return false; }
   });
   const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
     api.get("/dashboard").then(({ data }) => setData(data));
@@ -69,6 +72,17 @@ export default function Dashboard() {
       toast.error(e?.response?.data?.detail || "Could not generate standup");
     } finally { setStandupBusy(false); }
   };
+
+  // "Daily Standup" quick action deep-links here with ?standup=1 — auto-run it.
+  useEffect(() => {
+    if (params.get("standup") === "1") {
+      generateStandup();
+      const next = new URLSearchParams(params);
+      next.delete("standup");
+      setParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   const dismissBanner = () => {
     setBannerDismissed(true);
@@ -91,6 +105,7 @@ export default function Dashboard() {
           </h1>
         </div>
         <div className="hidden lg:flex gap-3">
+          {onChangeLook && <HomeLookSwitcher current={variant} onChange={onChangeLook} />}
           <Button
             data-testid="dash-new-chat"
             onClick={() => nav("/chats?new=group")}
@@ -118,8 +133,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="mb-6">
+        <IntelligenceBanner />
+      </div>
+
       <div className="mb-8">
-        <TopActionBar />
+        <TopActionBar items={["standup", "hire-ai", "new-chat", "my-ai", "invite"]} />
       </div>
 
       {/* Standup result */}

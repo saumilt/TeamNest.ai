@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import NewTaskDialog from "@/components/NewTaskDialog";
@@ -67,6 +68,7 @@ export default function Tasks() {
         const [showNew, setShowNew] = useState(false);
         const [collapsed, setCollapsed] = useState({ completed: true, overdue: false });
         const [busyId, setBusyId] = useState(null);
+        const [params, setParams] = useSearchParams();
 
         const load = useCallback(() => {
                 api.get(`/tasks?scope=${scope}&status_filter=${statusFilter}`).then(({ data }) => setTasks(data));
@@ -75,6 +77,17 @@ export default function Tasks() {
         useEffect(() => {
                 load();
         }, [load]);
+
+        // Open the create dialog when deep-linked with ?new=1 (from the Home cards).
+        useEffect(() => {
+                if (params.get("new") === "1") {
+                        setShowNew(true);
+                        const next = new URLSearchParams(params);
+                        next.delete("new");
+                        setParams(next, { replace: true });
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [params]);
 
         useEffect(() => {
                 api.get("/workspace/members").then(({ data }) => {
@@ -162,7 +175,15 @@ export default function Tasks() {
         return (
                 <div className="min-h-[100dvh] bg-bg pb-24 md:pb-8 text-ink">
                         <div className="px-4 md:px-8 pt-6">
-                                <TopActionBar />
+                                <TopActionBar
+                                        items={[
+                                                { key: "new-task", label: "New Task", desc: "Capture an action item", icon: Plus, onClick: () => setShowNew(true) },
+                                                "standup",
+                                                "new-chat",
+                                                "my-ai",
+                                                "invite",
+                                        ]}
+                                />
                         </div>
                         {/* Title */}
                         <div className="px-4 md:px-8 pt-8 md:pt-12 pb-4">

@@ -13,12 +13,30 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
-### Iteration 146 (web) — "What do you want to do next?" Top Action Bar
-- New reusable `components/TopActionBar.jsx`: a prominent, collapsible quick-action card with 5 actions — **New Chat** (opens the WhatsApp-style chat sheet), **New Group** (opens the group-create dialog), **Compare AI Models** (→ `/research`), **Invite Teammates** (→ `/team`), **Upload Documents** (→ `/knowledge`). Collapse state persisted in `localStorage["tn:quickbar:collapsed"]`. Test ids: `top-action-bar`, `quickbar-toggle`, `quickbar-{new-chat|new-group|compare|invite|upload}`.
-- Placed on four landing/working surfaces: **Chats list view** (top of split, only when no chat open — layout wrapped in a flex column so full-height panes still fit), **Dashboard/Home** (card under welcome header), **AI Research** (`/research`, top of page), and **Tasks** (`/tasks`, top of page). NOT rendered globally in `AppShell` on purpose — ~50 app pages use `h-[100dvh]`, so a global bar above `Outlet` would cause app-wide scroll regressions.
-- **Personalized ordering**: each action click increments a per-action counter in `localStorage["tn:quickbar:usage"]`; on mount the tiles are sorted by usage desc (stable tiebreak = original order) and the first/most-used tile gets the yellow "primary" highlight. Order is frozen at mount so tiles don't reshuffle under the cursor; the new order applies on the next mount/navigation.
-- New Chat/New Group wire through the `?new=chat|group` query param, which `Chats.jsx` reacts to via a `useEffect` (opens the sheet/dialog then strips the param) so it works whether navigating in or already on `/chats`.
-- Self-verified via screenshots: bar renders on all 4 surfaces, New Chat→sheet, New Group→dialog, collapse/expand persist, and reorder confirmed (usage boost floated Upload to first+highlighted; a real Compare click wrote `{"compare":1}`). Web-only — redeploy for teamnest.ai. (testing_agent NOT run — contained additive UI feature.)
+### Iteration 147 (web) — Multiple Home "looks" (ChatGPT-/Claude-style) + Intelligence banner
+- The Home (`/dashboard`) now offers **four switchable looks** via a `HomeLookSwitcher` (`home-look-btn` → `home-look-{classic|start|ask|focus}`), persisted in `localStorage["tn:home:variant"]` (migrates the old `"new"` → `"start"`); brand-new accounts (created <7d) default to `start`, existing users to `classic`.
+  - **Classic** — the original dashboard (stats, standup, page-aware TopActionBar).
+  - **Start Center** (`home-start-center`) — big action cards for every feature.
+  - **Ask AI** (`home-ask`) — ChatGPT-style: centered "What can I help with, <name>?" + prompt composer + example chips + feature shortcuts.
+  - **Focus** (`home-focus`) — Claude-style: time-of-day greeting + composer + "Jump back in" recents + feature shortcuts.
+- **Prompt-first composer** (`components/HomeComposer.jsx`): typing a prompt + Ask routes to `/my-ai?ask=...` which drops the user into their personal AI chat with the composer prefilled `@ai <prompt>` (or `@ai ask all <prompt>` when the **Compare models** toggle is on) — reuses the existing `?compose=` chat mechanism. `MyAI.jsx` now reads `?ask`/`?mode` and has an error fallback.
+- **IntelligenceBanner** (`components/IntelligenceBanner.jsx`) pinned to the TOP of ALL four looks: headline "Your organization's intelligence shouldn't disappear when people move on." + live counts from `GET /api/home/summary` + CTAs Ask My Memory (`/ai-memory`), Team Knowledge (`/knowledge`), and Role Intelligence (`/enterprise`, owner/admin/super_admin only). Start Center's old bottom "remembers" block was removed (moved up into this banner).
+- Shared `components/FeatureShortcuts.jsx` (Chat/Meeting/Tasks/Documents/AI Employees/Team Knowledge/Memory/Invite) keeps every capability one tap away on the AI-first looks.
+- Post-login landing (`lib/homeVariant.js` `homeLanding`): any non-classic look → `/dashboard`; classic → `/chats` (used in `Auth.jsx` login/demo/MFA).
+- Verified by testing_agent (iteration 140 — ALL PASS): all 4 looks + banner + switcher persistence + composer single/compare prefill + per-variant landing + regressions (/my-ai no-param, classic dashboard). Web-only — redeploy for teamnest.ai.
+
+### Iteration 146 (web) — "What do you want to do next?" Top Action Bar (page-aware, personalized, dismissible)
+- New reusable `components/TopActionBar.jsx`: a prominent, collapsible quick-action card driven by a central action **registry** + a per-page `items` prop. Actions: New Chat, New Group, Compare AI Models, Invite Teammates, Upload Documents, **Daily Standup** (→ `/dashboard?standup=1`, auto-runs the AI digest), **Hire an AI Employee** (→ `/employees`), **Ask My AI** (→ `/my-ai`), plus a custom **New Task** on Tasks (opens the task dialog).
+- **Page-aware curated sets** (first item = the highlighted page lead; the rest reorder by personal usage):
+  - Chats: New Chat · New Group · Ask My AI · Invite · Upload
+  - Home/Dashboard: Daily Standup · Hire an AI Employee · New Chat · Ask My AI · Invite
+  - Tasks: New Task · Daily Standup · New Chat · Ask My AI · Invite
+  - AI Research: Ask My AI · Compare AI Models · Upload · New Chat · Hire an AI Employee
+- **Personalized ordering**: each click increments a per-action counter in `localStorage["tn:quickbar:usage"]`; non-lead tiles sort by usage desc (stable tiebreak). Order frozen at mount (no reshuffle under the cursor).
+- **Dismiss For Good**: a "×" (`quickbar-dismiss`) hides the bar app-wide (`localStorage["tn:quickbar:hidden"]`, exported as `QUICKBAR_HIDDEN_KEY`); re-enabled from **Profile → Preferences** ("Show quick actions", `show-quickbar-btn`). Also collapsible via `quickbar-toggle` (`tn:quickbar:collapsed`).
+- New Chat/New Group wire through the `?new=chat|group` param that `Chats.jsx` reacts to; Daily Standup wires through `?standup=1` that `Dashboard.jsx` reacts to (auto-generates then strips the param).
+- Test ids: `top-action-bar`, `quickbar-toggle`, `quickbar-dismiss`, `quickbar-{new-chat|new-group|new-task|compare|invite|upload|standup|hire-ai|my-ai}`, `show-quickbar-btn`.
+- Self-verified via screenshots: correct set per page + lead highlight, New Chat→sheet, New Group→dialog, New Task→dialog, Daily Standup→digest generated on Home, dismiss hides everywhere + Profile re-enable restores, collapse/expand + reorder persist. Web-only — redeploy for teamnest.ai. (testing_agent NOT run — contained additive UI.)
 
 ### Iteration 145 (web) — "Show welcome again" replay
 - Profile (`/profile`) gained a **Preferences** section with a "Show welcome again" button (`replay-welcome-btn`) that clears `tn:welcomed:<uid>` and dispatches a `tn:replay-welcome` window event. `WelcomeTour` listens for that event and re-opens the short welcome variant on demand. Verified via screenshot (tour reappears + toast). Web-only.

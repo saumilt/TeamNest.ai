@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   MessageSquarePlus,
   Users,
@@ -8,19 +9,31 @@ import {
   FolderUp,
   ChevronDown,
   Zap,
+  X,
+  Sunrise,
+  Bot,
+  Brain,
 } from "lucide-react";
 import safeStorage from "@/lib/safeStorage";
 
-const ACTIONS = [
-  { key: "new-chat", label: "New Chat", desc: "Message a teammate or AI", icon: MessageSquarePlus, to: "/chats?new=chat" },
-  { key: "new-group", label: "New Group", desc: "Start a team channel", icon: Users, to: "/chats?new=group" },
-  { key: "compare", label: "Compare AI Models", desc: "Ask 6 AIs side-by-side", icon: GitCompareArrows, to: "/research" },
-  { key: "invite", label: "Invite Teammates", desc: "Grow your workspace", icon: UserPlus, to: "/team" },
-  { key: "upload", label: "Upload Documents", desc: "Chat with your files", icon: FolderUp, to: "/knowledge" },
-];
+// Central registry of every quick action. Pages pick which keys to show (and
+// in what priority order) via the `items` prop — see the per-page sets below.
+const REGISTRY = {
+  "new-chat": { key: "new-chat", label: "New Chat", desc: "Message a teammate or AI", icon: MessageSquarePlus, to: "/chats?new=chat" },
+  "new-group": { key: "new-group", label: "New Group", desc: "Start a team channel", icon: Users, to: "/chats?new=group" },
+  compare: { key: "compare", label: "Compare AI Models", desc: "Ask 6 AIs side-by-side", icon: GitCompareArrows, to: "/research" },
+  invite: { key: "invite", label: "Invite Teammates", desc: "Grow your workspace", icon: UserPlus, to: "/team" },
+  upload: { key: "upload", label: "Upload Documents", desc: "Chat with your files", icon: FolderUp, to: "/knowledge" },
+  standup: { key: "standup", label: "Daily Standup", desc: "AI recap of your team", icon: Sunrise, to: "/dashboard?standup=1" },
+  "hire-ai": { key: "hire-ai", label: "Hire an AI Employee", desc: "Add an AI teammate", icon: Bot, to: "/employees" },
+  "my-ai": { key: "my-ai", label: "Ask My AI", desc: "Your personal AI assistant", icon: Brain, to: "/my-ai" },
+};
+
+const DEFAULT_ITEMS = ["new-chat", "new-group", "compare", "invite", "upload"];
 
 const COLLAPSE_KEY = "tn:quickbar:collapsed";
 const USAGE_KEY = "tn:quickbar:usage";
+export const QUICKBAR_HIDDEN_KEY = "tn:quickbar:hidden";
 
 function readUsage() {
   try {
@@ -33,25 +46,36 @@ function readUsage() {
   }
 }
 
-// Sort by how often the user picks each action (desc), keeping the original
-// order as a stable tiebreaker so an untouched bar looks exactly as designed.
-function orderedActions(usage) {
-  return ACTIONS.map((a, i) => ({ a, i, count: Number(usage[a.key]) || 0 }))
-    .sort((x, y) => y.count - x.count || x.i - y.i)
-    .map((e) => e.a);
-}
-
-/** Prominent "what do you want to do next?" quick-action bar shown on the
- *  landing surfaces (Chats list, Home, Tasks, AI Research). Collapsible; the
- *  actions reorder so the ones this user opens most float to the front, and
- *  the most-used one is highlighted. State persisted in localStorage. */
-export default function TopActionBar() {
+/** Prominent "what do you want to do next?" quick-action bar.
+ *
+ *  - `items`: ordered list for THIS page — each entry is a REGISTRY key string
+ *    or a custom `{ key, label, desc, icon, to?, onClick? }` (e.g. "New Task"
+ *    that opens a dialog). The FIRST item is the page lead: pinned first and
+ *    highlighted. The rest reorder by how often this user picks them.
+ *  - Collapsible, and fully dismissible ("Don't show again", re-enabled from
+ *    Profile → Preferences). All state persisted in localStorage. */
+export default function TopActionBar({ items = DEFAULT_ITEMS }) {
   const nav = useNavigate();
   const [collapsed, setCollapsed] = useState(() => safeStorage.get(COLLAPSE_KEY) === "1");
+  const [hidden, setHidden] = useState(() => safeStorage.get(QUICKBAR_HIDDEN_KEY) === "1");
   // Frozen at mount so tiles don't reshuffle under the cursor; the new order
   // applies the next time the bar mounts (i.e. after a navigation).
   const [usage] = useState(readUsage);
-  const actions = useMemo(() => orderedActions(usage), [usage]);
+
+  const actions = useMemo(() => {
+    const list = items
+      .map((it) => (typeof it === "string" ? REGISTRY[it] : it))
+      .filter(Boolean);
+    if (list.length <= 1) return list;
+    const [lead, ...rest] = list;
+    const restOrdered = rest
+      .map((a, i) => ({ a, i, count: Number(usage[a.key]) || 0 }))
+      .sort((x, y) => y.count - x.count || x.i - y.i)
+      .map((e) => e.a);
+    return [lead, ...restOrdered];
+  }, [items, usage]);
+
+  if (hidden) return null;
 
   const toggle = () => {
     setCollapsed((c) => {
@@ -61,11 +85,20 @@ export default function TopActionBar() {
     });
   };
 
+  const dismiss = () => {
+    safeStorage.set(QUICKBAR_HIDDEN_KEY, "1");
+    setHidden(true);
+    toast("Quick actions hidden", {
+      description: "Turn them back on anytime in Profile → Preferences.",
+    });
+  };
+
   const runAction = (a) => {
     const counts = readUsage();
     counts[a.key] = (Number(counts[a.key]) || 0) + 1;
     safeStorage.set(USAGE_KEY, JSON.stringify(counts));
-    nav(a.to);
+    if (typeof a.onClick === "function") a.onClick();
+    else if (a.to) nav(a.to);
   };
 
   return (
@@ -80,22 +113,34 @@ export default function TopActionBar() {
             What do you want to do next?
           </span>
         </div>
-        <button
-          type="button"
-          data-testid="quickbar-toggle"
-          onClick={toggle}
-          className="text-zinc-500 hover:text-white p-1 rounded-md hover:bg-white/5 transition-colors"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand quick actions" : "Collapse quick actions"}
-        >
-          <ChevronDown className={`w-4 h-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            data-testid="quickbar-toggle"
+            onClick={toggle}
+            className="text-zinc-500 hover:text-white p-1 rounded-md hover:bg-white/5 transition-colors"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand quick actions" : "Collapse quick actions"}
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+          </button>
+          <button
+            type="button"
+            data-testid="quickbar-dismiss"
+            onClick={dismiss}
+            className="text-zinc-500 hover:text-white p-1 rounded-md hover:bg-white/5 transition-colors"
+            title="Don't show again — re-enable in Profile"
+            aria-label="Hide quick actions"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {!collapsed && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
           {actions.map((a, idx) => {
-            const primary = idx === 0; // most-used (or default first) gets the accent
+            const primary = idx === 0; // page lead gets the accent
             return (
               <button
                 key={a.key}

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppShell from "@/pages/AppShell";
-import Dashboard from "@/pages/Dashboard";
+import Home from "@/pages/Home";
 import Chats from "@/pages/Chats";
 import Tasks from "@/pages/Tasks";
 import MyAI from "@/pages/MyAI";
@@ -171,7 +171,7 @@ export default function App() {
 
           {/* Authenticated app shell */}
           <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Home />} />
             <Route path="/chats" element={<Chats />} />
             <Route path="/chats/:chatId" element={<Chats />} />
             <Route path="/projects" element={<ProjectsList />} />
