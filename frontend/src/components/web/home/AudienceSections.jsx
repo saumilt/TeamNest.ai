@@ -181,7 +181,7 @@ export function BusinessSection() {
       <div className="max-w-6xl mx-auto">
         <Reveal className="max-w-3xl">
           <Eyebrow tone="ai" className="mb-4"><span className="inline-flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> For businesses &amp; enterprise</span></Eyebrow>
-          <SectionTitle>Your organization&apos;s intelligence should not disappear when people move on.</SectionTitle>
+          <SectionTitle>Built for organizations that can&apos;t afford to lose what they know.</SectionTitle>
           <SectionSub className="mt-5">
             TeamNest captures what your people know, what they discuss, and what AI can reason
             across — so company knowledge stays available, grows over time, and can be

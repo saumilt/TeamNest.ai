@@ -129,12 +129,12 @@ function HeroWorkspaceMock() {
 
 const HERO_COPY = {
   default: {
-    headline: "Where people and AI think together.",
-    sub: "TeamNest brings human conversations, multiple AI models, research, files, tasks, and knowledge into one connected workspace. Work independently, collaborate with classmates, manage a team, or build intelligence across an entire organization.",
+    headline: "Where people and AI think together — so your intelligence never leaves.",
+    sub: "Your organization's knowledge shouldn't disappear when people move on. TeamNest brings human conversations, multiple AI models, research, files, tasks, and knowledge into one connected workspace — capturing what your people know so it stays, grows over time, and transfers to whoever needs it next. Work independently, collaborate with classmates, manage a team, or build intelligence across an entire organization.",
   },
   alt: {
-    headline: "Your work, research, and AI — in one place.",
-    sub: "Use multiple AI assistants, collaborate with people, organize research, manage tasks, and keep everything you learn connected by project.",
+    headline: "Your work, research, and AI — connected, and never lost.",
+    sub: "Your organization's knowledge shouldn't disappear when people move on. Use multiple AI assistants, collaborate with people, organize research, and manage tasks — with everything you learn captured and connected by project, from a single person to an entire organization.",
   },
 };
 

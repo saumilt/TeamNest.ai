@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 151 (web) — Unified marketing hero messaging
+- Blended the enterprise hook into the homepage hero (`components/web/home/Hero.jsx`, default + alt variants). Headline: "Where people and AI think together — so your intelligence never leaves." Sub now leads with "Your organization's knowledge shouldn't disappear when people move on." + the connected-workspace + audience-breadth copy.
+- `AudienceSections.jsx` BusinessSection headline changed to "Built for organizations that can't afford to lose what they know." to avoid duplicating the hero verbatim.
+- Verified via screenshot on `/` (HomeV2). Copy-only change; redeploy (Publish) required to reach production teamnest.ai.
+
+
 ### Iteration 150 (web) — Universal Search / Command Palette (⌘K) + example prompts in empty states
 - **Command Palette** (`components/CommandPalette.jsx`, mounted once in `AppShell.jsx`): global `⌘K` / `Ctrl+K` hotkey (toggle) + `window` event `tn:command-palette` (via `openCommandPalette()`); also opened from a new Sidebar **Search** button (`nav-command-palette`, shows a `⌘K` kbd hint). Portal overlay + backdrop, cmdk-powered fuzzy filter, ↑↓/Enter/Esc + backdrop-click close, query resets on close. Groups: **Quick actions** (new chat/group/project, host meeting, ask my AI, compare models, invite, upload docs, daily standup), **Message a person** (workspace members → opens existing direct chat or creates one), **Chats**, **Research threads** (→ `/chats/{chat_id}?thread={id}`), **Projects** (→ `/projects/{id}`), and **Go to** (all app routes, with enterprise/workspace-ai gated to owner/admin/super and superadmin gated). Data lazy-loaded once per session from `/chats`, `/ai/threads`, `/folders`, `/workspace/members`. Test ids: `command-palette`, `command-palette-input`, `command-act-*`, `command-nav-*`, `command-chat-<id>`, `command-thread-<id>`, `command-project-<id>`, `command-person-<id>`.
 - **Empty-state example prompts** (P1): `Research.jsx` empty state now shows 4 clickable research example chips (`research-example-*`) that route to `/my-ai?ask=<prompt>` (prefills `@ai <prompt>` in the personal AI composer). `Projects.jsx` (ProjectsList) empty state shows 4 project example chips (`project-example-*`) that open the New folder dialog PREFILLED with name+description.
