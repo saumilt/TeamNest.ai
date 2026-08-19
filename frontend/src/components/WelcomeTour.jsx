@@ -61,6 +61,9 @@ export default function WelcomeTour() {
     }
     try {
       if (!window.localStorage.getItem(seenKey(user.id))) {
+        // Persist immediately so the welcome shows at most once per user —
+        // even if they navigate away or reload without clicking close.
+        window.localStorage.setItem(seenKey(user.id), "1");
         setVariant("welcome");
         setOpen(true);
         setStep(0);

@@ -7,6 +7,7 @@ import ResizableEdge from "@/components/ui-v2/ResizableEdge";
 import safeStorage from "@/lib/safeStorage";
 import { toast } from "sonner";
 import { openShowMeHow } from "@/lib/showMeHow";
+import { openCommandPalette } from "@/components/CommandPalette";
 import {
         MessageSquare,
         LayoutDashboard,
@@ -27,6 +28,7 @@ import {
         Compass,
         PanelLeftClose,
         Pin,
+        Search,
 } from "lucide-react";
 
 const PRIMARY = [
@@ -231,6 +233,23 @@ export default function Sidebar() {
 
       {/* Primary nav */}
       <nav className={`flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-3"} space-y-0.5`}>
+        <button
+          type="button"
+          data-testid="nav-command-palette"
+          onClick={openCommandPalette}
+          title="Search — ⌘K"
+          className={`w-full flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors mb-1 text-ink-dim hover:bg-white/[0.03] hover:text-ink`}
+        >
+          <Search className="w-5 h-5 shrink-0" strokeWidth={1.8} />
+          {!collapsed && (
+            <>
+              <span className="truncate">Search</span>
+              <kbd className="ml-auto text-[10px] font-mono text-zinc-600 border border-white/10 rounded px-1.5 py-0.5">
+                ⌘K
+              </kbd>
+            </>
+          )}
+        </button>
         {PRIMARY.map((n) => (
           <NavLink
             key={n.to}

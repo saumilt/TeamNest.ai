@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles, Zap } from "lucide-react";
+import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles, Zap, Wand2 } from "lucide-react";
 import MfaSettings from "@/components/MfaSettings";
 import safeStorage from "@/lib/safeStorage";
 import { QUICKBAR_HIDDEN_KEY } from "@/components/TopActionBar";
@@ -15,6 +15,7 @@ export default function Profile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [savingPersona, setSavingPersona] = useState(false);
 
   const [form, setForm] = useState({
     name: user?.name || "",
@@ -23,6 +24,27 @@ export default function Profile() {
   });
   const [pwd, setPwd] = useState({ current: "", next: "" });
   const [emailForm, setEmailForm] = useState({ new_email: "", password: "" });
+
+  const PERSONAS = [
+    { id: "personal", label: "Just me" },
+    { id: "student", label: "Student" },
+    { id: "team", label: "A team" },
+    { id: "business", label: "Business" },
+    { id: "enterprise", label: "Enterprise" },
+  ];
+  const savePersona = async (persona) => {
+    if (persona === user?.persona) return;
+    setSavingPersona(true);
+    try {
+      await api.patch("/user/onboarding", { persona, completed: true });
+      await refresh();
+      toast.success("Home tailored to you");
+    } catch {
+      toast.error("Couldn't update — please try again");
+    } finally {
+      setSavingPersona(false);
+    }
+  };
 
   const saveProfile = async (e) => {
     e.preventDefault();
@@ -292,6 +314,35 @@ export default function Profile() {
           >
             Show quick actions
           </Button>
+        </div>
+        <div className="p-6 border-t border-white/5" data-testid="profile-persona">
+          <div className="text-sm text-zinc-200 flex items-center gap-1.5 mb-1">
+            <Wand2 className="w-3.5 h-3.5 text-yellow-300" /> How you use TeamNest
+          </div>
+          <div className="text-[13px] text-zinc-500 mb-3">
+            Sets which shortcuts and example prompts your Home highlights.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {PERSONAS.map((p) => {
+              const active = user?.persona === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-testid={`profile-persona-${p.id}`}
+                  disabled={savingPersona}
+                  onClick={() => savePersona(p.id)}
+                  className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors disabled:opacity-50 ${
+                    active
+                      ? "border-yellow-400/60 bg-yellow-400/10 text-yellow-300"
+                      : "border-white/10 bg-transparent text-zinc-300 hover:bg-white/5 hover:border-yellow-400/40"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
     </div>

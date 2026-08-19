@@ -20,6 +20,13 @@ import {
   Users,
 } from "lucide-react";
 
+const PROJECT_EXAMPLES = [
+  { name: "Product launch plan", description: "Everything for shipping our next launch — research, tasks, and decisions." },
+  { name: "Market research", description: "Competitor analysis, trends, and findings for a new opportunity." },
+  { name: "Client project", description: "Deliverables, meetings, and notes for a specific client engagement." },
+  { name: "Team knowledge base", description: "Shared docs, decisions, and reference material for the team." },
+];
+
 export function ProjectsList() {
   const [folders, setFolders] = useState([]);
   const [showNew, setShowNew] = useState(false);
@@ -42,6 +49,12 @@ export function ProjectsList() {
     toast.success("Folder created");
   };
 
+  const openNewWith = (n, d) => {
+    setName(n);
+    setDescription(d);
+    setShowNew(true);
+  };
+
   return (
     <div className="p-6 lg:p-10">
       <div className="flex items-end justify-between mb-10">
@@ -60,23 +73,53 @@ export function ProjectsList() {
         </Button>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5 border border-white/5">
-        {folders.map((f) => (
-          <Link
-            key={f.id}
-            to={`/projects/${f.id}`}
-            data-testid={`project-${f.id}`}
-            className="bg-[#0a0a0a] p-6 hover:bg-white/[0.03] transition-colors group"
-          >
-            <FolderKanban className="w-5 h-5 text-blue-400 mb-4" />
-            <div className="font-display text-xl font-bold tracking-tight mb-1">{f.name}</div>
-            <div className="text-sm text-zinc-500 line-clamp-2">{f.description || "—"}</div>
-            <div className="mt-4 label-mono group-hover:text-yellow-400">
-              OPEN <ArrowRight className="inline w-3 h-3" />
+      {folders.length === 0 ? (
+        <div className="border border-white/5 p-8 sm:p-12">
+          <div className="max-w-lg">
+            <FolderKanban className="w-6 h-6 text-blue-400 mb-4" />
+            <h3 className="font-display text-2xl font-bold tracking-tight mb-2">No projects yet</h3>
+            <p className="text-zinc-500 mb-6">
+              Project folders group your research, tasks, and chats in one place.
+              Start from an example:
+            </p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {PROJECT_EXAMPLES.map((ex) => (
+                <button
+                  key={ex.name}
+                  type="button"
+                  data-testid={`project-example-${ex.name.replace(/\s+/g, "-").toLowerCase()}`}
+                  onClick={() => openNewWith(ex.name, ex.description)}
+                  className="group text-left rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-blue-400/40 px-4 py-3 transition-colors"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderKanban className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 shrink-0" strokeWidth={1.8} />
+                    <span className="text-sm font-medium text-zinc-100">{ex.name}</span>
+                  </div>
+                  <div className="text-xs text-zinc-500 line-clamp-2">{ex.description}</div>
+                </button>
+              ))}
             </div>
-          </Link>
-        ))}
-      </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5 border border-white/5">
+          {folders.map((f) => (
+            <Link
+              key={f.id}
+              to={`/projects/${f.id}`}
+              data-testid={`project-${f.id}`}
+              className="bg-[#0a0a0a] p-6 hover:bg-white/[0.03] transition-colors group"
+            >
+              <FolderKanban className="w-5 h-5 text-blue-400 mb-4" />
+              <div className="font-display text-xl font-bold tracking-tight mb-1">{f.name}</div>
+              <div className="text-sm text-zinc-500 line-clamp-2">{f.description || "—"}</div>
+              <div className="mt-4 label-mono group-hover:text-yellow-400">
+                OPEN <ArrowRight className="inline w-3 h-3" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent className="bg-[#0a0a0a] border-white/10 rounded-sm">

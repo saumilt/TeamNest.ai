@@ -4,6 +4,13 @@ import { api } from "@/lib/api";
 import { Sparkles } from "lucide-react";
 import TopActionBar from "@/components/TopActionBar";
 
+const RESEARCH_EXAMPLES = [
+  "Compare three competitors in my industry and summarize their strengths",
+  "Research a market trend and outline the key opportunities",
+  "Summarize my uploaded documents into a one-page brief",
+  "Explain a complex topic simply, with pros and cons",
+];
+
 export default function Research() {
   const [threads, setThreads] = useState([]);
   const nav = useNavigate();
@@ -33,8 +40,29 @@ export default function Research() {
 
       <div className="border border-white/5">
         {threads.length === 0 && (
-          <div className="p-8 text-center text-zinc-500">
-            No research yet. Start a chat and click <span className="text-yellow-400">Research</span>.
+          <div className="p-8 sm:p-12">
+            <div className="max-w-lg">
+              <Sparkles className="w-6 h-6 text-yellow-400 mb-4" />
+              <h3 className="font-display text-2xl font-bold tracking-tight mb-2">No research yet</h3>
+              <p className="text-zinc-500 mb-6">
+                Ask your AI anything — it queries multiple models and saves the answer here.
+                Try one of these to get started:
+              </p>
+              <div className="flex flex-col gap-2">
+                {RESEARCH_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    data-testid={`research-example-${ex.slice(0, 16).replace(/\s+/g, "-").toLowerCase()}`}
+                    onClick={() => nav(`/my-ai?ask=${encodeURIComponent(ex)}`)}
+                    className="group flex items-center gap-3 text-left rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-yellow-400/40 px-4 py-3 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4 text-zinc-500 group-hover:text-yellow-400 shrink-0" strokeWidth={1.8} />
+                    <span className="text-sm text-zinc-200">{ex}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         {threads.map((t) => (

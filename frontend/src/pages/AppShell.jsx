@@ -10,6 +10,8 @@ import CreditsBadge from "@/components/CreditsBadge";
 import BudgetNudge from "@/components/BudgetNudge";
 import ForcePasswordChange from "@/components/ForcePasswordChange";
 import ShowMeHow from "@/components/ShowMeHow";
+import ChecklistNudge from "@/components/ChecklistNudge";
+import CommandPalette from "@/components/CommandPalette";
 import useUnreadTitle from "@/hooks/useUnreadTitle";
 
 /** App shell for authenticated routes.
@@ -56,6 +58,8 @@ export default function AppShell() {
       <CreditsBadge />
       <BudgetNudge />
       <ShowMeHow />
+      <ChecklistNudge />
+      <CommandPalette />
     </div>
   );
 }
