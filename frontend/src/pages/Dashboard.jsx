@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import TopActionBar from "@/components/TopActionBar";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
 import {
   MessageSquare,
@@ -138,6 +139,7 @@ export default function Dashboard({ variant, onChangeLook }) {
         <IntelligenceBanner />
       </div>
 
+      <PersonaNudge />
       <SetupChecklist />
 
       <div className="mb-8">

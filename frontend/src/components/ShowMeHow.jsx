@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { ArrowRight, ArrowLeft, ChevronRight, ListChecks } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ArrowRight, ArrowLeft, ChevronRight, ListChecks, X } from "lucide-react";
 import { WALKTHROUGHS, getWalkthrough } from "@/lib/walkthroughs";
 import { openSetupChecklist } from "@/lib/showMeHow";
 
+const COACH_WIDTH = 340;
+
 /** Global host for the "Show Me How" walkthroughs. Mounted once in AppShell;
- *  opened from anywhere via window events (see lib/showMeHow.js). */
+ *  opened from anywhere via window events (see lib/showMeHow.js). When a step
+ *  targets an on-screen element (e.g. a sidebar button) it spotlights it;
+ *  otherwise it falls back to a centered modal. */
 export default function ShowMeHow() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(null); // walkthrough object, or null = menu
   const [step, setStep] = useState(0);
+  const [rect, setRect] = useState(null); // spotlight target rect
 
   useEffect(() => {
     const onMenu = () => {
@@ -34,40 +40,101 @@ export default function ShowMeHow() {
     };
   }, []);
 
-  const close = () => setOpen(false);
+  // Resolve + track the spotlight target for the current step.
+  const targetSel = active ? active.steps[step]?.target || active.target : null;
+  useLayoutEffect(() => {
+    if (!open || !targetSel) {
+      setRect(null);
+      return;
+    }
+    const el = document.querySelector(targetSel);
+    if (!el) {
+      setRect(null);
+      return;
+    }
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    const update = () => {
+      const found = document.querySelector(targetSel);
+      setRect(found ? found.getBoundingClientRect() : null);
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, targetSel, step]);
 
+  const close = () => setOpen(false);
   const goTo = (to) => {
     close();
     nav(to);
   };
 
+  const spotlight = open && !!active && !!rect;
+  const guideProps = {
+    w: active,
+    step,
+    setStep,
+    onBackToMenu: () => setActive(null),
+    onGoTo: goTo,
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-[#141414] border-white/10 text-white max-w-lg">
-        <DialogTitle className="sr-only">Show Me How</DialogTitle>
-        {!active ? (
-          <MenuView
-            onPick={(w) => {
-              setActive(w);
-              setStep(0);
-            }}
-            onChecklist={() => {
-              close();
-              openSetupChecklist();
-              nav("/dashboard");
-            }}
-          />
-        ) : (
-          <GuideView
-            w={active}
-            step={step}
-            setStep={setStep}
-            onBackToMenu={() => setActive(null)}
-            onGoTo={goTo}
-          />
+    <>
+      {/* Menu + centered fallback guide (no on-screen target) */}
+      <Dialog open={open && !spotlight} onOpenChange={(v) => !v && close()}>
+        <DialogContent className="bg-[#141414] border-white/10 text-white max-w-lg">
+          <DialogTitle className="sr-only">Show Me How</DialogTitle>
+          <DialogDescription className="sr-only">Short guided walkthroughs of TeamNest features.</DialogDescription>
+          {!active ? (
+            <MenuView
+              onPick={(w) => {
+                setActive(w);
+                setStep(0);
+              }}
+              onChecklist={() => {
+                close();
+                openSetupChecklist();
+                nav("/dashboard");
+              }}
+            />
+          ) : (
+            <GuideBody {...guideProps} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Spotlight overlay when a step targets a real on-screen element */}
+      {spotlight &&
+        createPortal(
+          <div className="fixed inset-0 z-[100]" data-testid="show-me-how-spotlight">
+            <div className="absolute inset-0" onClick={close} />
+            <div
+              className="fixed rounded-xl border-2 border-yellow-400 transition-all duration-200"
+              style={{
+                top: rect.top - 6,
+                left: rect.left - 6,
+                width: rect.width + 12,
+                height: rect.height + 12,
+                boxShadow: "0 0 0 9999px rgba(0,0,0,0.72)",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              className="fixed w-[340px] max-w-[92vw] rounded-2xl border border-white/10 bg-[#141414] text-white p-4 shadow-2xl"
+              style={{
+                top: Math.min(Math.max(rect.top, 16), window.innerHeight - 340),
+                left: Math.min(rect.right + 16, window.innerWidth - COACH_WIDTH - 16),
+              }}
+            >
+              <GuideBody {...guideProps} onClose={close} compact />
+            </div>
+          </div>,
+          document.body
         )}
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
 
@@ -108,19 +175,26 @@ function MenuView({ onPick, onChecklist }) {
   );
 }
 
-function GuideView({ w, step, setStep, onBackToMenu, onGoTo }) {
+function GuideBody({ w, step, setStep, onBackToMenu, onGoTo, onClose, compact }) {
   const total = w.steps.length;
   const last = step === total - 1;
   const s = w.steps[step];
   return (
     <div data-testid="show-me-how-guide">
-      <button
-        type="button"
-        onClick={onBackToMenu}
-        className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-white mb-3"
-      >
-        <ArrowLeft className="w-3 h-3" /> All guides
-      </button>
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={onBackToMenu}
+          className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-white"
+        >
+          <ArrowLeft className="w-3 h-3" /> All guides
+        </button>
+        {compact && onClose && (
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-white p-0.5" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
       <div className="flex items-center gap-3 mb-4">
         <div className="w-11 h-11 rounded-xl bg-yellow-400 text-black flex items-center justify-center shrink-0">
@@ -130,17 +204,13 @@ function GuideView({ w, step, setStep, onBackToMenu, onGoTo }) {
           <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
             Step {step + 1} of {total}
           </div>
-          <h2 className="font-display text-lg font-bold tracking-tight">{w.title}</h2>
+          <h2 className={`font-display font-bold tracking-tight ${compact ? "text-base" : "text-lg"}`}>{w.title}</h2>
         </div>
       </div>
 
-      {/* progress dots */}
       <div className="flex gap-1.5 mb-5">
         {w.steps.map((_, i) => (
-          <div
-            key={i}
-            className={`h-1 flex-1 rounded-full ${i <= step ? "bg-yellow-400" : "bg-white/10"}`}
-          />
+          <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? "bg-yellow-400" : "bg-white/10"}`} />
         ))}
       </div>
 

@@ -7,6 +7,7 @@ export const WALKTHROUGHS = [
     title: "How to start AI Research",
     blurb: "Ask one AI or compare several — and keep every answer.",
     icon: Sparkles,
+    target: "[data-testid='nav-research']",
     cta: { label: "Open AI Research", to: "/research" },
     steps: [
       { title: "Open AI Research", body: "AI Research lives in the left nav (and on your Home). It's where you ask AI and keep every answer saved." },
@@ -20,6 +21,7 @@ export const WALKTHROUGHS = [
     title: "How to host a meeting",
     blurb: "Meet, transcribe, summarize, and turn talk into tasks.",
     icon: Video,
+    target: "[data-testid='nav-calls']",
     cta: { label: "Go to Meetings", to: "/calls" },
     steps: [
       { title: "Start or schedule", body: "Open Meetings to start an instant call or schedule one for later — everyone joins from web or mobile." },
@@ -33,6 +35,7 @@ export const WALKTHROUGHS = [
     title: "How TeamNest memory works",
     blurb: "Your work is remembered — and stays when people move on.",
     icon: Brain,
+    target: "[data-testid='nav-ai-memory']",
     cta: { label: "Open Memory", to: "/ai-memory" },
     steps: [
       { title: "TeamNest remembers", body: "As you chat, research, and decide, TeamNest quietly saves the important facts and decisions." },
@@ -46,6 +49,7 @@ export const WALKTHROUGHS = [
     title: "How to build an AI employee",
     blurb: "Reusable AI teammates that work inside your chats.",
     icon: Bot,
+    target: "[data-testid='nav-employees']",
     cta: { label: "Hire an AI Employee", to: "/employees" },
     steps: [
       { title: "What's an AI employee?", body: "A reusable AI teammate with a role, instructions, and its own knowledge — it works right inside your chats." },

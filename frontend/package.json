@@ -48,6 +48,7 @@
     "@radix-ui/react-tooltip": "^1.2.4",
     "@simplewebauthn/browser": "^13.3.0",
     "axios": "^1.8.4",
+    "canvas-confetti": "^1.9.4",
     "capacitor-native-biometric": "^4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

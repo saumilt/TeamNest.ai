@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Sparkles, MessageSquare, Layers, ArrowRight } from "lucide-react";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
 import HomeComposer from "@/components/HomeComposer";
 import FeatureShortcuts from "@/components/FeatureShortcuts";
@@ -45,6 +46,7 @@ export default function FocusHome({ variant, onChangeLook }) {
       </div>
 
       <IntelligenceBanner />
+      <PersonaNudge />
       <SetupChecklist />
 
       <div className="mb-3">

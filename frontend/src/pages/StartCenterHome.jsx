@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
 import { personaConfig } from "@/lib/persona";
 
@@ -105,6 +106,7 @@ export default function StartCenterHome({ variant, onChangeLook }) {
       </div>
 
       <IntelligenceBanner />
+      <PersonaNudge />
       <SetupChecklist />
 
       {/* Featured — AI Research */}

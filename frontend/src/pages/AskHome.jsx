@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
+import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
 import HomeComposer from "@/components/HomeComposer";
 import FeatureShortcuts from "@/components/FeatureShortcuts";
@@ -27,6 +28,7 @@ export default function AskHome({ variant, onChangeLook }) {
       </div>
 
       <IntelligenceBanner />
+      <PersonaNudge />
       <SetupChecklist />
 
       <div className="pt-8 pb-10 text-center">
