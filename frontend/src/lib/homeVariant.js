@@ -6,10 +6,10 @@ const KEY = "tn:home:variant";
 const NEW_USER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const HOME_LOOKS = [
-  { value: "classic", label: "Classic", desc: "Dashboard overview with stats" },
+  { value: "classic", label: "Chat View", desc: "Standard overview — chats, tasks & research" },
   { value: "start", label: "Start Center", desc: "Big action cards for every feature" },
-  { value: "ask", label: "Ask AI", desc: "Prompt-first, like ChatGPT" },
-  { value: "focus", label: "Focus", desc: "Calm composer + jump back in, like Claude" },
+  { value: "ask", label: "ChatGPT Layout", desc: "Prompt-first, like ChatGPT" },
+  { value: "focus", label: "Claude Layout", desc: "Calm composer + jump back in, like Claude" },
 ];
 
 const VALID = HOME_LOOKS.map((l) => l.value);

@@ -13,6 +13,10 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 155 (web) — Clearer Home layout switcher labels
+- `HomeLookSwitcher.jsx` button relabeled "Home: {look}" → **"Change layout"**. `homeVariant.js` HOME_LOOKS labels: Classic→**Chat View**, Ask AI→**ChatGPT Layout**, Focus→**Claude Layout** (Start Center kept). Internal values/storage keys unchanged (non-breaking). Verified via screenshot on /dashboard.
+
+
 ### Iteration 154 (web) — Super Admin "Link Domain Guard"
 - `pages/superadmin/UsersTab.jsx`: added `linkDomainIssue()` + `<LinkDomainWarning>` — after generating a reset link, if the link's origin ≠ the admin's current origin (a `PUBLIC_BACKEND_URL` mismatch), an amber warning shows the wrong vs expected domain and offers a one-click **corrected link** (domain swapped to the current origin). Test ids `sa-link-domain-warning`, `sa-copy-corrected-link`. Verified on preview: modal intact, no warning when domains match (correct); warning path triggers on mismatch (the production bug scenario).
 

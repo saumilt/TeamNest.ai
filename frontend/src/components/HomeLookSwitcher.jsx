@@ -5,7 +5,6 @@ import { HOME_LOOKS } from "@/lib/homeVariant";
 /** Small popover to switch the Home look (Classic / Start Center / Ask AI / Focus). */
 export default function HomeLookSwitcher({ current, onChange }) {
   const [open, setOpen] = useState(false);
-  const cur = HOME_LOOKS.find((l) => l.value === current) || HOME_LOOKS[0];
 
   return (
     <div className="relative" data-testid="home-look-switcher">
@@ -16,7 +15,7 @@ export default function HomeLookSwitcher({ current, onChange }) {
         className="flex items-center gap-2 border border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-[11px] h-9 px-3 text-zinc-400 hover:text-white transition-colors"
       >
         <Layout className="w-3.5 h-3.5" />
-        Home: {cur.label}
+        Change layout
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
