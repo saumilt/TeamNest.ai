@@ -34,10 +34,15 @@ export function getHomeVariant(user) {
 }
 
 export function setHomeVariant(v) {
-  safeStorage.set(KEY, normalize(v) || "classic");
+  const nv = normalize(v) || "classic";
+  safeStorage.set(KEY, nv);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("tn:home-variant", { detail: nv }));
+  }
 }
 
-// Post-login landing route for this user's chosen/default Home look.
-export function homeLanding(user) {
-  return getHomeVariant(user) === "classic" ? "/chats" : "/dashboard";
+// Post-login landing route — always the Home page so users land directly on
+// their chosen layout (Chat View / Start Center / ChatGPT / Claude).
+export function homeLanding() {
+  return "/dashboard";
 }

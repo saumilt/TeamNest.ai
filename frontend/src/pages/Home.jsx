@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Dashboard from "@/pages/Dashboard";
 import StartCenterHome from "@/pages/StartCenterHome";
@@ -11,6 +11,13 @@ import { getHomeVariant, setHomeVariant } from "@/lib/homeVariant";
 export default function Home() {
   const { user } = useAuth();
   const [variant, setVariant] = useState(() => getHomeVariant(user));
+
+  // Live-update when the layout is changed anywhere (switcher, welcome picker).
+  useEffect(() => {
+    const onChange = (e) => { if (e?.detail) setVariant(e.detail); };
+    window.addEventListener("tn:home-variant", onChange);
+    return () => window.removeEventListener("tn:home-variant", onChange);
+  }, []);
 
   const onChangeLook = (v) => {
     setHomeVariant(v);

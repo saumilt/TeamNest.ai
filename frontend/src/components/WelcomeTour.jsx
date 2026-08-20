@@ -2,9 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Sparkles, MessageSquareText, Users, Bot, Rocket, ChevronRight,
-  ChevronLeft, X, GitBranch,
+  ChevronLeft, X, GitBranch, Check, Layout,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { getHomeVariant, setHomeVariant } from "@/lib/homeVariant";
+
+// The three layouts offered in the welcome picker (Start Center stays available
+// from the in-app "Change layout" switcher).
+const LAYOUT_CHOICES = [
+  { value: "classic", label: "Chat View", desc: "Standard overview — chats, tasks & research", icon: MessageSquareText },
+  { value: "ask", label: "ChatGPT Layout", desc: "Prompt-first, like ChatGPT", icon: Sparkles },
+  { value: "focus", label: "Claude Layout", desc: "Calm composer, like Claude", icon: Bot },
+];
 
 /**
  * "Welcome to TeamNest — 60 second tour"
@@ -46,9 +55,15 @@ export default function WelcomeTour() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+  const [pickedLayout, setPickedLayout] = useState(() => getHomeVariant(user));
   // "demo" = the sales walkthrough after a demo-login; "welcome" = the short
   // first-time nudge (chat / AI compare / invite) shown once per real user.
   const [variant, setVariant] = useState("demo");
+
+  const chooseLayout = (v) => {
+    setPickedLayout(v);
+    setHomeVariant(v); // dispatches tn:home-variant so the Home page updates live
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -108,6 +123,20 @@ export default function WelcomeTour() {
         </>
       ),
       cta: "Show me",
+    },
+    {
+      key: "w-layout",
+      hero: <SlideHero icon={Layout} />,
+      eyebrow: "Make it yours",
+      title: "Choose your Home layout",
+      body: (
+        <>
+          Prefer a familiar feel? Pick the style you like best — you can switch
+          anytime from <b>Change layout</b> on your Home.
+        </>
+      ),
+      picker: true,
+      cta: "Next",
     },
     {
       key: "w-chat",
@@ -358,6 +387,32 @@ export default function WelcomeTour() {
           )}
 
           {slide.mock}
+
+          {slide.picker && (
+            <div className="mt-3 space-y-2" data-testid="welcome-layout-picker">
+              {LAYOUT_CHOICES.map((l) => {
+                const active = pickedLayout === l.value;
+                return (
+                  <button
+                    key={l.value}
+                    type="button"
+                    data-testid={`welcome-layout-${l.value}`}
+                    onClick={() => chooseLayout(l.value)}
+                    className={`w-full text-left flex items-center gap-3 rounded-xl p-2.5 ring-1 transition-colors ${active ? "bg-amber-400/10 ring-amber-400/50" : "bg-surface-2/60 ring-hairline hover:bg-surface-2"}`}
+                  >
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-amber-400/20 text-amber-200" : "bg-white/5 text-ink-dim"}`}>
+                      <l.icon className="w-4 h-4" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] font-semibold text-ink">{l.label}</span>
+                      <span className="block text-[11px] text-ink-dim">{l.desc}</span>
+                    </span>
+                    {active && <Check className="w-4 h-4 text-amber-300 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Progress dots */}
           <div className="flex items-center gap-1.5 mt-5">

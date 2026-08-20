@@ -13,6 +13,12 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 156 (web) — Onboarding layout pick + land-on-choice
+- **Land On Choice** (`homeVariant.js`): `homeLanding()` now always returns `/dashboard`, so users land on their chosen Home layout after login (previously Chat-View/classic users were sent to `/chats`).
+- **Live switching**: `setHomeVariant()` dispatches a `tn:home-variant` CustomEvent; `Home.jsx` listens and re-renders the chosen look immediately (so the switcher AND the welcome picker update the Home live).
+- **Onboarding Pick** (`WelcomeTour.jsx`): added a "Choose your Home layout" slide (2nd in the welcome variant) with three options — Chat View / ChatGPT Layout / Claude Layout (`welcome-layout-picker`, `welcome-layout-{classic|ask|focus}`). Selecting one calls `setHomeVariant` and updates the Home behind the card live. Verified via screenshots (picker shown, live switch to ChatGPT layout, login lands on /dashboard).
+
+
 ### Iteration 155 (web) — Clearer Home layout switcher labels
 - `HomeLookSwitcher.jsx` button relabeled "Home: {look}" → **"Change layout"**. `homeVariant.js` HOME_LOOKS labels: Classic→**Chat View**, Ask AI→**ChatGPT Layout**, Focus→**Claude Layout** (Start Center kept). Internal values/storage keys unchanged (non-breaking). Verified via screenshot on /dashboard.
 
