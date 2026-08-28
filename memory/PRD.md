@@ -13,6 +13,18 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 159 (CI/CD) — Monorepo GitHub Actions + foundational test infra
+- Added three path-filtered GitHub Actions workflows under `.github/workflows/` so a change to one surface only runs that surface's pipeline:
+  - `backend-ci.yml` (paths `backend/**`): installs deps (with the emergentintegrations private index `--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`), runs `flake8` syntax/undefined-name check (`--select=E9,F63,F7,F82`), `pytest --collect-only` (verifies all 1270 tests import — set dummy `MONGO_URL/DB_NAME/JWT_SECRET/PUBLIC_BACKEND_URL/REACT_APP_BACKEND_URL/EXPO_PUBLIC_BACKEND_URL`, Motor client is lazy so no real DB), and the new pure unit tests. Full integration suite (needs a live API + secrets) is intentionally NOT in this pass — to be added as a separate manual workflow later.
+  - `frontend-ci.yml` (paths `frontend/**`): `yarn install --frozen-lockfile` + `CI=true yarn test`.
+  - `mobile-ci.yml` (paths `mobile/**`): `yarn install --frozen-lockfile` + `yarn test --ci`.
+  - All trigger on PR + push to `main`; secrets referenced via GitHub Secrets only (no real URLs/keys committed).
+- Backend test infra: new pure unit test `tests/test_unit_resolve_app_base.py` (6 tests) covering the emailed-link origin allow-list (`resolve_app_base` / `_link_host_allowed`) — no network/DB. Passes locally.
+- Frontend test infra (was none): added `@testing-library/react@16`, `@testing-library/jest-dom@7`, `@testing-library/dom@10`, `@testing-library/user-event@14` (devDeps); `src/setupTests.js` (jest-dom); jest `moduleNameMapper` for the `@/` alias added to `craco.config.js`. Tests: `src/lib/persona.test.js` + `src/components/ui/button.test.jsx` (RTL) — 4 pass.
+- Mobile test infra (was none): added `jest-expo@~54`, `jest@30`, `@testing-library/react-native@14` (devDeps; no react-test-renderer per React 19); `"jest": {"preset":"jest-expo"}` + `"test":"jest"` in `package.json`. Test: `src/components/groupAvatarPresets.test.ts` — 5 pass.
+- Fixed a pre-existing blocking lint error: service workers used a bare `importScripts` → switched to `self.importScripts` in `frontend/public/service-worker.js` + `OneSignalSDKWorker.js`.
+- NOT run through the testing_agent (this is CI/test tooling; verified by running each suite locally: backend 6/6 + collect 1270/0-errors + flake8 clean, frontend 4/4, mobile 5/5).
+
 ### Iteration 158 (repo hygiene + docs) — Full credential scrub + README
 - Moved ALL remaining credentials out of tracked code into gitignored `backend/.env`: `Demo@2026`→`DEMO_PASSWORD`, `secret123`→`TEST_PASSWORD`, `Summer$123`→`RADCITI_TEST_PASSWORD` (plus `SUPERADMIN_TEST_PASSWORD`, `RC_WEBHOOK_AUTH` from iter 157). 70 files parameterized to `os.environ.get(..., "<generic placeholder>")`; `seed.py` default changed to a generic placeholder; docs use placeholders. `conftest.py` loads `backend/.env`. Verified: 1264 tests collect (0 errors), py_compile OK, all env vars resolve.
 - Final 3-way scan across 9492 tracked files: [1] real passwords NONE, [2] real API secrets NONE, [3] live-format patterns NONE. (Benign: `sk_test_emergent` sentinel, `nest-app-prep` subdomain.)

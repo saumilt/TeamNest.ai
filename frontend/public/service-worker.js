@@ -10,7 +10,7 @@
  * (safe for the dev preview + HMR), and only falls back to cache offline.
  */
 try {
-  importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+  self.importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 } catch (e) {
   /* OneSignal optional — app shell still works without it */
 }
