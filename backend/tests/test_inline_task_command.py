@@ -15,7 +15,7 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
-PWD = "Demo@2026"
+PWD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 def _login(email, password=PWD):

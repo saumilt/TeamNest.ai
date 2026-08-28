@@ -32,7 +32,7 @@ BASE_URL = _base_url()
 API = f"{BASE_URL}/api"
 
 
-def _login(email: str, password: str = "Demo@2026") -> str:
+def _login(email: str, password: str = os.environ.get("DEMO_PASSWORD", "DemoPass123!")) -> str:
     r = requests.post(f"{API}/auth/login", json={"email": email, "password": password}, timeout=15)
     assert r.status_code == 200, f"Login failed for {email}: {r.status_code} {r.text}"
     return r.json()["token"]

@@ -23,8 +23,8 @@ BASE_URL = os.environ.get(
 
 PROJECT_ID = "dc4942dc-c4a5-4020-8419-fef40ea6a19a"
 CHAT_ID = "d553cda0-62f4-4c2d-aae1-4b168208ed1e"
-AMIT = ("amit@demo.team", "Demo@2026")
-RAJ = ("raj@demo.team", "Demo@2026")
+AMIT = ("amit@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
+RAJ = ("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 # ─── Session helpers ─────────────────────────────────────────────────────

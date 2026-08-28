@@ -15,9 +15,9 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://nest-app-prep.previe
 SAM_EMAIL = "sam@funasia.net"
 SAM_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 MATE_EMAIL = "mate1@test.io"
-MATE_PASSWORD = "secret123"
+MATE_PASSWORD = os.environ.get("TEST_PASSWORD", "TestPass123!")
 RAJ_EMAIL = "raj@demo.team"
-RAJ_PASSWORD = "Demo@2026"
+RAJ_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 def _login(email, password):

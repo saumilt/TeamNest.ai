@@ -55,7 +55,7 @@ def test_invite_existing_email_flags_added_to_existing_user():
 
 
 def test_invite_forbidden_for_member_role():
-    s = _login("raj@demo.team", "Demo@2026")
+    s = _login("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
     r = s.post(f"{BASE_URL}/workspace/invite",
                json={"name": "X", "email": f"blocked+{int(time.time())}@example.com",
                      "role": "member"})

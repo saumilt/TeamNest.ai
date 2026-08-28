@@ -28,7 +28,7 @@ def admin_token():
 def member_token():
     r = requests.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": "raj@demo.team", "password": "Demo@2026"},
+        json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         timeout=30,
     )
     if r.status_code != 200:

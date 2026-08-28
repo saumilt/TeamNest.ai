@@ -33,7 +33,7 @@ def owner_session():
 @pytest.fixture(scope="module")
 def member_session():
     s = requests.Session()
-    r = s.post(f"{API}/auth/login", json={"email": "raj@demo.team", "password": "Demo@2026"}, timeout=20)
+    r = s.post(f"{API}/auth/login", json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}, timeout=20)
     if r.status_code != 200:
         pytest.skip("raj demo account login failed")
     tok = r.json()["token"]

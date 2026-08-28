@@ -13,11 +13,18 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Iteration 158 (repo hygiene + docs) — Full credential scrub + README
+- Moved ALL remaining credentials out of tracked code into gitignored `backend/.env`: `Demo@2026`→`DEMO_PASSWORD`, `secret123`→`TEST_PASSWORD`, `Summer$123`→`RADCITI_TEST_PASSWORD` (plus `SUPERADMIN_TEST_PASSWORD`, `RC_WEBHOOK_AUTH` from iter 157). 70 files parameterized to `os.environ.get(..., "<generic placeholder>")`; `seed.py` default changed to a generic placeholder; docs use placeholders. `conftest.py` loads `backend/.env`. Verified: 1264 tests collect (0 errors), py_compile OK, all env vars resolve.
+- Final 3-way scan across 9492 tracked files: [1] real passwords NONE, [2] real API secrets NONE, [3] live-format patterns NONE. (Benign: `sk_test_emergent` sentinel, `nest-app-prep` subdomain.)
+- Created `README.md`: local run steps (backend uvicorn :8001, web `yarn start` :3000, mobile `yarn expo start`, Mongo, seed), required env vars per surface, test instructions, project structure, and a GitHub Flow branch strategy + CI secrets guidance.
+- Fixed a pre-existing lint error in `frontend/public/OneSignalSDKWorker.js` (`/* global importScripts */`).
+
+
 ### Iteration 157 (repo hygiene) — Secret-proofing before GitHub push
 - `.gitignore`: added rules so real `.env` files (backend/frontend/mobile) are never committed; keep `*.env.example` templates. Added `test_reports/` (untracked 231 internal QA artifacts via `git rm --cached`; they held the prod super-admin password + an RC webhook token).
 - Created `.env.example` templates (backend/frontend/mobile) documenting every key with placeholder values (no real secrets).
 - Removed the hardcoded **prod super-admin password** from 21 tracked test files + a RevenueCat webhook token from 1 test — parameterized to `os.environ.get("SUPERADMIN_TEST_PASSWORD")` / `RC_WEBHOOK_AUTH`; added `SUPERADMIN_TEST_PASSWORD` to the gitignored `backend/.env`; `conftest.py` now `load_dotenv(backend/.env)` so tests still pass. Verified 1264 tests collect with 0 errors.
-- Final scan: no hard secret (API keys/tokens/prod password) in any git-tracked file. Remaining scan matches are false positives: `STRIPE_API_KEY=sk_test_emergent` (Emergent mode sentinel) and `DEEPGRAM_API_KEY=nest-app-prep` (preview subdomain). NOTE: demo/seed passwords (`Demo@2026` in 61 files incl. seed.py, `secret123` in 6) remain as non-production fixtures — flagged to user.
+- Final scan: no hard secret (API keys/tokens/prod password) in any git-tracked file. Remaining scan matches are false positives: `STRIPE_API_KEY=sk_test_emergent` (Emergent mode sentinel) and `DEEPGRAM_API_KEY=nest-app-prep` (preview subdomain). NOTE: demo/seed passwords (`DemoPass123!` in 61 files incl. seed.py, `TestPass123!` in 6) remain as non-production fixtures — flagged to user.
 
 
 ### Iteration 156 (web) — Onboarding layout pick + land-on-choice

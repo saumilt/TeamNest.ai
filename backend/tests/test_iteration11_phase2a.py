@@ -35,7 +35,7 @@ def amit_user(amit_token):
 def raj_token():
     r = requests.post(
         f"{BASE}/api/auth/login",
-        json={"email": "raj@demo.team", "password": "Demo@2026"},
+        json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         timeout=20,
     )
     assert r.status_code == 200, r.text

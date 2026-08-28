@@ -184,7 +184,7 @@ Wait ~15-20 min. Then the build appears in App Store Connect → TestFlight.
    - Used for tracking: **No**
 6. **Privacy Policy URL**: `https://teamnest.ai/privacy`
 7. **App Review Information**:
-   - Sign-in info: `amit@demo.team` / `Demo@2026` (demo account — pre-seeded)
+   - Sign-in info: `amit@demo.team` / `DemoPass123!` (demo account — pre-seeded)
    - Contact: your team's email + phone
    - Notes: `Use the "Try demo workspace" button on the welcome screen for fastest review — pre-populated workspace with 5 users, sample chats, tasks, and AI threads.`
 8. **Version Information** (1.0.0):
@@ -280,7 +280,7 @@ Then re-run `yarn cap:android` / `yarn cap:ios` and repeat the upload steps.
 | TestFlight build never appears | Code signing mismatch | Check Apple Developer → Certificates and re-import in Xcode |
 | Push notifications don't arrive on device | APNs key missing | Apple Developer → Keys → Create APNs Key → upload to your push backend |
 | Camera permission popup missing | `Info.plist` stripped | Already configured — confirm `NSCameraUsageDescription` is in `frontend/ios/App/App/Info.plist` |
-| App rejected: "metadata mismatch" | Demo creds not working | Verify `amit@demo.team` / `Demo@2026` still seeded in production |
+| App rejected: "metadata mismatch" | Demo creds not working | Verify `amit@demo.team` / `DemoPass123!` still seeded in production |
 
 ---
 
@@ -309,7 +309,7 @@ Then re-run `yarn cap:android` / `yarn cap:ios` and repeat the upload steps.
 Before tapping **Submit for Review** on either store:
 
 - [ ] App launches and loads `https://teamnest.ai` correctly on a real device
-- [ ] Demo login (`amit@demo.team` / `Demo@2026`) works through the native shell
+- [ ] Demo login (`amit@demo.team` / `DemoPass123!`) works through the native shell
 - [ ] Camera, mic, photo permissions all prompt with friendly copy
 - [ ] Push notification permission prompt appears on first launch
 - [ ] Sign out works (cookie cleared on backend)

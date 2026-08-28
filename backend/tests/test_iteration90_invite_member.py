@@ -25,13 +25,13 @@ def _login(email, password):
 
 @pytest.fixture(scope="module")
 def owner_client():
-    s, u = _login("amit@demo.team", "Demo@2026")
+    s, u = _login("amit@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
     return s, u
 
 
 @pytest.fixture(scope="module")
 def member_client():
-    s, u = _login("raj@demo.team", "Demo@2026")
+    s, u = _login("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
     return s, u
 
 

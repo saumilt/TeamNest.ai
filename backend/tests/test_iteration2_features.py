@@ -24,7 +24,7 @@ def amit():
 def priya():
     r = requests.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": "priya@demo.team", "password": "Demo@2026"},
+        json={"email": "priya@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         timeout=30,
     )
     assert r.status_code == 200, r.text

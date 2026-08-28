@@ -18,7 +18,7 @@ API = f"{BASE_URL}/api"
 SUPER_ADMIN_EMAIL = "sam@funasia.net"
 SUPER_ADMIN_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 DEMO_ADMIN_EMAIL = "amit@demo.team"
-DEMO_ADMIN_PASSWORD = "Demo@2026"
+DEMO_ADMIN_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────

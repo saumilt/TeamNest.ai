@@ -10,7 +10,7 @@ BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
 SUPER_EMAIL = "amit@demo.team"
-SUPER_PW = "Demo@2026"
+SUPER_PW = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 @pytest.fixture(scope="module")

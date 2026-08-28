@@ -26,7 +26,7 @@ BASE_URL = os.environ.get(
 
 # Credentials from /app/memory/test_credentials.md
 FREE_EMAIL = "mate1@test.io"
-FREE_PASSWORD = "secret123"
+FREE_PASSWORD = os.environ.get("TEST_PASSWORD", "TestPass123!")
 UNLIMITED_EMAIL = "sam@funasia.net"
 UNLIMITED_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 

@@ -1,3 +1,4 @@
+import os
 import asyncio, json, os
 import urllib.request
 import websockets
@@ -30,7 +31,7 @@ async def try_ws(url, label):
 
 
 async def main():
-    login = post("/api/auth/login", {"email": "os@radciti.com", "password": "Summer$123"})
+    login = post("/api/auth/login", {"email": "os@radciti.com", "password": os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!")})
     tok = login.get("token") or login.get("access_token")
     print("login ok, token?", bool(tok), "keys:", list(login.keys()))
     wt = get("/api/auth/ws-token", {"Authorization": f"Bearer {tok}"})

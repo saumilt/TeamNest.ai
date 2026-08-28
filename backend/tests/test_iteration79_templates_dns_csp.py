@@ -29,7 +29,7 @@ BASE_URL = _env_url.rstrip("/")
 API = f"{BASE_URL}/api"
 
 DEMO_EMAIL = "amit@demo.team"
-DEMO_PASSWORD = "Demo@2026"
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 EXISTING_PROJECT_ID = "40391fb0-f562-45d8-a7bf-0b10e0c1b49d"  # Restaurant Franchise Management Platform
 

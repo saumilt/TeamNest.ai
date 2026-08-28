@@ -15,7 +15,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
 DEMO_EMAIL = "amit@demo.team"
-DEMO_PASSWORD = "Demo@2026"
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 @pytest.fixture(scope="session")

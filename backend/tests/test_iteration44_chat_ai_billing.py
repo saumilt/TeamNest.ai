@@ -6,7 +6,7 @@ import pytest
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://teamnest.ai")
 API = f"{BASE_URL}/api"
 
-OWNER = {"email": "amit@demo.team", "password": "Demo@2026"}
+OWNER = {"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}
 
 
 @pytest.fixture(scope="module")

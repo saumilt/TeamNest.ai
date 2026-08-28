@@ -23,7 +23,7 @@ def amit_client():
     s.headers.update({"Content-Type": "application/json"})
     r = s.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": "amit@demo.team", "password": "Demo@2026"},
+        json={"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         timeout=30,
     )
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text}"

@@ -23,9 +23,9 @@ if not BASE_URL:
 
 RC_AUTH = os.environ.get("RC_WEBHOOK_AUTH", "")
 OWNER_EMAIL = "amit@demo.team"
-OWNER_PASSWORD = "Demo@2026"
+OWNER_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 MEMBER_EMAIL = "raj@demo.team"
-MEMBER_PASSWORD = "Demo@2026"
+MEMBER_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 def _login(email, password):

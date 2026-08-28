@@ -538,7 +538,7 @@ like native app with easy to use"
 
 **Verified**:
 - ✅ Demo login → `/chats` (Amit Patel, all chats loaded)
-- ✅ Email login (amit@demo.team / Demo@2026) → `/chats`
+- ✅ Email login (amit@demo.team / DemoPass123!) → `/chats`
 - ✅ Zero compile errors / zero hook warnings
 - ✅ Lint clean
 
@@ -897,7 +897,7 @@ Combined regression: **17/17 pass** across iterations 39-41.
 **Backend tests**: `tests/test_iteration43_contact_match.py` — 9/9 pass (backfill, owner matched by raw phone, hash-only path, empty input, auth gating, bulk WhatsApp, 50-row limit, partial garbage handling, bulk auth). Combined regression: **20/20 pass** across iters 41-43.
 
 ## Demo Credentials
-Demo workspace pre-seeded with 5 users at `@demo.team`. Password `Demo@2026`.
+Demo workspace pre-seeded with 5 users at `@demo.team`. Password `DemoPass123!`.
 See `/app/memory/test_credentials.md`.
 
 ### Iteration 31 — Phase 4: Persistent Chat Memory + Shared AI Context (RAG) (Feb 2026)
@@ -1761,7 +1761,7 @@ Pushes can't reach actual devices until the React app calls `OneSignal.login(use
 ### Verified (iter 57 testing agent + post-fix)
 - 12/12 backend pytest pass.
 - 3/3 frontend Playwright pass after the testing agent applied a tiny fix: `GovernancePanel.save()` had been omitting the 3 new fields from its PUT payload (state updated locally but server saw partial body). Fix in place.
-- Demo accounts: amit@demo.team (owner), priya@demo.team (admin), raj@demo.team (member). All password Demo@2026.
+- Demo accounts: amit@demo.team (owner), priya@demo.team (admin), raj@demo.team (member). All password DemoPass123!.
 
 ### Code review hygiene flagged (defer / next pass)
 - `GovernancePanel.save()` builds the body by enumerating keys — adding a new policy field requires 2 edits. Switch to `policy` spread next time we touch this file.
@@ -3392,7 +3392,7 @@ conversation. Replaces the dev-chat-only `DevWorkspacePane`.
 - NewUser gained credits/send_credentials/cc/must_change_password. create_user now optionally
   tops up credits (billing.add_extra_credits) and emails login + a single-use reset link
   (with CC) via mailgun (added cc support to mailgun_service.send_email).
-- Provisioned os@radciti.com / Summer$123 + 10,000 credits + credentials email cc sam
+- Provisioned os@radciti.com / RadcitiPass123! + 10,000 credits + credentials email cc sam
   (PREVIEW DB only — re-run in prod via the live UI with PUBLIC_BACKEND_URL=teamnest.ai).
 ### Dynamic connector folders (connectors.py + gmail/m365 services + ConnectorsPage.jsx)
 - GET /api/connectors/{provider}/folders enumerates real Gmail labels / M365 mail folders

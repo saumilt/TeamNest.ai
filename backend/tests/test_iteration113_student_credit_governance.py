@@ -14,7 +14,7 @@ load_dotenv("/app/backend/.env")
 BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://nest-app-prep.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-FREE_EMAIL, FREE_PWD = "mate1@test.io", "secret123"
+FREE_EMAIL, FREE_PWD = "mate1@test.io", os.environ.get("TEST_PASSWORD", "TestPass123!")
 
 
 def _login(email, pwd):

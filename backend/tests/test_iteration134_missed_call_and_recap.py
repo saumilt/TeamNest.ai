@@ -22,17 +22,17 @@ def _login(email: str, password: str) -> dict:
 
 @pytest.fixture(scope="module")
 def amit():
-    return _login("amit@demo.team", "Demo@2026")
+    return _login("amit@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 @pytest.fixture(scope="module")
 def priya():
-    return _login("priya@demo.team", "Demo@2026")
+    return _login("priya@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 @pytest.fixture(scope="module")
 def raj():
-    return _login("raj@demo.team", "Demo@2026")
+    return _login("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 def _h(user):

@@ -35,7 +35,7 @@ def demo_owner_headers(demo_owner_token):
     return {"Authorization": f"Bearer {demo_owner_token}", "Content-Type": "application/json"}
 
 
-DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "Demo@2026")
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 def _login(email, password=None):

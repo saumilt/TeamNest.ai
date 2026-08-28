@@ -20,7 +20,7 @@ API = f"{BASE_URL}/api"
 def client():
     s = requests.Session()
     s.headers.update({"Content-Type": "application/json"})
-    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text}"
     body = r.json()
     token = body.get("token") or body.get("access_token")

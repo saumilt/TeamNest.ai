@@ -12,7 +12,7 @@ import pytest
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 CHAT_ID = "d77a7d2a-b6e9-4923-89cd-54a21880c6a6"  # AIConv Test - Sam is a member
 SAM = ("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
-RAJ = ("raj@demo.team", "Demo@2026")  # different workspace / non-member
+RAJ = ("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))  # different workspace / non-member
 
 
 def _login(email, password):

@@ -132,7 +132,7 @@ class TestUserSearch:
     def test_search_viewer_forbidden(self):
         """Viewer cannot use the search endpoint."""
         r = requests.post(f"{API}/auth/login",
-                         json={"email": "sara@demo.team", "password": "Demo@2026"})
+                         json={"email": "sara@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
         assert r.status_code == 200, r.text
         token = r.json()["token"]
         h = {"Authorization": f"Bearer {token}"}
@@ -171,7 +171,7 @@ class TestAddExistingMember:
         """A member-role caller adding with role='admin' should be silently downgraded to member."""
         # Login as Raj (member)
         r = requests.post(f"{API}/auth/login",
-                         json={"email": "raj@demo.team", "password": "Demo@2026"})
+                         json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
         assert r.status_code == 200, r.text
         member_token = r.json()["token"]
         member_headers = {"Authorization": f"Bearer {member_token}"}

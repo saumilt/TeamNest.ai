@@ -37,7 +37,7 @@ def non_admin_token():
     """Login as Raj (member, non-admin) via /api/auth/login."""
     s = requests.Session()
     s.headers.update({"Content-Type": "application/json"})
-    r = s.post(f"{BASE_URL}/api/auth/login", json={"email": "raj@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{BASE_URL}/api/auth/login", json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     if r.status_code != 200:
         pytest.skip(f"Could not login as non-admin: {r.status_code} {r.text}")
     return r.json()["token"]

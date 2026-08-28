@@ -36,7 +36,7 @@ if not BASE_URL:
     pytest.skip("REACT_APP_BACKEND_URL is not set", allow_module_level=True)
 
 DEMO_EMAIL = os.environ.get("DEMO_EMAIL", "amit@demo.team")
-DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "Demo@2026")  # public demo cred; override in CI
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))  # public demo cred; override in CI
 
 
 # ---------- Fixtures ----------

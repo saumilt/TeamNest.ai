@@ -20,7 +20,7 @@ def _u(prefix="qa"):
 @pytest.fixture(scope="module")
 def admin_sess():
     s = requests.Session()
-    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     assert r.status_code == 200, r.text
     return s
 
@@ -37,7 +37,7 @@ def test_launch_config_invite_only():
 # ─── B. signup 403 invite_required ───────────────────────────────────────────
 def test_signup_gated_invite_required():
     r = requests.post(f"{API}/auth/signup", json={
-        "name": "QA New", "email": _u("qa-new"), "password": "secret123"})
+        "name": "QA New", "email": _u("qa-new"), "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     assert r.status_code == 403, r.text
     body = r.json()
     detail = body.get("detail") or body.get("message") or ""
@@ -114,7 +114,7 @@ def test_redeem_devos100_new_account():
         "code": "devos100",  # lowercase, should normalize
         "name": "QA Redeemer",
         "email": email,
-        "password": "secret123",
+        "password": os.environ.get("TEST_PASSWORD", "TestPass123!"),
         "company": "TestCo",
     })
     assert r.status_code == 200, r.text
@@ -128,7 +128,7 @@ def test_redeem_devos100_new_account():
 
     # redeem same email again → 400
     r2 = requests.post(f"{API}/launch/code/redeem", json={
-        "code": "DEVOS100", "name": "Dup", "email": email, "password": "secret123"})
+        "code": "DEVOS100", "name": "Dup", "email": email, "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     assert r2.status_code == 400, r2.text
 
 
@@ -153,7 +153,7 @@ def test_personal_code_redeem_and_team_multiplier():
     friend_sess = requests.Session()
     friend_email = _u("qa-friend")
     r = friend_sess.post(f"{API}/launch/code/redeem", json={
-        "code": personal_code, "name": "Friend One", "email": friend_email, "password": "secret123"})
+        "code": personal_code, "name": "Friend One", "email": friend_email, "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     assert r.status_code == 200, r.text
 
     # Inviter my-invites → accepted count +1, next_unlock returned
@@ -185,7 +185,7 @@ def test_waitlist_status_user_checkout_gated():
     sess = requests.Session()
     email = _u("qa-waited")
     r = sess.post(f"{API}/launch/code/redeem", json={
-        "code": "DEVOS100", "name": "QA Wait", "email": email, "password": "secret123"})
+        "code": "DEVOS100", "name": "QA Wait", "email": email, "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     if r.status_code != 200:
         pytest.skip(f"could not create user: {r.text}")
 
@@ -334,7 +334,7 @@ def test_admin_settings_mode_switch_and_restore(admin_sess):
     time.sleep(0.3)
     email = _u("qa-open-signup")
     rs = requests.post(f"{API}/auth/signup", json={
-        "name": "Open QA", "email": email, "password": "secret123"})
+        "name": "Open QA", "email": email, "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     open_signup_ok = rs.status_code in (200, 201)
 
     # ALWAYS restore
@@ -348,5 +348,5 @@ def test_admin_settings_mode_switch_and_restore(admin_sess):
     # Confirm gate re-enabled
     time.sleep(0.3)
     rs2 = requests.post(f"{API}/auth/signup", json={
-        "name": "gated again", "email": _u("qa-gate2"), "password": "secret123"})
+        "name": "gated again", "email": _u("qa-gate2"), "password": os.environ.get("TEST_PASSWORD", "TestPass123!")})
     assert rs2.status_code == 403

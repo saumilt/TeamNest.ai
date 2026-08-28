@@ -24,7 +24,7 @@ def test_home_summary_shape_super_admin():
 
 
 def test_home_summary_shape_test_user():
-    s = _login("os@radciti.com", "Summer$123")
+    s = _login("os@radciti.com", os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!"))
     r = s.get(f"{BASE_URL}/api/home/summary")
     # user may need password change first — allow 403 gracefully
     if r.status_code == 403:

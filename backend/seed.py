@@ -6,7 +6,7 @@ from auth_utils import hash_password
 from models import new_id, now_iso
 
 # Demo password is intentionally well-known for the demo workspace; override via env in production.
-DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "Demo@2026")
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 async def seed_demo(db) -> None:

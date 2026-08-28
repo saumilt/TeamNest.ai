@@ -14,7 +14,7 @@ assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 OWNER_EMAIL = "sam@funasia.net"
 OWNER_PW = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 MEMBER_EMAIL = "os@radciti.com"
-MEMBER_PW = "Summer$123"
+MEMBER_PW = os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!")
 
 
 def _login(email, password):

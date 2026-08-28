@@ -25,9 +25,9 @@ def _load_backend_url() -> str:
 BASE = _load_backend_url()
 API = f"{BASE}/api"
 
-AMIT = {"email": "amit@demo.team", "password": "Demo@2026"}
-RAJ = {"email": "raj@demo.team", "password": "Demo@2026"}
-PRIYA = {"email": "priya@demo.team", "password": "Demo@2026"}
+AMIT = {"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}
+RAJ = {"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}
+PRIYA = {"email": "priya@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────

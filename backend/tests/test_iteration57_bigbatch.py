@@ -27,7 +27,7 @@ API = f"{BASE_URL}/api"
 @pytest.fixture(scope="module")
 def amit_session():
     s = requests.Session()
-    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{API}/auth/login", json={"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     assert r.status_code == 200, r.text
     return s
 
@@ -35,7 +35,7 @@ def amit_session():
 @pytest.fixture(scope="module")
 def priya_session():
     s = requests.Session()
-    r = s.post(f"{API}/auth/login", json={"email": "priya@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{API}/auth/login", json={"email": "priya@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     assert r.status_code == 200, r.text
     return s
 
@@ -43,7 +43,7 @@ def priya_session():
 @pytest.fixture(scope="module")
 def raj_session():
     s = requests.Session()
-    r = s.post(f"{API}/auth/login", json={"email": "raj@demo.team", "password": "Demo@2026"})
+    r = s.post(f"{API}/auth/login", json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")})
     assert r.status_code == 200, r.text
     return s
 

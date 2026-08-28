@@ -24,7 +24,7 @@ def _login(email: str, password: str) -> requests.Session:
 
 @pytest.fixture(scope="module")
 def super_admin():
-    return _login("amit@demo.team", "Demo@2026")
+    return _login("amit@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 @pytest.fixture(scope="module")
@@ -36,13 +36,13 @@ def sam_admin():
 def non_priv():
     # buildertest is owner of their OWN workspace so /workspace-ai/* would 200
     # for owner-only endpoints. Use raj@demo.team who is a plain member.
-    return _login("raj@demo.team", "Demo@2026")
+    return _login("raj@demo.team", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 @pytest.fixture(scope="module")
 def buildertest():
     # For super-admin-only endpoints, buildertest is fine (not super admin).
-    return _login("buildertest@example.com", "Demo@2026")
+    return _login("buildertest@example.com", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 # ── Billing rules defaults ─────────────────────────────────────────────

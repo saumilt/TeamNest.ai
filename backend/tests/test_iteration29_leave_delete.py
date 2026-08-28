@@ -54,7 +54,7 @@ def amit_user(_amit):
 def _priya():
     r = _post(
         "/api/auth/login",
-        json={"email": "priya@demo.team", "password": "Demo@2026"},
+        json={"email": "priya@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
     )
     assert r.status_code == 200, r.text
     return r.json()

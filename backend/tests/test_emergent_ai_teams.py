@@ -44,7 +44,7 @@ class TestAuth:
     def test_login_seeded_user(self, api_client):
         r = api_client.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "amit@demo.team", "password": "Demo@2026"},
+            json={"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         )
         assert r.status_code == 200, r.text
         assert "token" in r.json()
@@ -362,7 +362,7 @@ class TestTasks:
         # Login as priya
         login_r = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "priya@demo.team", "password": "Demo@2026"},
+            json={"email": "priya@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         )
         assert login_r.status_code == 200
         priya_token = login_r.json()["token"]

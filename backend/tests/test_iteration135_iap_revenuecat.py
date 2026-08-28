@@ -24,7 +24,7 @@ if not BASE_URL:
 
 RC_AUTH = "Bearer 21DnfEqooCzFRE-n7gxfONs0jYCpxh6byIVEF4QnuPA"
 TEST_EMAIL = "os@radciti.com"
-TEST_PASSWORD = "Summer$123"
+TEST_PASSWORD = os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!")
 TEST_USER_ID = "8aaa964b-5880-4f2c-bc4f-4d910f08d3d4"
 
 

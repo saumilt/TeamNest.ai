@@ -21,9 +21,9 @@ BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://nest-app-prep.pr
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = "amit@demo.team"
-ADMIN_PWD = "Demo@2026"
+ADMIN_PWD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 BUILDER_EMAIL = "buildertest@example.com"
-BUILDER_PWD = "Demo@2026"
+BUILDER_PWD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 def _login(email, password):

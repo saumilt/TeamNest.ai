@@ -9,7 +9,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://nest-app-prep.previe
 # Demo workspace password is fixed in seed data and intentionally shared with
 # the testing agent via /app/memory/test_credentials.md. Override via env when
 # running against a hardened deploy.
-DEMO_PWD = os.environ.get("TEST_DEMO_PASSWORD", "Demo@2026")
+DEMO_PWD = os.environ.get("TEST_DEMO_PASSWORD", os.environ.get("DEMO_PASSWORD", "DemoPass123!"))
 
 
 def _login(email, password=None):
@@ -88,7 +88,7 @@ class TestProfile:
     def test_change_password_wrong_current(self, owner_hdr):
         r = requests.post(
             f"{BASE_URL}/api/me/password",
-            json={"current_password": "Wrong!!!", "new_password": "NewDemo@2026"},
+            json={"current_password": "Wrong!!!", "new_password": "NewDemoPass123!"},
             headers=owner_hdr,
             timeout=15,
         )
@@ -106,7 +106,7 @@ class TestProfile:
     def test_change_email_collision(self, owner_hdr):
         r = requests.post(
             f"{BASE_URL}/api/me/email",
-            json={"new_email": "raj@demo.team", "password": "Demo@2026"},
+            json={"new_email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
             headers=owner_hdr,
             timeout=15,
         )

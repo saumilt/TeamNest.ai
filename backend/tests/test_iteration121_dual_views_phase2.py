@@ -44,7 +44,7 @@ def sam_headers():
 
 @pytest.fixture(scope="module")
 def os_headers():
-    tok = _login("os@radciti.com", "Summer$123")
+    tok = _login("os@radciti.com", os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!"))
     return {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
 
 
@@ -274,7 +274,7 @@ class TestCreateLinkedPrivateDiscussion:
             )
 
         # Second user gets 403 on this brand-new private thread
-        os_tok = _login("os@radciti.com", "Summer$123")
+        os_tok = _login("os@radciti.com", os.environ.get("RADCITI_TEST_PASSWORD", "RadcitiPass123!"))
         r2 = requests.get(
             f"{BASE_URL}/api/ai/research/{tid}",
             headers={"Authorization": f"Bearer {os_tok}"}, timeout=30,

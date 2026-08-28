@@ -43,7 +43,7 @@ def _make_png(w=256, h=256, r=200, g=50, b=50):
 
 RED_PIXEL_PNG = _make_png()
 
-LOGIN = {"email": "amit@demo.team", "password": "Demo@2026"}
+LOGIN = {"email": "amit@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}
 
 
 @pytest.fixture(scope="module")

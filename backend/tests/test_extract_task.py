@@ -83,7 +83,7 @@ def test_task_assigned_creates_reminder_and_shows_in_mine(auth, members):
     # Now login as Raj
     r2 = requests.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": "raj@demo.team", "password": "Demo@2026"},
+        json={"email": "raj@demo.team", "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")},
         timeout=30,
     )
     assert r2.status_code == 200, r2.text

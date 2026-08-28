@@ -67,7 +67,7 @@ def mongo():
 def _login(email: str) -> requests.Session:
     s = requests.Session()
     r = s.post(f"{LOCAL}/api/auth/login",
-               json={"email": email, "password": "Demo@2026"}, timeout=15)
+               json={"email": email, "password": os.environ.get("DEMO_PASSWORD", "DemoPass123!")}, timeout=15)
     r.raise_for_status()
     token = r.json().get("token")
     assert token, f"No token returned for {email}"

@@ -18,7 +18,7 @@ BASE_URL = os.environ.get(
 
 # ---- helpers ----------------------------------------------------------------
 
-def _login(email: str, password: str = "Demo@2026") -> dict:
+def _login(email: str, password: str = os.environ.get("DEMO_PASSWORD", "DemoPass123!")) -> dict:
     s = requests.Session()
     r = s.post(
         f"{BASE_URL}/api/auth/login",

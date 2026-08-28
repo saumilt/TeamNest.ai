@@ -24,9 +24,9 @@ load_dotenv("/app/frontend/.env")
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 
 AMIT_EMAIL = "amit@demo.team"
-AMIT_PASSWORD = "Demo@2026"
+AMIT_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 BUILDER_EMAIL = "buildertest@example.com"
-BUILDER_PASSWORD = "Demo@2026"
+BUILDER_PASSWORD = os.environ.get("DEMO_PASSWORD", "DemoPass123!")
 
 
 # ── auth helpers ─────────────────────────────────────────────────────────
