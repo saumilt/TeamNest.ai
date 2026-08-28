@@ -1,9 +1,9 @@
 name: Backend CI
 
 # Foundational checks for the shared FastAPI backend.
-# Path-filtered so backend-only changes don't trigger the web/mobile pipelines.
-# Full integration tests (which need a live API + MongoDB + secrets) are run
-# separately/manually — this pass is lint + import verification + pure unit tests.
+# Path-filtered on push so backend-only pushes don't trigger the web/mobile
+# pipelines; PRs run every pipeline. This pass is lint + pure unit tests.
+# Full integration tests (live API + MongoDB + secrets) run separately/manually.
 
 on:
   push:
@@ -27,10 +27,6 @@ jobs:
       DB_NAME: teamnest_ci
       JWT_SECRET: ci-not-a-secret
       PUBLIC_BACKEND_URL: http://localhost:8001
-      # A few integration test modules read these at import time; set dummy
-      # values so `--collect-only` can import every module cleanly.
-      REACT_APP_BACKEND_URL: http://localhost:8001
-      EXPO_PUBLIC_BACKEND_URL: http://localhost:8001
     steps:
       - uses: actions/checkout@v4
 
@@ -38,20 +34,18 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements-ci.txt
 
       - name: Install dependencies
-        # emergentintegrations is hosted on a private index, so add it here.
+        # A slim, public-only subset (see requirements-ci.txt). The full
+        # requirements.txt needs a private package that isn't resolvable on
+        # GitHub runners, so it's intentionally not installed here.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt \
-            --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+          pip install -r requirements-ci.txt
 
       - name: Lint (syntax / undefined-name errors only)
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-      - name: Verify all tests import (collect-only, no network)
-        run: python -m pytest tests/ --collect-only -q
 
       - name: Run pure unit tests (no network / DB)
         run: python -m pytest tests/test_unit_resolve_app_base.py -q

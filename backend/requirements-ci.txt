@@ -1,0 +1,20 @@
+# Minimal, public-only dependency set for CI.
+# Enough to import `deps` (the module under test) and run the pure unit tests
+# + flake8. The full requirements.txt pulls a private package
+# (emergentintegrations) that isn't resolvable on GitHub runners, so CI uses
+# this slimmer, pinned subset instead. Versions mirror requirements.txt.
+annotated-types==0.7.0
+bcrypt==4.1.3
+dnspython==2.8.0
+email-validator==2.3.0
+fastapi==0.110.1
+flake8==7.3.0
+motor==3.3.1
+pydantic==2.12.5
+PyJWT==2.12.1
+pymongo==4.5.0
+pytest==9.0.3
+python-dotenv==1.2.2
+requests==2.33.1
+starlette==0.37.2
+typing_extensions==4.15.0

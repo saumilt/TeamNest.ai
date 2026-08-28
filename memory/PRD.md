@@ -15,9 +15,9 @@ invite-your-friends flows.
 ## Implemented Features
 ### Iteration 159 (CI/CD) — Monorepo GitHub Actions + foundational test infra
 - Added three path-filtered GitHub Actions workflows under `.github/workflows/` so a change to one surface only runs that surface's pipeline:
-  - `backend-ci.yml` (paths `backend/**`): installs deps (with the emergentintegrations private index `--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`), runs `flake8` syntax/undefined-name check (`--select=E9,F63,F7,F82`), `pytest --collect-only` (verifies all 1270 tests import — set dummy `MONGO_URL/DB_NAME/JWT_SECRET/PUBLIC_BACKEND_URL/REACT_APP_BACKEND_URL/EXPO_PUBLIC_BACKEND_URL`, Motor client is lazy so no real DB), and the new pure unit tests. Full integration suite (needs a live API + secrets) is intentionally NOT in this pass — to be added as a separate manual workflow later.
-  - `frontend-ci.yml` (paths `frontend/**`): `yarn install --frozen-lockfile` + `CI=true yarn test`.
-  - `mobile-ci.yml` (paths `mobile/**`): `yarn install --frozen-lockfile` + `yarn test --ci`.
+  - `backend-ci.yml` (push paths `backend/**`; PRs run always): installs a slim public-only pinned subset (`backend/requirements-ci.txt` — the full `requirements.txt` needs the private `emergentintegrations` package which isn't resolvable on GitHub runners), runs `flake8` syntax/undefined-name check (`--select=E9,F63,F7,F82`, scans without importing), and the pure unit tests (`tests/test_unit_resolve_app_base.py`, 6 tests — `deps` import chain needs no private pkg; verified in a clean venv with `env -i`). Full integration suite intentionally NOT in this pass.
+  - `frontend-ci.yml` (push paths `frontend/**`; PRs run always): Node 22 (testing libs need ≥22), `yarn install` + `CI=true yarn test`.
+  - `mobile-ci.yml` (push paths `mobile/**`; PRs run always): Node 22, `yarn install` + `yarn test --ci`.
   - All trigger on PR + push to `main`; secrets referenced via GitHub Secrets only (no real URLs/keys committed).
 - Backend test infra: new pure unit test `tests/test_unit_resolve_app_base.py` (6 tests) covering the emailed-link origin allow-list (`resolve_app_base` / `_link_host_allowed`) — no network/DB. Passes locally.
 - Frontend test infra (was none): added `@testing-library/react@16`, `@testing-library/jest-dom@7`, `@testing-library/dom@10`, `@testing-library/user-event@14` (devDeps); `src/setupTests.js` (jest-dom); jest `moduleNameMapper` for the `@/` alias added to `craco.config.js`. Tests: `src/lib/persona.test.js` + `src/components/ui/button.test.jsx` (RTL) — 4 pass.
