@@ -32,6 +32,18 @@ dist
 
 # Environment files (comprehensive coverage)
 
+# --- Secrets: never commit real .env files (keep only the *.example templates) ---
+.env
+.env.*
+**/.env
+**/.env.*
+backend/.env
+frontend/.env
+mobile/.env
+!.env.example
+!**/.env.example
+
+
 *token.json*
 *credentials.json*
 
