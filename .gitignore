@@ -43,6 +43,9 @@ mobile/.env
 !.env.example
 !**/.env.example
 
+# Internal QA artifacts (test reports can contain tokens/credentials) — keep out of the repo
+test_reports/
+
 
 *token.json*
 *credentials.json*

@@ -13,7 +13,7 @@ BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = BASE_URL + "/api"
 
 EMAIL = "sam@funasia.net"
-PASSWORD = "Perfect$2008"
+PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 def _login():

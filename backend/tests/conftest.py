@@ -1,7 +1,16 @@
 """Shared fixtures for backend tests."""
 import os
+from pathlib import Path
 import pytest
 import requests
+
+# Load backend/.env so secrets (SUPERADMIN_TEST_PASSWORD, RC_WEBHOOK_AUTH, etc.)
+# are available to tests without being hardcoded in the repo.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+except Exception:
+    pass
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://nest-app-prep.preview.emergentagent.com").rstrip("/")
 

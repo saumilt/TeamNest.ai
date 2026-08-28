@@ -11,7 +11,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 API = f"{BASE_URL}/api"
 
-SAM = {"email": "sam@funasia.net", "password": "Perfect$2008"}
+SAM = {"email": "sam@funasia.net", "password": os.environ.get("SUPERADMIN_TEST_PASSWORD", "")}
 OS = {"email": "os@radciti.com", "password": "Summer$123"}
 
 CHECKLIST_KEYS = {

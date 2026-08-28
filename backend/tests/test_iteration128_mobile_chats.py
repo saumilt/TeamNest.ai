@@ -12,7 +12,7 @@ BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") if os.environ.get(
 ) else os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 
 SAM_EMAIL = "sam@funasia.net"
-SAM_PW = "Perfect$2008"
+SAM_PW = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

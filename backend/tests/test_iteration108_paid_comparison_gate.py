@@ -28,7 +28,7 @@ BASE_URL = os.environ.get(
 FREE_EMAIL = "mate1@test.io"
 FREE_PASSWORD = "secret123"
 UNLIMITED_EMAIL = "sam@funasia.net"
-UNLIMITED_PASSWORD = "Perfect$2008"
+UNLIMITED_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 def _login(email: str, password: str) -> requests.Session:

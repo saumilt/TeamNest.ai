@@ -13,7 +13,7 @@ def _login(email, password):
 
 
 def test_home_summary_shape_super_admin():
-    s = _login("sam@funasia.net", "Perfect$2008")
+    s = _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
     r = s.get(f"{BASE_URL}/api/home/summary")
     assert r.status_code == 200, r.text
     d = r.json()
@@ -42,7 +42,7 @@ def test_home_summary_requires_auth():
 
 
 def test_dashboard_regression():
-    s = _login("sam@funasia.net", "Perfect$2008")
+    s = _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
     r = s.get(f"{BASE_URL}/api/dashboard")
     assert r.status_code == 200
     d = r.json()

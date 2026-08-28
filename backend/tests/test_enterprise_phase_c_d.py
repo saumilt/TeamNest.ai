@@ -12,7 +12,7 @@ import requests
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 
 OWNER_EMAIL = "sam@funasia.net"
-OWNER_PASS = "Perfect$2008"
+OWNER_PASS = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 _BREAKDOWN_KEYS = {
     "role_description_score", "sop_score", "workflow_score", "recurring_task_score",

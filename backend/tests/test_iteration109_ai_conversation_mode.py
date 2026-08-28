@@ -38,7 +38,7 @@ assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
 
 SUPER_EMAIL = "sam@funasia.net"
-SUPER_PASSWORD = "Perfect$2008"
+SUPER_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://nest-app-prep.preview.emergentagent.com").rstrip("/")
 
 SAM_EMAIL = "sam@funasia.net"
-SAM_PASSWORD = "Perfect$2008"
+SAM_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 MATE_EMAIL = "mate1@test.io"
 MATE_PASSWORD = "secret123"
 RAJ_EMAIL = "raj@demo.team"

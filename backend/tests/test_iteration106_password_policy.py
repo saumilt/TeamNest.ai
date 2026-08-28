@@ -16,7 +16,7 @@ BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
 SUPER_ADMIN_EMAIL = "sam@funasia.net"
-SUPER_ADMIN_PASSWORD = "Perfect$2008"
+SUPER_ADMIN_PASSWORD = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 DEMO_ADMIN_EMAIL = "amit@demo.team"
 DEMO_ADMIN_PASSWORD = "Demo@2026"
 

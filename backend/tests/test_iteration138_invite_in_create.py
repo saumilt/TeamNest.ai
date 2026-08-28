@@ -19,7 +19,7 @@ def _login(email, password):
 
 
 def test_invite_new_email_returns_public_fields():
-    s = _login("sam@funasia.net", "Perfect$2008")
+    s = _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
     ts = int(time.time())
     email = f"qa+{ts}@example.com"
     r = s.post(f"{BASE_URL}/workspace/invite",
@@ -40,7 +40,7 @@ def test_invite_new_email_returns_public_fields():
 
 
 def test_invite_existing_email_flags_added_to_existing_user():
-    s = _login("sam@funasia.net", "Perfect$2008")
+    s = _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
     # priya@demo.team belongs to a different workspace (demo). Inviting her should
     # attach her to sam's workspace with added_to_existing_user=True (or if she
     # is already in sam's workspace, we accept a 400 as valid state).

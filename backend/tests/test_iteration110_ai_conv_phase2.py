@@ -15,7 +15,7 @@ import requests
 
 BASE = (os.environ.get("REACT_APP_BACKEND_URL") or "https://nest-app-prep.preview.emergentagent.com").rstrip("/")
 
-OWNER = {"email": "sam@funasia.net", "password": "Perfect$2008"}
+OWNER = {"email": "sam@funasia.net", "password": os.environ.get("SUPERADMIN_TEST_PASSWORD", "")}
 MEMBER = {"email": "mate1@test.io", "password": "secret123"}
 # raj is a true 'member' role (not owner) — used to test RBAC 403s in his workspace.
 MEMBER_ROLE = {"email": "raj@demo.team", "password": "Demo@2026"}

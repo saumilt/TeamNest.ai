@@ -9,7 +9,7 @@ import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://nest-app-prep.preview.emergentagent.com").rstrip("/")
 OWNER_EMAIL = "sam@funasia.net"
-OWNER_PW = "Perfect$2008"
+OWNER_PW = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

@@ -29,7 +29,7 @@ def super_admin():
 
 @pytest.fixture(scope="module")
 def sam_admin():
-    return _login("sam@funasia.net", "Perfect$2008")
+    return _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
 
 
 @pytest.fixture(scope="module")

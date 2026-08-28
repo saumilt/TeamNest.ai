@@ -38,7 +38,7 @@ def _login(email: str, password: str) -> str:
 
 @pytest.fixture(scope="module")
 def sam_headers():
-    tok = _login("sam@funasia.net", "Perfect$2008")
+    tok = _login("sam@funasia.net", os.environ.get("SUPERADMIN_TEST_PASSWORD", ""))
     return {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
 
 

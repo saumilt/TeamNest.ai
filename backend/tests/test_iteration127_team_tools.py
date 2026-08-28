@@ -12,7 +12,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 
 OWNER_EMAIL = "sam@funasia.net"
-OWNER_PW = "Perfect$2008"
+OWNER_PW = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 MEMBER_EMAIL = "os@radciti.com"
 MEMBER_PW = "Summer$123"
 

@@ -20,7 +20,7 @@ BASE_URL = os.environ.get(
     "https://nest-app-prep.preview.emergentagent.com",
 ).rstrip("/")
 SAM_EMAIL = "sam@funasia.net"
-SAM_PW = "Perfect$2008"
+SAM_PW = os.environ.get("SUPERADMIN_TEST_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

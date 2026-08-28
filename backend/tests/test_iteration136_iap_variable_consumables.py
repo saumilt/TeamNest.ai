@@ -21,7 +21,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 if not BASE_URL:
     raise RuntimeError("REACT_APP_BACKEND_URL must be set")
 
-RC_AUTH = "Bearer MBDwPktHDqbqd8e7G0IjcYUXp2bGqMjebM8zP0QaSyo="
+RC_AUTH = os.environ.get("RC_WEBHOOK_AUTH", "")
 OWNER_EMAIL = "amit@demo.team"
 OWNER_PASSWORD = "Demo@2026"
 MEMBER_EMAIL = "raj@demo.team"
