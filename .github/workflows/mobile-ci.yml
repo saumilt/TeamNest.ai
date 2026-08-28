@@ -10,9 +10,6 @@ on:
       - 'mobile/**'
       - '.github/workflows/mobile-ci.yml'
   pull_request:
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/mobile-ci.yml'
 
 jobs:
   test:
