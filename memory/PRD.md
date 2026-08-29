@@ -13,6 +13,13 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Save As Template + Meeting Reminders + Weekly Digest Email — 2026-08-30
+- **Save As Template (web)**: `POST/DELETE /api/automations/templates/custom` (collection `automation_templates`, workspace-scoped); `GET /automations/canvas-templates` now returns custom templates first (`custom:true`) then the 5 built-ins. `Automations.jsx`: a "Save as template" button on the canvas (visual mode, ≥1 step) saves the current plan as a team template; custom chips show a **Team** badge + hover delete (owner/admin or creator). `save-as-template`, `canvas-template-<key>`, `canvas-template-delete-<key>`.
+- **Meeting Reminders (backend → both surfaces)**: meetings gained `remind_minutes` (default 10) + `reminded_at`. `run_due_meeting_reminders()` (in the 60s loop) posts one message into the meeting's chat ~lead-time before start with the **full AI prep brief attached** (`metadata.event="meeting_reminder"`), idempotent. `_build_brief()` generates the brief from chat context + agenda.
+- **Weekly Digest Email (backend, Mailgun)**: `_compute_digests()` refactored + reused; `POST /api/ai-employees/_/digest-email` (owner/admin; member 403) composes an HTML recap and sends to workspace owners via `services.mailgun_service`. `maybe_send_weekly_digests()` (60s loop, Monday ≥08:00 UTC, once per ISO week via `digest_email_log`). Web `digest-send-email` ("Email owners") on the digest header + mobile owner-only button. Delivery is real via Mailgun (`teamnest.ai`) but demo inboxes won't land; send path returns `{sent:true, recipients}`.
+- Tested: iteration_155 — backend 14/14, web + mobile pass. Applied polish: web digest button now gated owner/admin (parity with mobile).
+- Known non-blocking polish: mobile `meeting_reminder` renders as a normal avatar bubble (⏰+title crowd the avatar) — could be a centered system card later; RN deprecation warnings (shadow*, pointerEvents, Image.resizeMode).
+
 ### Canvas Templates — start the visual builder from ready-made workflows — 2026-08-29
 - Web-only. New `GET /api/automations/canvas-templates` returns 5 full workflow plans (Daily overdue-task digest, Weekly research digest, New CRM lead → welcome email, Stalled-projects alert, New task → notify team) matching the exact plan schema the canvas + create API use.
 - `Automations.jsx`: an "Or start on the canvas from a template" chip row (`canvas-templates`, `canvas-template-<key>`) shown when no plan is in progress; clicking loads the template plan and opens Canvas mode with pre-filled, pre-configured trigger + step nodes. Distinct from the existing NL Template Gallery.

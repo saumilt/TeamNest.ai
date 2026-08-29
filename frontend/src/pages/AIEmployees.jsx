@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   PauseCircle,
   CalendarDays,
+  Mail,
 } from "lucide-react";
 
 const EMPLOYEE_ICONS = {
@@ -300,16 +301,41 @@ export default function AIEmployees() {
 }
 
 function WeeklyDigests() {
+  const { user } = useAuth();
+  const isAdmin = ["owner", "admin"].includes(user?.role);
   const [digests, setDigests] = useState(null);
+  const [sending, setSending] = useState(false);
   useEffect(() => {
     api.get("/ai-employees/_/digests").then(({ data }) => setDigests(data.digests || [])).catch(() => setDigests([]));
   }, []);
+  const sendEmail = async () => {
+    setSending(true);
+    try {
+      const { data } = await api.post("/ai-employees/_/digest-email");
+      if (data.sent) toast.success(`Digest emailed to ${data.recipients?.length || 0} owner(s)`);
+      else toast.error(data.reason === "no_owner_email" ? "No owner email on file" : "Couldn't send the digest email");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't send the digest email");
+    } finally {
+      setSending(false);
+    }
+  };
   if (!digests || digests.length === 0) return null;
   return (
     <section data-testid="employee-digests">
-      <div className="flex items-center gap-2 mb-4">
-        <CalendarDays className="w-4 h-4 text-brand" />
-        <h2 className="text-lg font-semibold tracking-tight">This week with your AI team</h2>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-brand" />
+          <h2 className="text-lg font-semibold tracking-tight">This week with your AI team</h2>
+        </div>
+        <button
+          data-testid="digest-send-email"
+          onClick={sendEmail}
+          disabled={sending}
+          className={`${isAdmin ? "inline-flex" : "hidden"} text-xs font-semibold px-3 py-1.5 rounded-lg border border-hairline text-ink-dim hover:text-ink hover:bg-white/5 disabled:opacity-60 items-center gap-1.5`}
+        >
+          <Mail className="w-3.5 h-3.5" /> {sending ? "Sending…" : "Email owners"}
+        </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {digests.map((d) => (

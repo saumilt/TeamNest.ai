@@ -504,8 +504,56 @@ CANVAS_TEMPLATES = [
 
 @router.get("/automations/canvas-templates")
 async def canvas_templates(current=Depends(require_user)):
-    """Ready-made full workflow plans that open directly in the visual canvas."""
-    return {"templates": CANVAS_TEMPLATES}
+    """Ready-made full workflow plans that open directly in the visual canvas —
+    the built-in set plus any templates this workspace has saved."""
+    custom = await db.automation_templates.find(
+        {"workspace_id": current["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    for c in custom:
+        c["custom"] = True
+    return {"templates": custom + CANVAS_TEMPLATES}
+
+
+class SaveTemplateRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    plan: dict
+
+
+@router.post("/automations/templates/custom")
+async def save_custom_template(payload: SaveTemplateRequest, current=Depends(require_user)):
+    """Save a canvas-built plan as a reusable, team-shared template."""
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(400, "Give the template a name")
+    if not payload.plan or not payload.plan.get("trigger"):
+        raise HTTPException(400, "The template needs a trigger and steps")
+    doc = {
+        "id": new_id(),
+        "workspace_id": current["workspace_id"],
+        "key": "custom_" + new_id()[:8],
+        "title": title,
+        "description": (payload.description or "").strip() or "Saved by your team",
+        "category": "Team",
+        "plan": payload.plan,
+        "created_by": current["id"],
+        "created_at": now_iso(),
+    }
+    await db.automation_templates.insert_one(doc.copy())
+    return _clean(doc)
+
+
+@router.delete("/automations/templates/custom/{template_id}")
+async def delete_custom_template(template_id: str, current=Depends(require_user)):
+    tpl = await db.automation_templates.find_one(
+        {"id": template_id, "workspace_id": current["workspace_id"]}, {"_id": 0, "created_by": 1}
+    )
+    if not tpl:
+        raise HTTPException(404, "Template not found")
+    if current.get("role") not in ("owner", "admin") and tpl.get("created_by") != current["id"]:
+        raise HTTPException(403, "Only the creator or an admin can delete this template")
+    await db.automation_templates.delete_one({"id": template_id, "workspace_id": current["workspace_id"]})
+    return {"ok": True}
 
 
 @router.get("/automations/{automation_id}")

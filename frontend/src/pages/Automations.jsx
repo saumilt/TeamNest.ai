@@ -6,7 +6,7 @@ import AutomationNodeBuilder from "@/components/AutomationNodeBuilder";
 import { toast } from "sonner";
 import {
   Zap, Play, Pause, Clock, GitBranch, Wand2, X, AlertTriangle, CheckCircle2,
-  Activity as ActivityIcon, Sparkles, ArrowRight, ShieldCheck, XCircle, Lightbulb,
+  Activity as ActivityIcon, Sparkles, ArrowRight, ShieldCheck, XCircle, Lightbulb, Bookmark,
 } from "lucide-react";
 
 const RISK = {
@@ -56,6 +56,31 @@ export default function Automations() {
     setPlan(JSON.parse(JSON.stringify(t.plan)));
     setBuilderMode("visual");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const saveAsTemplate = async () => {
+    if (!plan) return;
+    try {
+      await api.post("/automations/templates/custom", {
+        title: plan.name || "Team template",
+        description: "",
+        plan,
+      });
+      toast.success("Saved to your team's templates");
+      const { data } = await api.get("/automations/canvas-templates");
+      setCanvasTemplates(data.templates || []);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save template");
+    }
+  };
+
+  const deleteTemplate = async (t) => {
+    try {
+      await api.delete(`/automations/templates/custom/${t.id}`);
+      setCanvasTemplates((prev) => prev.filter((x) => x.id !== t.id));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't delete template");
+    }
   };
 
   const load = () => {
@@ -250,16 +275,30 @@ export default function Automations() {
             </div>
             <div className="flex flex-wrap gap-2">
               {canvasTemplates.map((t) => (
-                <button
-                  key={t.key}
-                  data-testid={`canvas-template-${t.key}`}
-                  onClick={() => startFromTemplate(t)}
-                  title={t.description}
-                  className="text-left rounded-lg border border-white/10 hover:border-yellow-400/40 hover:bg-yellow-500/[0.04] px-3 py-2 transition-colors max-w-[260px]"
-                >
-                  <div className="text-[13px] font-semibold text-zinc-100 truncate">{t.title}</div>
-                  <div className="text-[11px] text-zinc-500 truncate">{t.description}</div>
-                </button>
+                <div key={t.key} className="relative group">
+                  <button
+                    data-testid={`canvas-template-${t.key}`}
+                    onClick={() => startFromTemplate(t)}
+                    title={t.description}
+                    className="text-left rounded-lg border border-white/10 hover:border-yellow-400/40 hover:bg-yellow-500/[0.04] px-3 py-2 transition-colors w-full sm:w-[260px]"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {t.custom && <span className="text-[9px] font-mono uppercase tracking-widest bg-yellow-500/15 text-yellow-300 rounded px-1.5 py-0.5">Team</span>}
+                      <div className="text-[13px] font-semibold text-zinc-100 truncate">{t.title}</div>
+                    </div>
+                    <div className="text-[11px] text-zinc-500 truncate">{t.description}</div>
+                  </button>
+                  {t.custom && (
+                    <button
+                      data-testid={`canvas-template-delete-${t.key}`}
+                      onClick={(e) => { e.stopPropagation(); deleteTemplate(t); }}
+                      title="Delete template"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 bg-[#0a0a0a]/80 rounded p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -298,6 +337,15 @@ export default function Automations() {
                 <span className={`text-[10px] font-mono uppercase tracking-widest border rounded px-2 py-1 ${RISK[plan.risk]?.cls || RISK.low.cls}`}>
                   {RISK[plan.risk]?.label || plan.risk}
                 </span>
+                {builderMode === "visual" && (plan.steps?.length > 0) && (
+                  <button
+                    data-testid="save-as-template"
+                    onClick={saveAsTemplate}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/10 text-zinc-300 hover:bg-white/5 inline-flex items-center gap-1"
+                  >
+                    <Bookmark className="w-3.5 h-3.5" /> Save as template
+                  </button>
+                )}
               </div>
             </div>
 

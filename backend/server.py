@@ -343,6 +343,8 @@ async def startup():
     try:
         import asyncio as _asyncio
         from routes.automations import run_due_automations as _rda
+        from routes.meetings import run_due_meeting_reminders as _rmr
+        from routes.ai_employees import maybe_send_weekly_digests as _wd
 
         async def _automation_scheduler():
             while True:
@@ -350,10 +352,18 @@ async def startup():
                     await _rda()
                 except Exception:
                     logger.exception("automation scheduler tick failed")
+                try:
+                    await _rmr()
+                except Exception:
+                    logger.exception("meeting reminder tick failed")
+                try:
+                    await _wd()
+                except Exception:
+                    logger.exception("weekly digest tick failed")
                 await _asyncio.sleep(60)
 
         _asyncio.create_task(_automation_scheduler())
-        logger.info("[startup] automation scheduler scheduled (60s tick)")
+        logger.info("[startup] automation + meeting-reminder + weekly-digest scheduler scheduled (60s tick)")
     except Exception as e:
         logger.warning("Automation scheduler failed to start: %s", e)
 

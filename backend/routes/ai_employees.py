@@ -17,7 +17,7 @@ from ai_employees_catalog import (
     public_employee,
 )
 from ai_service import complete
-from deps import db, new_id, now_iso, require_user
+from deps import db, logger, new_id, now_iso, require_user
 
 router = APIRouter()
 
@@ -474,11 +474,8 @@ async def deduct_employee_credits(
     }
 
 
-@router.get("/ai-employees/_/digests")
-async def employee_weekly_digests(current=Depends(require_user)):
-    """A 'this week' recap for each subscribed AI employee: tasks handled, hours
-    saved, estimated $ saved, top things it did, and a one-line AI summary."""
-    ws = current["workspace_id"]
+async def _compute_digests(ws: str) -> list:
+    """Per subscribed employee: last-7-day tasks, hours saved, $ saved, an AI recap."""
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     subs = await db.ai_employee_subscriptions.find(
         {"workspace_id": ws, "status": {"$nin": ["paused", "cancelled"]}}, {"_id": 0}
@@ -519,7 +516,92 @@ async def employee_weekly_digests(current=Depends(require_user)):
             "recap": recap,
         })
     digests.sort(key=lambda d: (d["tasks"], d["hours_saved"]), reverse=True)
-    return {"digests": digests}
+    return digests
+
+
+def _digest_email_html(ws_name: str, digests: list) -> str:
+    rows = []
+    for d in digests:
+        hl = "".join(f"<li style='color:#6b7280;font-size:13px'>{h}</li>" for h in (d.get("highlights") or [])[:3])
+        rows.append(
+            f"<div style='border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:0 0 12px'>"
+            f"<div style='font-weight:700;font-size:15px;color:#111827'>{d['display_full_name']}</div>"
+            f"<div style='margin:6px 0;color:#111827'><b>{d['tasks']}</b> tasks &nbsp;·&nbsp; "
+            f"<b style='color:#d97706'>~{d['hours_saved']}h</b> saved &nbsp;·&nbsp; "
+            f"<b style='color:#059669'>${d['dollar_savings']}</b></div>"
+            f"<div style='color:#374151;font-size:13px'>{d.get('recap') or 'No activity yet this week.'}</div>"
+            f"<ul style='margin:8px 0 0;padding-left:18px'>{hl}</ul></div>"
+        )
+    total_h = round(sum(d["hours_saved"] for d in digests), 2)
+    total_d = round(sum(d["dollar_savings"] for d in digests), 2)
+    return (
+        f"<div style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto'>"
+        f"<h2 style='color:#111827'>Your AI team — last week</h2>"
+        f"<p style='color:#6b7280'>{ws_name} · ~{total_h}h saved · ${total_d} in value</p>"
+        f"{''.join(rows) or '<p>No AI employee activity last week.</p>'}"
+        f"<p style='color:#9ca3af;font-size:12px;margin-top:20px'>Sent by TeamNest · you're receiving this as a workspace owner.</p></div>"
+    )
+
+
+async def _send_digest_email(ws: str) -> dict:
+    """Compose + send the weekly AI-employee digest to workspace owners."""
+    from services import mailgun_service
+    digests = await _compute_digests(ws)
+    owners = await db.users.find(
+        {"workspace_id": ws, "role": {"$in": ["owner", "admin"]}, "status": {"$ne": "removed"}},
+        {"_id": 0, "email": 1, "name": 1},
+    ).to_list(20)
+    recipients = [o["email"] for o in owners if o.get("email")]
+    if not recipients:
+        return {"sent": False, "reason": "no_owner_email", "recipients": []}
+    wsdoc = await db.workspaces.find_one({"id": ws}, {"_id": 0, "name": 1})
+    html = _digest_email_html((wsdoc or {}).get("name") or "Your workspace", digests)
+    subject = "Your AI team's week in review"
+    ok = False
+    try:
+        res = await mailgun_service.send_email(to=recipients, subject=subject, html=html)
+        ok = bool(res.get("ok"))
+    except Exception as e:
+        return {"sent": False, "reason": str(e)[:160], "recipients": recipients}
+    return {"sent": ok, "recipients": recipients, "employees": len(digests)}
+
+
+@router.get("/ai-employees/_/digests")
+async def employee_weekly_digests(current=Depends(require_user)):
+    """A 'this week' recap for each subscribed AI employee."""
+    return {"digests": await _compute_digests(current["workspace_id"])}
+
+
+@router.post("/ai-employees/_/digest-email")
+async def send_digest_email_now(current=Depends(require_user)):
+    """Send the weekly AI-employee digest email to owners now (owner/admin)."""
+    if current.get("role") not in ("owner", "admin"):
+        raise HTTPException(403, "Only owners and admins can send the digest email")
+    return await _send_digest_email(current["workspace_id"])
+
+
+async def maybe_send_weekly_digests():
+    """Tick job: on Mondays (UTC) after 08:00, email each workspace's owners a
+    weekly AI-employee digest, once per ISO week. Called from the 60s loop."""
+    now = datetime.now(timezone.utc)
+    if now.weekday() != 0 or now.hour < 8:  # Monday only, from 08:00 UTC
+        return
+    iso_week = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+    ws_ids = await db.ai_employee_subscriptions.distinct(
+        "workspace_id", {"status": {"$nin": ["paused", "cancelled"]}}
+    )
+    for ws in ws_ids:
+        already = await db.digest_email_log.find_one({"workspace_id": ws, "iso_week": iso_week})
+        if already:
+            continue
+        try:
+            res = await _send_digest_email(ws)
+            await db.digest_email_log.insert_one({
+                "id": new_id(), "workspace_id": ws, "iso_week": iso_week,
+                "sent_at": now_iso(), "result": res,
+            })
+        except Exception:
+            logger.exception("weekly digest email failed for ws=%s", ws)
 
 
 @router.get("/ai-employees/_/savings")

@@ -99,7 +99,24 @@ export default function AIEmployeesPanel() {
 
       {digests.length > 0 ? (
         <View testID="employee-digests">
-          <Text style={styles.section}>THIS WEEK WITH YOUR AI TEAM</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={styles.section}>THIS WEEK WITH YOUR AI TEAM</Text>
+            {isAdmin ? (
+              <Pressable
+                testID="digest-send-email"
+                onPress={async () => {
+                  try {
+                    const r = await apiPost("/api/ai-employees/_/digest-email", {});
+                    show(r.sent ? `Digest emailed to ${r.recipients?.length || 0} owner(s)` : "Couldn't send digest email");
+                  } catch { show("Couldn't send digest email"); }
+                }}
+                style={styles.emailBtn}
+              >
+                <Ionicons name="mail-outline" size={13} color={colors.textSecondary} />
+                <Text style={styles.emailBtnText}>Email owners</Text>
+              </Pressable>
+            ) : null}
+          </View>
           {digests.map((d) => (
             <View key={d.employee_key} style={styles.digestCard} testID={`digest-${d.employee_key}`}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -181,6 +198,8 @@ const styles = StyleSheet.create({
   groupNames: { color: colors.accent, fontSize: font.tiny, fontWeight: "700", marginTop: 2 },
   section: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 1.5, marginTop: spacing.md, marginBottom: spacing.sm },
   digestCard: { backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accentBorder, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
+  emailBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 5 },
+  emailBtnText: { color: colors.textSecondary, fontSize: font.tiny, fontWeight: "700" },
   digestName: { color: colors.textPrimary, fontSize: font.small, fontWeight: "800" },
   digestMeta: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.8 },
   digestStats: { flexDirection: "row", gap: spacing.lg, marginTop: 6, marginBottom: 4, alignItems: "baseline" },
