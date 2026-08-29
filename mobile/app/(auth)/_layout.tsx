@@ -4,7 +4,7 @@ import { colors } from "@/src/theme";
 
 export default function AuthLayout() {
   const { token, loading } = useAuth();
-  if (!loading && token) return <Redirect href="/(tabs)" />;
+  if (!loading && token) return <Redirect href="/(tabs)/home" />;
   return (
     <Stack
       screenOptions={{

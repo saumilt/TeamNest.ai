@@ -36,7 +36,7 @@ export default function Login() {
     setBusy("login");
     try {
       await login(email.trim(), password);
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/home");
     } catch (e: any) {
       setError(e.message || "Login failed");
     } finally {
@@ -49,7 +49,7 @@ export default function Login() {
     setBusy("demo");
     try {
       await demoLogin();
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/home");
     } catch (e: any) {
       setError(e.message || "Demo login failed");
     } finally {

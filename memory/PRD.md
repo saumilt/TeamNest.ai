@@ -13,6 +13,15 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Phase 2 — Drop 1: Mobile Home landing + AI hub + Response Action Bar (web + mobile + backend) — 2026-08-29
+User approved a/a/a/a; shipped in two drops. This is Drop 1.
+- **Mobile Home landing**: app now opens directly on the Home hub (redirects → `/(tabs)/home` in `app/index.tsx`, `(auth)/login.tsx`, `(auth)/_layout.tsx`), not the chat list.
+- **AI hub** (`pages/AIHub.jsx`, route `/ai`): tabs **Research · Employees · Automations · Activity** framed as **Ask / Do / Watch**. Nav "AI" (testid `nav-research`) repointed to `/ai`; `/research`, `/employees`, `/automations` still work directly. Each tab reuses the existing page (no duplication); Activity = new `components/AIActivity.jsx` fed by `GET /api/ai/activity`.
+- **Response Action Bar** ("Do something with this") after AI answers — added the missing actions to BOTH the full-screen (`SynthesisFooter.jsx`) and inline in-chat (`AIComparisonInline.jsx`) synthesis footers, and to mobile Research (`app/(tabs)/research.tsx`): **Save to Knowledge** (reuses `POST /api/ai/threads/{id}/save-knowledge`), **Draft Email** (new `POST /api/ai/draft-email`, draft-only via `DraftEmailDialog.jsx` / mobile draft sheet — does NOT send), **Ask Another AI** (→ `/ai?tab=research`), **Automate This** (→ `/automations?prompt=…`). Existing actions (copy/share/task/save/approval/PDF) preserved.
+- **Backend** (`routes/ai.py`, additive): `POST /api/ai/draft-email` (LLM via `ai_service.complete`, Emergent key) and `GET /api/ai/activity`.
+- **Tested**: testing_agent iteration 145 — backend 5/5; web + mobile all target flows pass (report `/app/test_reports/iteration_145.json`). Inline-footer parity added after the report (same handlers/endpoints as the passing full-screen bar).
+- **Known follow-ups (non-blocking)**: `/ai` Research tab has no inline composer (ask via TopActionBar / +New); single-model answer cards don't yet show the new action bar; `sendForApproval` uses a hard reload; `GET /api/ai/activity` isn't per-approval permission-filtered.
+
 ### Phase 1 — UX Simplification: Navigation + Home IA (web + mobile + backend) — 2026-08-29
 Part of the multi-phase "Simplicity + AI Actions + Automation + Integration UX" upgrade. User chose web + mobile together; full automation engine deferred to Phase 3 (start with center/builder/manual then real triggers); LLM reuse via Emergent key = yes; one real partner integration to be wired in Phase 4.
 - **Backend** (`routes/dashboard.py`, additive): `GET /api/home/overview` → `{remembers:{my_memory,team_knowledge,research,decisions,documents}, continue:{meetings[],documents[]}}` (sources: learned_memories personal, memory_items workspace + decision, ai_threads, knowledge_sources, calls). `GET /api/home/summary` extended with `my_memory` + `team_knowledge` (regression-safe).

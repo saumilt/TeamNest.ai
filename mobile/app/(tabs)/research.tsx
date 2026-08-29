@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +33,9 @@ export default function ResearchScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
+  const [actMsg, setActMsg] = useState("");
+  const [draft, setDraft] = useState<any>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -83,6 +88,36 @@ export default function ResearchScreen() {
       setError(e.message || "Research failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const say = (t: string) => {
+    setActMsg(t);
+    setTimeout(() => setActMsg(""), 2600);
+  };
+
+  const saveKnowledge = async () => {
+    const id = result?.thread?.id;
+    if (!id) return;
+    try {
+      await apiPost(`/api/ai/threads/${id}/save-knowledge`, {});
+      say("Saved to Team Knowledge");
+    } catch {
+      say("Couldn't save to knowledge");
+    }
+  };
+
+  const draftEmail = async () => {
+    const content = result?.thread?.final_answer;
+    if (!content) return;
+    setDraftBusy(true);
+    try {
+      const d = await apiPost("/api/ai/draft-email", { content });
+      setDraft(d);
+    } catch {
+      say("Couldn't draft email");
+    } finally {
+      setDraftBusy(false);
     }
   };
 
@@ -190,6 +225,24 @@ export default function ResearchScreen() {
               <Markdown content={result.thread?.final_answer || "No answer produced."} />
             </View>
 
+            <View style={styles.actionRow}>
+              <TouchableOpacity testID="research-save-knowledge" style={styles.actBtn} onPress={saveKnowledge}>
+                <Ionicons name="bookmark" size={14} color={colors.accent} />
+                <Text style={styles.actText}>Save to Knowledge</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="research-draft-email" style={styles.actBtn} onPress={draftEmail} disabled={draftBusy}>
+                <Ionicons name="mail" size={14} color={colors.accent} />
+                <Text style={styles.actText}>{draftBusy ? "Drafting…" : "Draft Email"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="research-automate" style={styles.actBtn} onPress={() => say("Automation Builder is coming soon")}>
+                <Ionicons name="flash" size={14} color={colors.accent} />
+                <Text style={styles.actText}>Automate This</Text>
+              </TouchableOpacity>
+            </View>
+            {actMsg ? (
+              <Text style={styles.actFlash} testID="research-act-flash">{actMsg}</Text>
+            ) : null}
+
             <Text style={[styles.label, { marginTop: spacing.xl }]}>PER-MODEL ANSWERS</Text>
             {(result.responses || []).map((r: any) => (
               <View key={r.id || r.model_key} style={styles.respCard}>
@@ -207,6 +260,26 @@ export default function ResearchScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <Modal visible={!!draft} transparent animationType="slide" onRequestClose={() => setDraft(null)}>
+        <Pressable style={styles.draftOverlay} onPress={() => setDraft(null)}>
+          <Pressable
+            style={[styles.draftSheet, { paddingBottom: insets.bottom + spacing.lg }]}
+            onPress={() => {}}
+            testID="research-draft-sheet"
+          >
+            <View style={styles.draftGrip} />
+            <Text style={styles.draftLabel}>DRAFT EMAIL · REVIEW BEFORE SENDING</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              <Text style={styles.draftSubject}>{draft?.subject}</Text>
+              <Text style={styles.draftBody}>{draft?.body}</Text>
+            </ScrollView>
+            <TouchableOpacity testID="research-draft-close" style={styles.draftClose} onPress={() => setDraft(null)}>
+              <Text style={styles.draftCloseText}>Done</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -307,4 +380,33 @@ const styles = StyleSheet.create({
   respHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
   respModel: { color: colors.textPrimary, fontSize: font.small, fontWeight: "700" },
   mockTag: { color: colors.textMuted, fontSize: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  actBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  actText: { color: colors.accent, fontSize: font.small, fontWeight: "700" },
+  actFlash: { color: colors.textSecondary, fontSize: font.small, marginTop: spacing.sm },
+  draftOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  draftSheet: {
+    backgroundColor: colors.bgElevated,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  draftGrip: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.md },
+  draftLabel: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 1.2, marginBottom: spacing.md },
+  draftSubject: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800", marginBottom: spacing.sm },
+  draftBody: { color: colors.textSecondary, fontSize: font.body, lineHeight: 21 },
+  draftClose: { marginTop: spacing.md, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: spacing.sm, alignItems: "center" },
+  draftCloseText: { color: "#09090b", fontWeight: "800", fontSize: font.body },
 });

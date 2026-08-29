@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 
 from ai_service import (
     MODEL_CONFIG,
@@ -760,3 +761,99 @@ async def list_models():
         }
         for k, v in MODEL_CONFIG.items()
     ]
+
+
+class DraftEmailRequest(BaseModel):
+    content: str
+    tone: Optional[str] = None
+
+
+@router.post("/ai/draft-email")
+async def draft_email(payload: DraftEmailRequest, current=Depends(require_user)):
+    """Turn any AI answer (or arbitrary text) into a ready-to-edit email draft.
+    Draft-only — does NOT send. Sending would require the email connector + an
+    approval per the risk policy."""
+    content = (payload.content or "").strip()
+    if not content:
+        raise HTTPException(400, "Nothing to draft from")
+    tone = (payload.tone or "professional and concise").strip()
+    sys = "You draft clear, ready-to-send business emails. Output only the email."
+    prompt = (
+        f"Draft a {tone} email based on the content below.\n"
+        "Return the first line as 'SUBJECT: <subject>', then a blank line, then the body.\n\n"
+        f"CONTENT:\n{content[:6000]}"
+    )
+    text = await complete(sys, prompt, "claude")
+    subject, body = "", text.strip()
+    for line in text.splitlines():
+        if line.strip().upper().startswith("SUBJECT:"):
+            subject = line.split(":", 1)[1].strip()
+            body = text.split(line, 1)[1].lstrip("\n").strip()
+            break
+    return {"subject": subject or "(no subject)", "body": body}
+
+
+@router.get("/ai/activity")
+async def ai_activity(current=Depends(require_user)):
+    """Recent AI activity for the AI hub 'Activity' tab: research completed,
+    approvals requested, and knowledge saved — newest first."""
+    uid = current["id"]
+    ws = current["workspace_id"]
+    chat_ids = [
+        c["id"]
+        async for c in db.chats.find(
+            {"workspace_id": ws, "member_ids": uid}, {"id": 1, "_id": 0}
+        )
+    ]
+    events = []
+
+    if chat_ids:
+        threads = (
+            await db.ai_threads.find(
+                {"chat_id": {"$in": chat_ids}},
+                {"_id": 0, "id": 1, "question": 1, "chat_id": 1, "created_at": 1, "status": 1},
+            )
+            .sort("created_at", -1)
+            .to_list(15)
+        )
+        for t in threads:
+            events.append({
+                "type": "research",
+                "title": (t.get("question") or "AI research")[:140],
+                "status": t.get("status") or "complete",
+                "chat_id": t.get("chat_id"),
+                "thread_id": t.get("id"),
+                "at": t.get("created_at"),
+            })
+
+    approvals = (
+        await db.approvals.find({"workspace_id": ws}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(10)
+    )
+    for a in approvals:
+        events.append({
+            "type": "approval",
+            "title": (a.get("title") or "Approval requested")[:140],
+            "status": a.get("status") or "pending",
+            "at": a.get("created_at"),
+        })
+
+    mems = (
+        await db.memory_items.find(
+            {"workspace_id": ws, "status": {"$in": ["active", "outdated"]}},
+            {"_id": 0, "id": 1, "title": 1, "memory_type": 1, "created_at": 1},
+        )
+        .sort("created_at", -1)
+        .to_list(10)
+    )
+    for m in mems:
+        events.append({
+            "type": "knowledge",
+            "title": (m.get("title") or "Knowledge saved")[:140],
+            "status": m.get("memory_type") or "note",
+            "at": m.get("created_at"),
+        })
+
+    events.sort(key=lambda e: e.get("at") or "", reverse=True)
+    return {"items": events[:30]}

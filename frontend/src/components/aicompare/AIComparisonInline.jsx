@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Layers, Trophy, CheckCheck, BookOpen, ThumbsUp, Sparkles, Save, Copy, Share2, Wand2, X, Maximize2, Plus,
+  Layers, Trophy, CheckCheck, BookOpen, ThumbsUp, Sparkles, Save, Copy, Share2, Wand2, X, Maximize2, Plus, Brain, Mail, Zap,
 } from "lucide-react";
 import NewTaskDialog from "@/components/NewTaskDialog";
 import SaveToFolderDialog from "@/components/aicompare/SaveToFolderDialog";
+import DraftEmailDialog from "@/components/aicompare/DraftEmailDialog";
 import { api } from "@/lib/api";
 import { useResearchThread } from "@/hooks/useResearchThread";
 
@@ -30,6 +32,8 @@ export default function AIComparisonInline({ threadId, chatId, comparisonAllowed
   const [showTask, setShowTask] = useState(null);
   const [allModels, setAllModels] = useState([]);
   const [expanding, setExpanding] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+  const nav = useNavigate();
   const rootRef = useRef(null);
 
   useEffect(() => {
@@ -65,6 +69,19 @@ export default function AIComparisonInline({ threadId, chatId, comparisonAllowed
     setExpanding(true);
     await runModels(leftover.map((m) => m.key));
     setExpanding(false);
+  };
+
+  const saveToKnowledge = async () => {
+    try {
+      await api.post(`/ai/threads/${threadId}/save-knowledge`);
+      toast.success("Saved to Team Knowledge");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save to knowledge");
+    }
+  };
+  const automateThis = () => {
+    const prompt = `Watch this topic and alert me with updates: ${thread.question || "this research"}`;
+    nav(`/automations?prompt=${encodeURIComponent(prompt)}`);
   };
 
   return (
@@ -254,6 +271,34 @@ export default function AIComparisonInline({ threadId, chatId, comparisonAllowed
               >
                 <Save className="w-3 h-3" /> Save
               </button>
+              <button
+                data-testid="inline-save-to-knowledge"
+                onClick={saveToKnowledge}
+                className="border border-blue-400/40 text-blue-300 hover:bg-blue-500/10 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full inline-flex items-center gap-1"
+              >
+                <Brain className="w-3 h-3" /> Save to knowledge
+              </button>
+              <button
+                data-testid="inline-draft-email"
+                onClick={() => setDraftOpen(true)}
+                className="border border-white/10 hover:bg-white/5 text-zinc-300 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full inline-flex items-center gap-1"
+              >
+                <Mail className="w-3 h-3" /> Draft email
+              </button>
+              <button
+                data-testid="inline-ask-another-ai"
+                onClick={() => nav("/ai?tab=research")}
+                className="border border-purple-400/40 text-purple-300 hover:bg-purple-500/10 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full inline-flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" /> Ask another AI
+              </button>
+              <button
+                data-testid="inline-automate-this"
+                onClick={automateThis}
+                className="border border-yellow-400/40 text-yellow-300 hover:bg-yellow-500/10 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full inline-flex items-center gap-1"
+              >
+                <Zap className="w-3 h-3" /> Automate this
+              </button>
             </div>
           </div>
         </div>
@@ -274,6 +319,9 @@ export default function AIComparisonInline({ threadId, chatId, comparisonAllowed
         defaultTitle={showTask?.model_name ? `Follow up on ${showTask.model_name} answer` : ""}
         defaultDescription={showTask?.answer?.slice(0, 400)}
       />
+      {draftOpen && (
+        <DraftEmailDialog content={thread.final_answer} onClose={() => setDraftOpen(false)} />
+      )}
     </div>
   );
 }

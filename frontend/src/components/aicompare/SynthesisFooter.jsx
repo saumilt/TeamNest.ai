@@ -1,11 +1,30 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, API } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Save, CheckCircle2, Download, Copy, Share2 } from "lucide-react";
+import { Sparkles, Save, CheckCircle2, Download, Copy, Share2, Brain, Mail, Zap } from "lucide-react";
 import { toast } from "sonner";
+import DraftEmailDialog from "@/components/aicompare/DraftEmailDialog";
 
 /** Synthesized final-answer block — body + action buttons. */
 export default function SynthesisFooter({ thread, threadId, onTask, onSave, onShare }) {
+  const nav = useNavigate();
+  const [draftOpen, setDraftOpen] = useState(false);
   if (!thread.final_answer) return null;
+
+  const saveToKnowledge = async () => {
+    try {
+      await api.post(`/ai/threads/${threadId}/save-knowledge`);
+      toast.success("Saved to Team Knowledge");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save to knowledge");
+    }
+  };
+
+  const automateThis = () => {
+    const prompt = `Watch this topic and alert me with updates: ${thread.question || "this research"}`;
+    nav(`/automations?prompt=${encodeURIComponent(prompt)}`);
+  };
 
   const copyAnswer = async () => {
     try {
@@ -92,6 +111,46 @@ export default function SynthesisFooter({ thread, threadId, onTask, onSave, onSh
           Save to project
         </Button>
         <Button
+          data-testid="save-to-knowledge"
+          size="sm"
+          variant="outline"
+          onClick={saveToKnowledge}
+          className="border-blue-400/40 text-blue-300 hover:bg-blue-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+        >
+          <Brain className="w-3 h-3 mr-1" />
+          Save to knowledge
+        </Button>
+        <Button
+          data-testid="draft-email"
+          size="sm"
+          variant="outline"
+          onClick={() => setDraftOpen(true)}
+          className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+        >
+          <Mail className="w-3 h-3 mr-1" />
+          Draft email
+        </Button>
+        <Button
+          data-testid="ask-another-ai"
+          size="sm"
+          variant="outline"
+          onClick={() => nav("/ai?tab=research")}
+          className="border-purple-400/40 text-purple-300 hover:bg-purple-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+        >
+          <Sparkles className="w-3 h-3 mr-1" />
+          Ask another AI
+        </Button>
+        <Button
+          data-testid="automate-this"
+          size="sm"
+          variant="outline"
+          onClick={automateThis}
+          className="border-yellow-400/40 text-yellow-300 hover:bg-yellow-500/10 rounded-sm font-mono uppercase text-[10px] tracking-widest"
+        >
+          <Zap className="w-3 h-3 mr-1" />
+          Automate this
+        </Button>
+        <Button
           data-testid="send-for-approval"
           size="sm"
           variant="outline"
@@ -112,6 +171,9 @@ export default function SynthesisFooter({ thread, threadId, onTask, onSave, onSh
           Export PDF
         </Button>
       </div>
+      {draftOpen && (
+        <DraftEmailDialog content={thread.final_answer} onClose={() => setDraftOpen(false)} />
+      )}
     </div>
   );
 }

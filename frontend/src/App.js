@@ -27,6 +27,7 @@ import Knowledge from "@/pages/Knowledge";
 import MemoryPage from "@/pages/MemoryPage";
 import Decisions from "@/pages/Decisions";
 import Automations from "@/pages/Automations";
+import AIHub from "@/pages/AIHub";
 import AuditLog from "@/pages/AuditLog";
 import ImportWhatsApp from "@/pages/ImportWhatsApp";
 import ProjectMemoryTimeline from "@/pages/ProjectMemoryTimeline";
@@ -181,6 +182,7 @@ export default function App() {
             <Route path="/my-ai" element={<MyAI />} />
             <Route path="/team" element={<TeamAdmin />} />
             <Route path="/research" element={<Research />} />
+            <Route path="/ai" element={<AIHub />} />
             <Route path="/find-friends" element={<FindFriends />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/admin" element={<AdminDashboard />} />

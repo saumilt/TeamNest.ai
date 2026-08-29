@@ -23,7 +23,7 @@ import {
 export const PRIMARY_ITEMS = {
   home:      { to: "/dashboard", label: "Home",  icon: LayoutDashboard, testid: "nav-dashboard" },
   chats:     { to: "/chats",     label: "Chats", icon: MessageSquare,   testid: "nav-chats", end: true },
-  ai:        { to: "/research",  label: "AI",    icon: Sparkles,        testid: "nav-research", accent: true },
+  ai:        { to: "/ai",        label: "AI",    icon: Sparkles,        testid: "nav-research", accent: true },
   employees: { to: "/employees", label: "Hire",  icon: Bot,             testid: "nav-employees", accent: true },
   tasks:     { to: "/tasks",     label: "Tasks", icon: CheckSquare,     testid: "nav-tasks" },
   calls:     { to: "/calls",     label: "Calls", icon: Phone,           testid: "nav-calls" },
