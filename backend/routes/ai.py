@@ -857,3 +857,50 @@ async def ai_activity(current=Depends(require_user)):
 
     events.sort(key=lambda e: e.get("at") or "", reverse=True)
     return {"items": events[:30]}
+
+
+class MeetingPrepRequest(BaseModel):
+    chat_id: Optional[str] = None
+    call_id: Optional[str] = None
+
+
+@router.post("/ai/meeting-prep")
+async def meeting_prep(payload: MeetingPrepRequest, current=Depends(require_user)):
+    """'Prepare me' — brief the user before a meeting using its chat history +
+    the workspace's documents. Read-only, low risk."""
+    ws = current["workspace_id"]
+    chat_id = payload.chat_id
+    if not chat_id and payload.call_id:
+        call = await db.calls.find_one({"id": payload.call_id}, {"_id": 0, "chat_id": 1})
+        chat_id = call.get("chat_id") if call else None
+    if not chat_id:
+        raise HTTPException(400, "No meeting context")
+    chat = await db.chats.find_one({"id": chat_id, "workspace_id": ws}, {"_id": 0})
+    if not chat:
+        raise HTTPException(404, "Meeting not found")
+    msgs = (
+        await db.messages.find(
+            {"chat_id": chat_id}, {"_id": 0, "body": 1, "created_at": 1}
+        )
+        .sort("created_at", -1)
+        .to_list(30)
+    )
+    convo = "\n".join(
+        f"- {(m.get('body') or '')[:200]}" for m in reversed(msgs) if m.get("body")
+    )[:5000] or "(no recent messages)"
+    docs = (
+        await db.knowledge_sources.find({"workspace_id": ws}, {"_id": 0, "name": 1})
+        .sort("created_at", -1)
+        .to_list(8)
+    )
+    doclist = ", ".join(d.get("name", "") for d in docs) or "none"
+    sys = "You are an executive assistant preparing someone for a meeting. Be concise and practical."
+    prompt = (
+        f"Prepare me for an upcoming meeting in the chat '{chat.get('name') or 'Meeting'}'.\n"
+        f"Recent conversation:\n{convo}\n\nAvailable documents: {doclist}\n\n"
+        "Produce, with short bold headings: (1) a 2-3 sentence context recap, "
+        "(2) 3-5 likely talking points or open questions, (3) any pending decisions, "
+        "(4) one suggested goal for the meeting."
+    )
+    brief = await complete(sys, prompt, "claude")
+    return {"chat_id": chat_id, "title": chat.get("name") or "Meeting", "brief": brief}

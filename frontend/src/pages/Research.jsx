@@ -13,6 +13,7 @@ const RESEARCH_EXAMPLES = [
 
 export default function Research() {
   const [threads, setThreads] = useState([]);
+  const [ask, setAsk] = useState("");
   const nav = useNavigate();
 
   const loadThreads = useCallback(() => {
@@ -23,12 +24,18 @@ export default function Research() {
     loadThreads();
   }, [loadThreads]);
 
+  const submitAsk = () => {
+    const q = ask.trim();
+    if (!q) return;
+    nav(`/my-ai?ask=${encodeURIComponent(q)}`);
+  };
+
   return (
     <div className="p-6 lg:p-10">
       <div className="mb-8">
         <TopActionBar items={["my-ai", "compare", "upload", "new-chat", "hire-ai"]} />
       </div>
-      <div className="mb-10">
+      <div className="mb-6">
         <div className="label-mono mb-3">WORKSPACE / AI RESEARCH</div>
         <h1 className="font-display text-4xl lg:text-5xl font-bold tracking-tighter">
           Research threads
@@ -36,6 +43,29 @@ export default function Research() {
         <p className="text-zinc-500 mt-3 max-w-xl">
           All AI research queries across the workspace. Click any thread to open its side-by-side comparison.
         </p>
+      </div>
+
+      {/* Ask composer — start research right here */}
+      <div className="mb-8 rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-400/[0.06] to-transparent p-4">
+        <label className="label-mono mb-2 block">ASK · START NEW RESEARCH</label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            data-testid="research-ask-input"
+            value={ask}
+            onChange={(e) => setAsk(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitAsk()}
+            placeholder="Ask anything — TeamNest queries the models and saves the answer here"
+            className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-sm px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-yellow-400/40"
+          />
+          <button
+            data-testid="research-ask-btn"
+            onClick={submitAsk}
+            disabled={!ask.trim()}
+            className="bg-yellow-500 text-black hover:bg-yellow-400 disabled:opacity-60 text-sm font-semibold rounded-sm px-4 py-2.5 inline-flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" /> Ask AI
+          </button>
+        </div>
       </div>
 
       <div className="border border-white/5">

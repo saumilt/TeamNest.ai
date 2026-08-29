@@ -13,6 +13,15 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Phase 2 — Drop 2: Automation Builder + enhancements (web + mobile + backend) — 2026-08-29
+- **Automation Builder** (`backend/routes/automations.py`, `frontend/src/pages/Automations.jsx`, `mobile/app/automations/index.tsx`): describe in plain English → LLM parses into **WHEN / GET / THEN** + risk → save → **manual Run/Test**. The safe recipe (`overdue_tasks` | `recent_research` → AI summarize → **post to a chat**) executes for REAL (verified: posts an actual message to the target chat); other action kinds are logged as **"simulated"** in the run timeline. Includes a 9-item templates gallery, dashboard stats (running/needs_approval/failed/saved_hours/credits_used), run history + user-facing reasoning summary, pause/activate, risk tags. Endpoints (router has NO prefix; parent adds `/api`): `/automations/templates`, `/automations/parse`, CRUD `/automations[/{id}]`, `/automations/{id}/run`, `/automations/{id}/runs`, `/automations/stats`. **Real scheduled/event triggers are DEFERRED** (next).
+- **Ask Composer** (`Research.jsx`): `research-ask-input` + `research-ask-btn` on the AI Research tab (`/ai` + `/research`) → starts research via the personal-AI chat (`/my-ai?ask=`).
+- **Action Bar Everywhere** (`ModelCard.jsx` + `AIComparison.jsx` passes `threadId`): single-model answer cards now show Save to Knowledge / Draft Email / Automate; plus the Drop-1 synthesis bar (full-screen + inline) reused.
+- **Meeting Prep** (`backend/routes/ai.py POST /api/ai/meeting-prep`, `frontend/src/components/MeetingPrepButton.jsx` on `Calls.jsx` recent rows): "Prepare me" briefs from the meeting's chat history + workspace documents (read-only). Button uses preventDefault/stopPropagation so it doesn't trigger row nav.
+- Mobile entry points wired: Home "Automate Something", "+ New → Automation", and Research "Automate This" all open `/automations` (mobile screen gates fetches on the rehydrated auth token to avoid a cold-load race).
+- **Tested**: testing_agent iteration 146 — backend 9/9 (incl. real chat-post + meeting-prep), web + mobile all target flows pass (report `/app/test_reports/iteration_146.json`). Tester added one missing `data-testid="automations-stats"`.
+- **Known follow-ups (non-blocking)**: mobile Meeting Prep not yet added; no per-user rate limit on `/automations/{id}/run`; real scheduled/event execution still pending.
+
 ### Phase 2 — Drop 1: Mobile Home landing + AI hub + Response Action Bar (web + mobile + backend) — 2026-08-29
 User approved a/a/a/a; shipped in two drops. This is Drop 1.
 - **Mobile Home landing**: app now opens directly on the Home hub (redirects → `/(tabs)/home` in `app/index.tsx`, `(auth)/login.tsx`, `(auth)/_layout.tsx`), not the chat list.

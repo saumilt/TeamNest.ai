@@ -76,7 +76,7 @@ export default function HomeScreen() {
     { key: "meeting", title: "Host a Meeting", subtitle: "Meet, transcribe & summarize", icon: "videocam", onPress: () => say("Open a chat to start a meeting") },
     { key: "task", title: "Create a Task", subtitle: "Capture an action item", icon: "checkbox", onPress: () => router.push("/(tabs)/tasks") },
     { key: "docs", title: "Ask Your Documents", subtitle: "Upload files & ask with sources", icon: "document-text", onPress: () => router.push("/documents") },
-    { key: "automate", title: "Automate Something", subtitle: "Let TeamNest do it for you", icon: "flash", onPress: () => say("Automation Builder is coming soon") },
+    { key: "automate", title: "Automate Something", subtitle: "Let TeamNest do it for you", icon: "flash", onPress: () => router.push("/automations") },
   ];
 
   const r = overview?.remembers || {};
@@ -93,7 +93,7 @@ export default function HomeScreen() {
     { key: "chat", label: "Chat", desc: "Message people or an AI", icon: "chatbubbles", onPress: () => setShowNewChat(true) },
     { key: "task", label: "Task", desc: "Capture an action item", icon: "checkbox", onPress: () => router.push("/(tabs)/tasks") },
     { key: "document", label: "Document Research", desc: "Upload & ask with citations", icon: "document-text", onPress: () => router.push("/documents") },
-    { key: "automation", label: "Automation", desc: "Let TeamNest do it for you", icon: "flash", onPress: () => say("Automation Builder is coming soon") },
+    { key: "automation", label: "Automation", desc: "Let TeamNest do it for you", icon: "flash", onPress: () => router.push("/automations") },
     { key: "employee", label: "AI Employee", desc: "Build or hire an AI teammate", icon: "person-add", onPress: () => router.push("/marketplace") },
   ];
 

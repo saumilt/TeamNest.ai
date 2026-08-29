@@ -32,6 +32,7 @@ from routes import (
     ai_threads,
     approvals,
     auth,
+    automations,
     billing,
     connectors,
     credit_governance,
@@ -116,6 +117,7 @@ api.include_router(launch.router)
 api.include_router(launch_admin.router)
 api.include_router(voice_notes.router)
 api.include_router(approvals.router)
+api.include_router(automations.router)   # Automation Builder (Drop 2)
 api.include_router(exports.router)
 api.include_router(admin.router)
 api.include_router(superadmin.router)

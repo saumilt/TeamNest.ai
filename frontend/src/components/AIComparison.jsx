@@ -129,6 +129,7 @@ export default function AIComparison({ threadId, chatId, onClose, fullScreen = f
                   key={mk}
                   modelKey={mk}
                   response={r}
+                  threadId={threadId}
                   isLoading={!r && isLoading}
                   onVote={(cat) => vote(r.id, cat)}
                   onSelectBest={() => selectBest(r.id)}

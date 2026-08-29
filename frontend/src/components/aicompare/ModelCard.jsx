@@ -1,4 +1,9 @@
-import { Trophy, CheckCheck, BookOpen, ThumbsUp, Save, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Trophy, CheckCheck, BookOpen, ThumbsUp, Save, Sparkles, Brain, Mail, Zap } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import DraftEmailDialog from "@/components/aicompare/DraftEmailDialog";
 
 const VOTE_BTNS = [
   { key: "best", label: "Best", icon: Trophy },
@@ -8,8 +13,22 @@ const VOTE_BTNS = [
 ];
 
 /** Single model column in the AI comparison strip. */
-export default function ModelCard({ modelKey, response, isLoading, onVote, onSelectBest, onSave, onTask }) {
+export default function ModelCard({ modelKey, response, threadId, isLoading, onVote, onSelectBest, onSave, onTask }) {
   const name = response?.model_name || modelKey;
+  const nav = useNavigate();
+  const [draftOpen, setDraftOpen] = useState(false);
+
+  const saveToKnowledge = async () => {
+    try {
+      await api.post(`/ai/threads/${threadId}/save-knowledge`);
+      toast.success("Saved to Team Knowledge");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save to knowledge");
+    }
+  };
+  const automateThis = () =>
+    nav(`/automations?prompt=${encodeURIComponent("Watch this topic and alert me with updates")}`);
+
   return (
     <div
       className={`w-full sm:w-[340px] sm:shrink-0 bg-[#0a0a0a] border-t-2 ${
@@ -108,6 +127,22 @@ export default function ModelCard({ modelKey, response, isLoading, onVote, onSel
               <Save className="w-3 h-3" />
             </button>
           </div>
+          {response?.answer && (
+            <div className="flex flex-wrap gap-1.5 mt-2" data-testid={`model-actions-${modelKey}`}>
+              <button data-testid={`model-save-knowledge-${modelKey}`} onClick={saveToKnowledge} className="border border-blue-400/40 text-blue-300 hover:bg-blue-500/10 text-[10px] font-mono uppercase tracking-widest py-1 px-2 rounded-sm inline-flex items-center gap-1">
+                <Brain className="w-3 h-3" /> Knowledge
+              </button>
+              <button data-testid={`model-draft-email-${modelKey}`} onClick={() => setDraftOpen(true)} className="border border-white/10 hover:bg-white/5 text-zinc-300 text-[10px] font-mono uppercase tracking-widest py-1 px-2 rounded-sm inline-flex items-center gap-1">
+                <Mail className="w-3 h-3" /> Draft email
+              </button>
+              <button data-testid={`model-automate-${modelKey}`} onClick={automateThis} className="border border-yellow-400/40 text-yellow-300 hover:bg-yellow-500/10 text-[10px] font-mono uppercase tracking-widest py-1 px-2 rounded-sm inline-flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Automate
+              </button>
+            </div>
+          )}
+          {draftOpen && (
+            <DraftEmailDialog content={response.answer} onClose={() => setDraftOpen(false)} />
+          )}
         </div>
       )}
     </div>

@@ -234,7 +234,7 @@ export default function ResearchScreen() {
                 <Ionicons name="mail" size={14} color={colors.accent} />
                 <Text style={styles.actText}>{draftBusy ? "Drafting…" : "Draft Email"}</Text>
               </TouchableOpacity>
-              <TouchableOpacity testID="research-automate" style={styles.actBtn} onPress={() => say("Automation Builder is coming soon")}>
+              <TouchableOpacity testID="research-automate" style={styles.actBtn} onPress={() => router.push("/automations")}>
                 <Ionicons name="flash" size={14} color={colors.accent} />
                 <Text style={styles.actText}>Automate This</Text>
               </TouchableOpacity>
