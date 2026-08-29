@@ -32,7 +32,8 @@ const STEP_ICON: Record<string, any> = {
 
 export default function AutomationsScreen() {
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = ["owner", "admin"].includes(user?.role);
   const [prompt, setPrompt] = useState("");
   const [plan, setPlan] = useState<any>(null);
   const [parsing, setParsing] = useState(false);
@@ -40,12 +41,17 @@ export default function AutomationsScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [pending, setPending] = useState<any[]>([]);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [targetChatId, setTargetChatId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
   const load = useCallback(() => {
     apiGet("/api/automations").then((d) => setItems(d.items || [])).catch(() => {});
     apiGet("/api/automations/stats").then(setStats).catch(() => {});
+    apiGet("/api/automations/suggestions").then((d) => setSuggestions(d.suggestions || [])).catch(() => {});
+    apiGet("/api/automations/pending").then((d) => setPending(d.items || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -110,6 +116,19 @@ export default function AutomationsScreen() {
     }
   };
 
+  const decide = async (runId: string, action: "approve" | "reject") => {
+    setActingId(runId);
+    try {
+      const run = await apiPost(`/api/automations/runs/${runId}/${action}`, {});
+      say(action === "approve" ? `Approved · ${run.status}` : "Rejected");
+      load();
+    } catch {
+      say("Couldn't update approval");
+    } finally {
+      setActingId(null);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -128,6 +147,36 @@ export default function AutomationsScreen() {
             <Stat label="Running" value={stats.running} />
             <Stat label="Approvals" value={stats.needs_approval} />
             <Stat label="Hours saved" value={stats.saved_hours} />
+          </View>
+        ) : null}
+
+        {/* Pending approvals */}
+        {pending.length > 0 ? (
+          <View style={styles.pendingBox} testID="mobile-pending">
+            <View style={styles.pendingHead}>
+              <Ionicons name="shield-checkmark" size={16} color="#f59e0b" />
+              <Text style={styles.pendingTitle}>Waiting for approval ({pending.length})</Text>
+            </View>
+            {pending.map((p) => (
+              <View key={p.id} style={styles.pendingRow} testID={`pending-${p.id}`}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{p.automation_name}</Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>Triggered {p.trigger_source}</Text>
+                </View>
+                {isAdmin ? (
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable testID={`pending-approve-${p.id}`} disabled={actingId === p.id} onPress={() => decide(p.id, "approve")} style={styles.approveBtn}>
+                      <Ionicons name="checkmark" size={14} color="#09090b" />
+                    </Pressable>
+                    <Pressable testID={`pending-reject-${p.id}`} disabled={actingId === p.id} onPress={() => decide(p.id, "reject")} style={styles.rejectBtn}>
+                      <Ionicons name="close" size={14} color={colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Text style={styles.needsAdmin}>Needs admin</Text>
+                )}
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -175,6 +224,27 @@ export default function AutomationsScreen() {
 
         {msg ? <Text style={styles.flash} testID="autom-flash">{msg}</Text> : null}
 
+        {/* Suggested */}
+        {suggestions.length > 0 ? (
+          <>
+            <Text style={styles.section}>SUGGESTED FOR YOU</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }} testID="mobile-suggestions">
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s.key}
+                  testID={`suggestion-${s.key}`}
+                  style={styles.suggestion}
+                  onPress={() => { setPrompt(s.prompt); setPlan(null); }}
+                >
+                  <Text style={styles.tplTitle}>{s.title}</Text>
+                  <Text style={styles.suggestionReason} numberOfLines={2}>{s.reason}</Text>
+                  <Text style={styles.suggestionCta}>✦ Set this up</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
         {/* Templates */}
         <Text style={styles.section}>TEMPLATES</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}>
@@ -203,7 +273,12 @@ export default function AutomationsScreen() {
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{a.name}</Text>
-                <Text style={styles.rowSub} numberOfLines={1}>{a.trigger?.label} · {a.status}</Text>
+                <Text style={styles.rowSub} numberOfLines={1}>
+                  {a.trigger?.label} · {a.status}
+                  {a.status === "active" && a.next_run_at && a.trigger?.type === "scheduled"
+                    ? ` · next ${new Date(a.next_run_at).toLocaleDateString([], { month: "short", day: "numeric" })}`
+                    : ""}
+                </Text>
               </View>
               <Pressable testID={`automation-run-${a.id}`} onPress={() => runNow(a.id)} hitSlop={8} style={styles.runBtn}>
                 <Ionicons name="play" size={16} color={colors.accent} />
@@ -294,6 +369,16 @@ const styles = StyleSheet.create({
   tpl: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, width: 200 },
   tplTitle: { color: colors.textPrimary, fontSize: font.small, fontWeight: "700" },
   tplCat: { color: colors.textMuted, fontSize: font.tiny, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.8 },
+  suggestion: { backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accentBorder, borderRadius: radius.md, padding: spacing.md, width: 240 },
+  suggestionReason: { color: colors.textSecondary, fontSize: font.tiny, marginTop: 4 },
+  suggestionCta: { color: colors.accent, fontSize: font.tiny, fontWeight: "700", marginTop: 8 },
+  pendingBox: { backgroundColor: "rgba(245,158,11,0.06)", borderWidth: 1, borderColor: "rgba(245,158,11,0.3)", borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg },
+  pendingHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  pendingTitle: { color: colors.textPrimary, fontSize: font.small, fontWeight: "800" },
+  pendingRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm },
+  approveBtn: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
+  rejectBtn: { width: 34, height: 34, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  needsAdmin: { color: "#f59e0b", fontSize: font.tiny, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
   empty: { color: colors.textMuted, fontSize: font.body },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   rowIcon: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },

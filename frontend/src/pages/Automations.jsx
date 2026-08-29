@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import {
   Zap, Play, Pause, Clock, GitBranch, Wand2, X, AlertTriangle, CheckCircle2,
-  Activity as ActivityIcon, Sparkles, ArrowRight,
+  Activity as ActivityIcon, Sparkles, ArrowRight, ShieldCheck, XCircle, Lightbulb,
 } from "lucide-react";
 
 const RISK = {
@@ -26,20 +27,27 @@ function StatCard({ label, value, tint }) {
 
 export default function Automations() {
   const [params] = useSearchParams();
+  const { user } = useAuth();
+  const isAdmin = ["owner", "admin"].includes(user?.role);
   const [stats, setStats] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [items, setItems] = useState([]);
   const [chats, setChats] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [pending, setPending] = useState([]);
   const [prompt, setPrompt] = useState(params.get("prompt") || "");
   const [plan, setPlan] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [targetChatId, setTargetChatId] = useState("");
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [actingId, setActingId] = useState(null);
 
   const load = () => {
     api.get("/automations").then(({ data }) => setItems(data.items || [])).catch(() => {});
     api.get("/automations/stats").then(({ data }) => setStats(data)).catch(() => {});
+    api.get("/automations/suggestions").then(({ data }) => setSuggestions(data.suggestions || [])).catch(() => {});
+    api.get("/automations/pending").then(({ data }) => setPending(data.items || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -51,6 +59,25 @@ export default function Automations() {
       setTargetChatId(ai?.id || (data || [])[0]?.id || "");
     }).catch(() => {});
   }, []);
+
+  const applySuggestion = (s) => {
+    setPrompt(s.prompt);
+    setPlan(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const decide = async (runId, action) => {
+    setActingId(runId);
+    try {
+      const { data } = await api.post(`/automations/runs/${runId}/${action}`);
+      toast.success(action === "approve" ? `Approved · run ${data.status}` : "Automation rejected");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't update approval");
+    } finally {
+      setActingId(null);
+    }
+  };
 
   const generate = async () => {
     if (!prompt.trim()) return;
@@ -132,6 +159,41 @@ export default function Automations() {
         <StatCard label="AI Credits" value={stats?.credits_used ?? "—"} />
       </div>
 
+      {/* Pending approvals */}
+      {pending.length > 0 && (
+        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/[0.06] p-5 mb-8" data-testid="automations-pending">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck className="w-5 h-5 text-amber-400" />
+            <h2 className="text-lg font-bold">Waiting for approval</h2>
+            <span className="text-[11px] font-mono text-amber-300">{pending.length}</span>
+          </div>
+          <p className="text-zinc-500 text-sm mb-4">These higher-risk automations paused before running. {isAdmin ? "Approve to run them now." : "An owner or admin needs to approve them."}</p>
+          <div className="space-y-2">
+            {pending.map((p) => (
+              <div key={p.id} data-testid={`pending-${p.id}`} className="rounded-xl border border-white/10 bg-[#121214] p-4 flex items-center gap-3">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-zinc-100 truncate">{p.automation_name}</div>
+                  <div className="text-[11px] text-zinc-500 truncate">Triggered {p.trigger_source} · {new Date(p.started_at).toLocaleString()}</div>
+                </div>
+                {isAdmin ? (
+                  <>
+                    <button data-testid={`pending-approve-${p.id}`} disabled={actingId === p.id} onClick={() => decide(p.id, "approve")} className="inline-flex items-center gap-1.5 bg-emerald-500 text-black hover:bg-emerald-400 disabled:opacity-60 text-xs font-semibold rounded-sm px-3 py-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                    </button>
+                    <button data-testid={`pending-reject-${p.id}`} disabled={actingId === p.id} onClick={() => decide(p.id, "reject")} className="inline-flex items-center gap-1.5 border border-white/10 text-zinc-300 hover:bg-white/5 disabled:opacity-60 text-xs font-semibold rounded-sm px-3 py-1.5">
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-amber-300 border border-amber-400/30 rounded px-2 py-1">Needs admin</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Builder */}
       <div className="rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-400/[0.06] to-transparent p-5 lg:p-6 mb-8">
         <div className="flex items-center gap-2 mb-3">
@@ -201,6 +263,30 @@ export default function Automations() {
         )}
       </div>
 
+      {/* Suggested automations */}
+      {suggestions.length > 0 && (
+        <div className="mb-10" data-testid="automations-suggestions">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="w-4 h-4 text-yellow-400" />
+            <div className="label-mono">SUGGESTED FOR YOU</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s) => (
+              <button
+                key={s.key}
+                data-testid={`suggestion-${s.key}`}
+                onClick={() => applySuggestion(s)}
+                className="text-left rounded-xl border border-yellow-400/20 bg-gradient-to-br from-yellow-400/[0.05] to-transparent hover:border-yellow-400/50 p-4 w-full sm:w-[320px] transition-colors"
+              >
+                <div className="text-sm font-semibold text-zinc-100">{s.title}</div>
+                <div className="text-[12px] text-zinc-400 mt-1">{s.reason}</div>
+                <div className="text-[11px] text-yellow-400 mt-2 inline-flex items-center gap-1"><Sparkles className="w-3 h-3" /> Set this up</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Templates */}
       <div className="label-mono mb-3">TEMPLATE GALLERY</div>
       <div className="space-y-4 mb-10">
@@ -241,7 +327,12 @@ export default function Automations() {
               </div>
               <button className="min-w-0 flex-1 text-left" onClick={() => openDetail(a.id)} data-testid={`automation-open-${a.id}`}>
                 <div className="text-sm font-semibold text-zinc-100 truncate">{a.name}</div>
-                <div className="text-[11px] text-zinc-500 truncate">{a.trigger?.label} · {a.status}</div>
+                <div className="text-[11px] text-zinc-500 truncate">
+                  {a.trigger?.label} · {a.status}
+                  {a.status === "active" && a.next_run_at && a.trigger?.type === "scheduled" && (
+                    <span className="text-zinc-600"> · next {new Date(a.next_run_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                </div>
               </button>
               <span className={`hidden sm:inline text-[9px] font-mono uppercase tracking-widest border rounded px-2 py-1 ${RISK[a.risk]?.cls || RISK.low.cls}`}>{a.risk}</span>
               <button data-testid={`automation-run-${a.id}`} onClick={() => runNow(a.id)} title="Run now" className="p-2 rounded-lg hover:bg-white/10 text-yellow-300"><Play className="w-4 h-4" /></button>

@@ -336,6 +336,24 @@ async def startup():
         logger.warning("Market payment reconciler failed to start: %s", e)
 
 
+    try:
+        import asyncio as _asyncio
+        from routes.automations import run_due_automations as _rda
+
+        async def _automation_scheduler():
+            while True:
+                try:
+                    await _rda()
+                except Exception:
+                    logger.exception("automation scheduler tick failed")
+                await _asyncio.sleep(60)
+
+        _asyncio.create_task(_automation_scheduler())
+        logger.info("[startup] automation scheduler scheduled (60s tick)")
+    except Exception as e:
+        logger.warning("Automation scheduler failed to start: %s", e)
+
+
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
