@@ -22,7 +22,10 @@ import {
   PauseCircle,
   CalendarDays,
   Mail,
+  Settings2,
 } from "lucide-react";
+
+const DIGEST_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const EMPLOYEE_ICONS = {
   cmo: Megaphone,
@@ -305,6 +308,7 @@ function WeeklyDigests() {
   const isAdmin = ["owner", "admin"].includes(user?.role);
   const [digests, setDigests] = useState(null);
   const [sending, setSending] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   useEffect(() => {
     api.get("/ai-employees/_/digests").then(({ data }) => setDigests(data.digests || [])).catch(() => setDigests([]));
   }, []);
@@ -312,31 +316,48 @@ function WeeklyDigests() {
     setSending(true);
     try {
       const { data } = await api.post("/ai-employees/_/digest-email");
-      if (data.sent) toast.success(`Digest emailed to ${data.recipients?.length || 0} owner(s)`);
-      else toast.error(data.reason === "no_owner_email" ? "No owner email on file" : "Couldn't send the digest email");
+      if (data.sent) toast.success(`Digest emailed to ${data.recipients?.length || 0} recipient(s)`);
+      else toast.error(data.reason === "no_owner_email" ? "No recipient email on file" : "Couldn't send the digest email");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't send the digest email");
     } finally {
       setSending(false);
     }
   };
-  if (!digests || digests.length === 0) return null;
+  const hasDigests = digests && digests.length > 0;
+  if (!isAdmin && !hasDigests) return null;
   return (
     <section data-testid="employee-digests">
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-brand" />
           <h2 className="text-lg font-semibold tracking-tight">This week with your AI team</h2>
         </div>
-        <button
-          data-testid="digest-send-email"
-          onClick={sendEmail}
-          disabled={sending}
-          className={`${isAdmin ? "inline-flex" : "hidden"} text-xs font-semibold px-3 py-1.5 rounded-lg border border-hairline text-ink-dim hover:text-ink hover:bg-white/5 disabled:opacity-60 items-center gap-1.5`}
-        >
-          <Mail className="w-3.5 h-3.5" /> {sending ? "Sending…" : "Email owners"}
-        </button>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <button
+              data-testid="digest-schedule-open"
+              onClick={() => setShowSchedule(true)}
+              className="inline-flex text-xs font-semibold px-3 py-1.5 rounded-lg border border-hairline text-ink-dim hover:text-ink hover:bg-white/5 items-center gap-1.5"
+            >
+              <Settings2 className="w-3.5 h-3.5" /> Schedule
+            </button>
+            <button
+              data-testid="digest-send-email"
+              onClick={sendEmail}
+              disabled={sending}
+              className="inline-flex text-xs font-semibold px-3 py-1.5 rounded-lg border border-hairline text-ink-dim hover:text-ink hover:bg-white/5 disabled:opacity-60 items-center gap-1.5"
+            >
+              <Mail className="w-3.5 h-3.5" /> {sending ? "Sending…" : "Email now"}
+            </button>
+          </div>
+        )}
       </div>
+      {!hasDigests ? (
+        <div data-testid="digest-empty" className="rounded-card border border-hairline bg-surface-1/60 p-5 text-[13px] text-ink-dim leading-relaxed">
+          No AI employee activity yet this week. Once your AI team completes work, their weekly recap appears here — and lands in your inbox on the schedule you set.
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {digests.map((d) => (
           <div key={d.employee_key} data-testid={`digest-${d.employee_key}`} className="rounded-card border border-hairline bg-surface-1/60 p-4">
@@ -361,7 +382,165 @@ function WeeklyDigests() {
           </div>
         ))}
       </div>
+      )}
+      {showSchedule && <DigestScheduleModal onClose={() => setShowSchedule(false)} />}
     </section>
+  );
+}
+
+function DigestScheduleModal({ onClose }) {
+  const [s, setS] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api.get("/ai-employees/_/digest-settings").then(({ data }) => {
+      const custom = Array.isArray(data.recipient_user_ids) && data.recipient_user_ids.length > 0;
+      setS({
+        enabled: data.enabled,
+        day_of_week: data.day_of_week,
+        hour_utc: data.hour_utc,
+        mode: custom ? "custom" : "default",
+        customIds: custom ? data.recipient_user_ids : (data.default_recipient_ids || []),
+        available: data.available_recipients || [],
+      });
+    }).catch(() => { toast.error("Couldn't load digest settings"); onClose(); });
+  }, []);
+
+  const localHint = (h) => {
+    const d = new Date(); d.setUTCHours(h, 0, 0, 0);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+  const toggleId = (id) =>
+    setS((p) => ({ ...p, customIds: p.customIds.includes(id) ? p.customIds.filter((x) => x !== id) : [...p.customIds, id] }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/ai-employees/_/digest-settings", {
+        enabled: s.enabled,
+        day_of_week: s.day_of_week,
+        hour_utc: s.hour_utc,
+        recipient_user_ids: s.mode === "custom" ? s.customIds : null,
+      });
+      toast.success("Digest schedule saved");
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't save schedule");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      data-testid="digest-schedule-modal"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg bg-[#0F0F12] border border-brand/40 rounded-md p-6 space-y-5 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-widest text-brand mb-1">Weekly digest</div>
+            <h3 className="text-lg font-semibold">Schedule the AI team email</h3>
+          </div>
+          <button onClick={onClose} data-testid="digest-schedule-close" className="text-ink-dim hover:text-ink text-xl leading-none" aria-label="Close">×</button>
+        </div>
+        {!s ? (
+          <div className="py-10 text-center text-ink-dim text-sm">Loading…</div>
+        ) : (
+          <>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <div className="text-sm font-medium text-ink">Send the weekly digest</div>
+                <div className="text-[12px] text-ink-dim">Turn the automatic email on or off.</div>
+              </div>
+              <input type="checkbox" data-testid="digest-enabled" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} className="w-5 h-5" />
+            </label>
+
+            <div>
+              <div className="text-sm font-medium text-ink mb-2">Day</div>
+              <div className="flex flex-wrap gap-1.5">
+                {DIGEST_DAYS.map((d, i) => (
+                  <button
+                    key={d}
+                    data-testid={`digest-day-${i}`}
+                    onClick={() => setS({ ...s, day_of_week: i })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${s.day_of_week === i ? "bg-brand text-black border-brand" : "border-hairline text-ink-dim hover:text-ink"}`}
+                  >
+                    {d.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm font-medium text-ink mb-1">Time</div>
+              <div className="text-[12px] text-ink-dim mb-2">{String(s.hour_utc).padStart(2, "0")}:00 UTC · ≈ {localHint(s.hour_utc)} your time</div>
+              <select
+                data-testid="digest-hour"
+                value={s.hour_utc}
+                onChange={(e) => setS({ ...s, hour_utc: Number(e.target.value) })}
+                className="w-full h-10 bg-[#121214] border border-white/10 rounded-md px-3 text-sm"
+              >
+                {Array.from({ length: 24 }).map((_, h) => (
+                  <option key={h} value={h}>{String(h).padStart(2, "0")}:00 UTC</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="text-sm font-medium text-ink mb-2">Recipients</div>
+              <div className="flex gap-2 mb-3">
+                <button
+                  data-testid="digest-mode-default"
+                  onClick={() => setS({ ...s, mode: "default" })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${s.mode === "default" ? "bg-brand/15 border-brand/50 text-brand" : "border-hairline text-ink-dim hover:text-ink"}`}
+                >
+                  All owners &amp; admins
+                </button>
+                <button
+                  data-testid="digest-mode-custom"
+                  onClick={() => setS({ ...s, mode: "custom" })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${s.mode === "custom" ? "bg-brand/15 border-brand/50 text-brand" : "border-hairline text-ink-dim hover:text-ink"}`}
+                >
+                  Choose people
+                </button>
+              </div>
+              {s.mode === "custom" && (
+                <div className="space-y-1 max-h-48 overflow-y-auto border border-hairline rounded-md p-2">
+                  {s.available.map((m) => {
+                    const on = s.customIds.includes(m.id);
+                    return (
+                      <label key={m.id} data-testid={`digest-recipient-${m.id}`} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-white/5 cursor-pointer">
+                        <input type="checkbox" checked={on} onChange={() => toggleId(m.id)} className="w-4 h-4" />
+                        <div className="min-w-0">
+                          <div className="text-[13px] text-ink truncate">{m.name}</div>
+                          <div className="text-[11px] text-ink-dim truncate">{m.email} · {m.role}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button onClick={onClose} className="h-10 px-4 rounded-md border border-white/10 hover:bg-white/5 text-xs font-mono uppercase tracking-widest">Cancel</button>
+              <button
+                data-testid="digest-schedule-save"
+                onClick={save}
+                disabled={saving}
+                className="h-10 px-4 rounded-md bg-brand text-black hover:bg-brand-deep disabled:opacity-50 text-xs font-mono uppercase tracking-widest"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -3,6 +3,21 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 156 (Jun 2026) — Digest Schedule Control + production deploy unblocked — VERIFIED (backend 10/10 + web + mobile)
+P1 done: workspace owners/admins now choose the DAY, TIME (hour, UTC) and RECIPIENTS of the weekly AI-employee digest email (previously hardcoded to Monday 08:00 UTC → all owners/admins).
+- **Backend** (`routes/ai_employees.py`):
+  - `DigestSettingsUpdate` model + `_get_digest_settings(ws)` helper (defaults: enabled, Mon, 08:00 UTC, recipients=null ⇒ all owners/admins). Stored on `workspaces.digest_settings`.
+  - `GET /api/ai-employees/_/digest-settings` → enabled/day_of_week/hour_utc/recipient_user_ids + `available_recipients` (members w/ email) + `default_recipient_ids` + `day_names`.
+  - `PUT /api/ai-employees/_/digest-settings` (owner/admin, else 403) → clamps day 0–6 & hour 0–23, filters invalid recipient ids, empty list ⇒ null.
+  - `_send_digest_email` now sends to configured recipients (or owners/admins default); manual `POST /_/digest-email` ignores the enabled toggle (explicit action).
+  - `maybe_send_weekly_digests` (60s tick loop in `server.py`) is now per-workspace schedule-aware (checks each ws's day/hour/enabled, once per ISO week via `digest_email_log`).
+- **Web** (`pages/AIEmployees.jsx`): `WeeklyDigests` shows for admins even with no activity; added "Schedule" button → `DigestScheduleModal` (enabled toggle, day chips, hour `<select>` with local-time hint, recipients: All owners&admins vs Choose people checkbox list). "Email owners" → "Email now".
+- **Mobile** (`components/ai/AIEmployeesPanel.tsx` + new `components/ai/DigestScheduleModal.tsx`): admin-only "WEEKLY DIGEST" controls (Schedule + Email now); bottom-sheet RN `<Modal>` with day/hour horizontal chip scrollers, enabled `<Switch>`, recipient modes + member checkbox list. Fixed iter155 parity gap — controls correctly HIDDEN for member role on both surfaces.
+- **Deployment fix**: removed the `"packageManager": "yarn@1.22.22+sha512…"` field from `frontend/package.json` — it triggered Corepack in the Node build image and caused Cloud Build step #8 to fail with `yarn: not found`. `deployment_agent` = PASS, no blockers; next production Deploy should succeed. (Earlier jest-dom Node-22 blocker was already fixed in iter prior.)
+- Tests: `/app/backend/tests/test_iteration156_digest_schedule.py` (10/10). Report `/app/test_reports/iteration_156.json`.
+- Non-blocking polish noted by QA: RN `<Switch>` testID not reaching web DOM (works/persists); web+RN deprecation warnings (shadow*, pointerEvents).
+
+
 ## Iteration 135 (Jun 2026) — Mobile In-App Purchases via RevenueCat (no Stripe on mobile) — backend VERIFIED (7/7) + mobile paywall renders
 On the iOS/Android apps, subscriptions + credit packs now buy through native App Store / Google Play billing (RevenueCat) instead of a Stripe web redirect (Apple/Google disallow external processors for digital goods). Web keeps Stripe. Store prices are configured ~20% above web; the website stays the discounted price. testing_agent iteration_135 = PASS, no regressions.
 - **Backend** (`services/iap_revenuecat.py`, `routes/iap.py`, registered in `server.py`):

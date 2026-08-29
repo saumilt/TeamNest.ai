@@ -7,6 +7,7 @@ import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/components/Toast";
 import { getItem, setItem } from "@/src/storage";
 import { colors, font, radius, spacing } from "@/src/theme";
+import DigestScheduleModal from "@/src/components/ai/DigestScheduleModal";
 
 const INTRO_KEY = "ai_employees_intro_seen_v1";
 
@@ -35,6 +36,7 @@ export default function AIEmployeesPanel() {
   const [employees, setEmployees] = useState<any[] | null>(null);
   const [digests, setDigests] = useState<any[]>([]);
   const [showIntro, setShowIntro] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -97,26 +99,36 @@ export default function AIEmployeesPanel() {
         </View>
       ) : null}
 
-      {digests.length > 0 ? (
-        <View testID="employee-digests">
+      {isAdmin ? (
+        <View testID="digest-controls" style={{ marginTop: spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={styles.section}>THIS WEEK WITH YOUR AI TEAM</Text>
-            {isAdmin ? (
+            <Text style={[styles.section, { marginTop: 0, marginBottom: 0 }]}>WEEKLY DIGEST</Text>
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Pressable testID="digest-schedule-open" onPress={() => setShowSchedule(true)} style={styles.emailBtn}>
+                <Ionicons name="options-outline" size={13} color={colors.textSecondary} />
+                <Text style={styles.emailBtnText}>Schedule</Text>
+              </Pressable>
               <Pressable
                 testID="digest-send-email"
                 onPress={async () => {
                   try {
                     const r = await apiPost("/api/ai-employees/_/digest-email", {});
-                    show(r.sent ? `Digest emailed to ${r.recipients?.length || 0} owner(s)` : "Couldn't send digest email");
-                  } catch { show("Couldn't send digest email"); }
+                    show(r.sent ? `Digest emailed to ${r.recipients?.length || 0} recipient(s)` : "Couldn't send digest email");
+                  } catch { show("Couldn't send digest email", "error"); }
                 }}
                 style={styles.emailBtn}
               >
                 <Ionicons name="mail-outline" size={13} color={colors.textSecondary} />
-                <Text style={styles.emailBtnText}>Email owners</Text>
+                <Text style={styles.emailBtnText}>Email now</Text>
               </Pressable>
-            ) : null}
+            </View>
           </View>
+        </View>
+      ) : null}
+
+      {digests.length > 0 ? (
+        <View testID="employee-digests">
+          <Text style={styles.section}>THIS WEEK WITH YOUR AI TEAM</Text>
           {digests.map((d) => (
             <View key={d.employee_key} style={styles.digestCard} testID={`digest-${d.employee_key}`}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -182,6 +194,14 @@ export default function AIEmployeesPanel() {
           ))}
         </>
       ) : null}
+
+      <DigestScheduleModal
+        visible={showSchedule}
+        onClose={(saved) => {
+          setShowSchedule(false);
+          if (saved) load();
+        }}
+      />
     </ScrollView>
   );
 }

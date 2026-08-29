@@ -1,6 +1,8 @@
 # TeamNest.ai — Roadmap
 
 ## P1 — Upcoming
+- (DONE iter 156) Digest Schedule Control — owners pick day/time (UTC)/recipients for the weekly AI-team email (web + mobile + per-workspace tick loop).
+- (DONE iter 156) Production deploy unblocked — removed `packageManager` field causing Cloud Build `yarn: not found`; deployment_agent PASS.
 - (DONE iter 80) Real headless-browser smoke gate (playwright) per build/QA run.
 - (DONE iter 81) Builders Hub — 7 visual plain-English builders as 6th DevStudio tab, spec persistence + auto-feed to @devmanager.
 - (DONE iter 87) AI-powered Builders: plain-English → AI-generated structured spec → editable cards → auto-apply Save & Apply.

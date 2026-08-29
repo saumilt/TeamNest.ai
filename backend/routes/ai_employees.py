@@ -67,6 +67,13 @@ class CreditAdjust(BaseModel):
     reason: str
 
 
+class DigestSettingsUpdate(BaseModel):
+    enabled: bool = True
+    day_of_week: int = 0  # 0 = Monday … 6 = Sunday
+    hour_utc: int = 8      # 0 … 23 (UTC)
+    recipient_user_ids: Optional[List[str]] = None  # None/empty => all owners+admins
+
+
 # ----- Helpers -----
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -474,6 +481,22 @@ async def deduct_employee_credits(
     }
 
 
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+async def _get_digest_settings(ws: str) -> Dict[str, Any]:
+    """Read a workspace's weekly-digest schedule + recipients (with defaults:
+    enabled, Monday, 08:00 UTC, all owners/admins)."""
+    doc = await db.workspaces.find_one({"id": ws}, {"_id": 0, "digest_settings": 1})
+    s = (doc or {}).get("digest_settings") or {}
+    return {
+        "enabled": bool(s.get("enabled", True)),
+        "day_of_week": int(s.get("day_of_week", 0)),
+        "hour_utc": int(s.get("hour_utc", 8)),
+        "recipient_user_ids": s.get("recipient_user_ids") or None,
+    }
+
+
 async def _compute_digests(ws: str) -> list:
     """Per subscribed employee: last-7-day tasks, hours saved, $ saved, an AI recap."""
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
@@ -547,11 +570,19 @@ async def _send_digest_email(ws: str) -> dict:
     """Compose + send the weekly AI-employee digest to workspace owners."""
     from services import mailgun_service
     digests = await _compute_digests(ws)
-    owners = await db.users.find(
-        {"workspace_id": ws, "role": {"$in": ["owner", "admin"]}, "status": {"$ne": "removed"}},
-        {"_id": 0, "email": 1, "name": 1},
-    ).to_list(20)
-    recipients = [o["email"] for o in owners if o.get("email")]
+    settings = await _get_digest_settings(ws)
+    rids = settings.get("recipient_user_ids")
+    if rids:
+        people = await db.users.find(
+            {"workspace_id": ws, "id": {"$in": rids}, "status": {"$ne": "removed"}},
+            {"_id": 0, "email": 1, "name": 1},
+        ).to_list(50)
+    else:
+        people = await db.users.find(
+            {"workspace_id": ws, "role": {"$in": ["owner", "admin"]}, "status": {"$ne": "removed"}},
+            {"_id": 0, "email": 1, "name": 1},
+        ).to_list(50)
+    recipients = [p["email"] for p in people if p.get("email")]
     if not recipients:
         return {"sent": False, "reason": "no_owner_email", "recipients": []}
     wsdoc = await db.workspaces.find_one({"id": ws}, {"_id": 0, "name": 1})
@@ -574,23 +605,77 @@ async def employee_weekly_digests(current=Depends(require_user)):
 
 @router.post("/ai-employees/_/digest-email")
 async def send_digest_email_now(current=Depends(require_user)):
-    """Send the weekly AI-employee digest email to owners now (owner/admin)."""
+    """Send the weekly AI-employee digest email to the configured recipients now
+    (owner/admin). Ignores the enabled toggle — this is an explicit action."""
     if current.get("role") not in ("owner", "admin"):
         raise HTTPException(403, "Only owners and admins can send the digest email")
     return await _send_digest_email(current["workspace_id"])
 
 
+@router.get("/ai-employees/_/digest-settings")
+async def get_digest_settings(current=Depends(require_user)):
+    """Current weekly-digest schedule + the pool of people who can receive it."""
+    ws = current["workspace_id"]
+    settings = await _get_digest_settings(ws)
+    members = await db.users.find(
+        {"workspace_id": ws, "status": {"$ne": "removed"}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+    ).to_list(200)
+    available = [m for m in members if m.get("email")]
+    settings["available_recipients"] = available
+    settings["default_recipient_ids"] = [
+        m["id"] for m in available if m.get("role") in ("owner", "admin")
+    ]
+    settings["day_names"] = DAY_NAMES
+    return settings
+
+
+@router.put("/ai-employees/_/digest-settings")
+async def update_digest_settings(payload: DigestSettingsUpdate, current=Depends(require_user)):
+    """Owners/admins set the day, hour (UTC) and recipients of the weekly digest."""
+    if current.get("role") not in ("owner", "admin"):
+        raise HTTPException(403, "Only owners and admins can change the digest schedule")
+    ws = current["workspace_id"]
+    day = max(0, min(6, int(payload.day_of_week)))
+    hour = max(0, min(23, int(payload.hour_utc)))
+    rids = payload.recipient_user_ids
+    if rids is not None:
+        rids = [r for r in rids if r]
+        if rids:
+            valid = await db.users.find(
+                {"workspace_id": ws, "id": {"$in": rids}}, {"_id": 0, "id": 1}
+            ).to_list(200)
+            valid_ids = {v["id"] for v in valid}
+            rids = [r for r in rids if r in valid_ids]
+        rids = rids or None  # empty selection => fall back to owners/admins
+    await db.workspaces.update_one(
+        {"id": ws},
+        {"$set": {"digest_settings": {
+            "enabled": bool(payload.enabled),
+            "day_of_week": day,
+            "hour_utc": hour,
+            "recipient_user_ids": rids,
+        }}},
+    )
+    return await get_digest_settings(current)
+
+
 async def maybe_send_weekly_digests():
-    """Tick job: on Mondays (UTC) after 08:00, email each workspace's owners a
-    weekly AI-employee digest, once per ISO week. Called from the 60s loop."""
+    """Tick job: email each workspace's chosen recipients a weekly AI-employee
+    digest on their configured day + hour (UTC), once per ISO week. Owners set
+    the schedule via PUT /ai-employees/_/digest-settings. Called from the 60s
+    loop."""
     now = datetime.now(timezone.utc)
-    if now.weekday() != 0 or now.hour < 8:  # Monday only, from 08:00 UTC
-        return
     iso_week = f"{now.isocalendar().year}-W{now.isocalendar().week}"
     ws_ids = await db.ai_employee_subscriptions.distinct(
         "workspace_id", {"status": {"$nin": ["paused", "cancelled"]}}
     )
     for ws in ws_ids:
+        settings = await _get_digest_settings(ws)
+        if not settings["enabled"]:
+            continue
+        if now.weekday() != settings["day_of_week"] or now.hour < settings["hour_utc"]:
+            continue
         already = await db.digest_email_log.find_one({"workspace_id": ws, "iso_week": iso_week})
         if already:
             continue
