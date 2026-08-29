@@ -23,7 +23,7 @@ import { colors, font, radius, spacing } from "@/src/theme";
 
 const DEFAULT_MODELS = ["chatgpt", "claude", "gemini"];
 
-export default function ResearchScreen() {
+export default function ResearchScreen({ embedded = false }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const [models, setModels] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>(DEFAULT_MODELS);
@@ -127,19 +127,23 @@ export default function ResearchScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, paddingTop: insets.top + spacing.md, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: embedded ? spacing.md : insets.top + spacing.md, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={styles.h1}>AI Research</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-            <NotificationBell />
-            <CreditsBadge />
-          </View>
-        </View>
-        <Text style={styles.sub}>
-          Ask once, compare answers across models, get one synthesized result.
-        </Text>
+        {!embedded && (
+          <>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={styles.h1}>AI Research</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <NotificationBell />
+                <CreditsBadge />
+              </View>
+            </View>
+            <Text style={styles.sub}>
+              Ask once, compare answers across models, get one synthesized result.
+            </Text>
+          </>
+        )}
 
         <Text style={styles.label}>MODELS TO COMPARE</Text>
         {!comparisonAllowed && (

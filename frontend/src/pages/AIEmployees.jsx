@@ -42,6 +42,59 @@ const STATUS_BADGE = {
   cancelled: { label: "Cancelled", className: "bg-zinc-700/30 text-zinc-400 border border-zinc-600/40" },
 };
 
+const ROLE_GROUPS_INTRO = [
+  { title: "Marketing", Icon: Megaphone, blurb: "Plans campaigns, writes content, runs social.", keys: ["cmo"] },
+  { title: "Finance", Icon: Calculator, blurb: "Keeps the books, models numbers, pays bills.", keys: ["bookkeeper", "financial_modeler", "bill_pay"] },
+  { title: "Sales", Icon: Briefcase, blurb: "Finds leads and moves deals forward.", keys: ["sales"] },
+  { title: "Legal", Icon: Scale, blurb: "Reviews and drafts everyday legal docs.", keys: ["paralegal"] },
+  { title: "Operations", Icon: UtensilsCrossed, blurb: "Handles orders and day-to-day ops.", keys: ["restaurant_orders"] },
+];
+
+function RoleFirstIntro({ employees }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem("tn_ai_employees_intro_v1") === "1"; } catch { return false; }
+  });
+  if (dismissed) return null;
+  const byKey = Object.fromEntries((employees || []).map((e) => [e.key, e]));
+  const groups = ROLE_GROUPS_INTRO
+    .map((g) => ({ ...g, present: g.keys.map((k) => byKey[k]).filter(Boolean) }))
+    .filter((g) => g.present.length > 0);
+  if (groups.length === 0) return null;
+  const close = () => {
+    setDismissed(true);
+    try { localStorage.setItem("tn_ai_employees_intro_v1", "1"); } catch { /* ignore */ }
+  };
+  return (
+    <div data-testid="employees-intro" className="rounded-card border border-brand/30 bg-gradient-to-br from-brand-tint/40 to-transparent p-5 md:p-6">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-brand" />
+          <h2 className="text-lg font-semibold tracking-tight">Meet your AI team — who does what</h2>
+        </div>
+        <button data-testid="employees-intro-dismiss" onClick={close} className="text-ink-dim hover:text-ink shrink-0 text-xl leading-none" aria-label="Dismiss">×</button>
+      </div>
+      <p className="text-[13px] text-ink-dim leading-relaxed max-w-2xl mb-5">
+        New here? Hire specialized AI teammates by role — you pay per role, not per seat. Each has a 7-day trial,
+        lives inside your chats, asks questions when unsure, and never acts on sensitive work without approval.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {groups.map((g) => (
+          <div key={g.title} data-testid={`employees-group-${g.title.toLowerCase()}`} className="rounded-md border border-hairline bg-surface-1/60 p-3.5 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-brand-tint text-brand flex items-center justify-center shrink-0">
+              <g.Icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold">{g.title}</div>
+              <div className="text-[11px] text-ink-dim leading-snug">{g.blurb}</div>
+              <div className="text-[11px] text-brand font-medium mt-1 truncate">{g.present.map((e) => e.name).join(" · ")}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AIEmployees() {
   const { user } = useAuth();
   const nav = useNavigate();
@@ -177,6 +230,7 @@ export default function AIEmployees() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 md:px-8 mt-10 space-y-12">
+        <RoleFirstIntro employees={employees} />
         <AiSavingsDashboard />
         <CmoSocialConnections />
 

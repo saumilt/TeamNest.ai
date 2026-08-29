@@ -13,6 +13,21 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Node Workflow Builder — web visual canvas alongside the NL builder — 2026-08-29
+- Web-only (per user choice; mobile keeps the natural-language builder). New `frontend/src/components/AutomationNodeBuilder.jsx` integrated into `Automations.jsx` with a **List / Canvas** toggle (`builder-mode-nl` / `builder-mode-visual`) and a **"Build on canvas"** starter (`automation-blank-canvas`) that seeds a blank plan.
+- Canvas renders the plan as a draggable WHEN → GET/THEN pipeline (`node-trigger`, `node-step-<i>`) on a grid canvas with SVG connectors. Per-node: editable label (`node-label-<i>`, `node-trigger-label`), GET↔THEN toggle (`node-kind-<i>`), reorder (`node-up/down-<i>`), delete (`node-remove-<i>`), editable automation name (`automation-name-input`), and `node-add-step`.
+- Edits mutate the same `plan` object the NL builder produces, so Canvas↔List stay in sync and **Activate / Test** save via the existing `POST /api/automations` (no backend change). Verified round-trip + save-persists.
+- Tested: iteration_153 (web node builder full flow PASS; also re-verified the mobile auth-race fix — `/api/ai-employees` + `/api/ai/activity` now 200 on first mount for owner + member, zero 401s).
+- Note (non-blocking): RN deprecation warnings in Expo web console (`shadow*` → `boxShadow`, `props.pointerEvents` → `style.pointerEvents`) — cosmetic.
+
+### Mobile AI Hub + Meeting Prep parity + Employees role-first intro (web + mobile) — 2026-08-29
+- **Mobile AI Hub** (`mobile/app/ai/index.tsx`, route `/ai`): mirrors web's `/ai` with 4 sub-tabs — Research (Ask) / Employees (Do) / Automations (Watch) / Activity — plus the Ask·Do·Watch legend. Reached from Home (`home-action-aihub` + "+ New" menu) and You (`you-ai-hub`); the Research bottom tab stays for fast access (per user choice). Research + Automations screens gained an `embedded` prop (hide own header/top-inset) so the hub reuses them with no duplication.
+- New mobile panels: `AIEmployeesPanel` (from `/ai-employees`, with the role-first intro) and `ActivityPanel` (from `/ai/activity`). Both gate fetches on the hydrated auth `token` (fixes the mount-time 401 race — verified member `raj` now sees the full gated roster).
+- **Mobile Meeting Prep** (`MeetingPrepButton.tsx`, Modal): "Prepare me" icon in the chat header of non-AI chats → `POST /ai/meeting-prep` brief. Hidden on personal-AI chats.
+- **Employees role-first intro** (web `AIEmployees.jsx` `RoleFirstIntro` + mobile `AIEmployeesPanel`): dismissible "Meet your AI team — who does what" card grouping employees by Marketing / Finance / Sales / Legal / Operations so new managers instantly see who does what. Persisted (localStorage `tn_ai_employees_intro_v1` / storage `ai_employees_intro_seen_v1`).
+- No backend changes (reuses `/ai-employees`, `/ai/activity`, `/ai/meeting-prep`). Tested: iteration_152 (web + mobile pass; the one HIGH auth-race bug was fixed and re-verified on the exact repro).
+- **Pending from this batch:** Node Workflow Builder (web-only visual canvas alongside the NL builder) — NOT yet built; next up.
+
 ### Phase 5 (Round 3) — "Do This For Me" contextual AI actions (web + mobile + backend) — 2026-08-29
 One-tap, draft-only AI actions on a Task / Document / Chat, reusing the AI layer + approvals. Never writes or sends on its own.
 - Backend (`routes/ai.py`): `GET /ai/do-actions?entity_type=` (catalogue) + `POST /ai/do-action` {entity_type, entity_id, action}. Actions — task: summarize/subtasks/update/draft_email; document: summarize/action_items/draft_email (pulls `knowledge_chunks` text); chat: summarize/reply/decisions/draft_email (builds a transcript from `messages`). Returns `{title, result, followups:[copy | automate(prompt) | draft_email(content)]}`. 400 on bad action/entity_type; 404 when entity not in caller's workspace / chat non-member. Read-only verified.

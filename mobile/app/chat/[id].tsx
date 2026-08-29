@@ -40,6 +40,7 @@ import { AiDiscussionCard } from "@/src/components/AiDiscussionCard";
 import { AiDiscussionsDashboard } from "@/src/components/AiDiscussionsDashboard";
 import { AiComposeModal } from "@/src/components/AiComposeModal";
 import { AiDiscussionDetail } from "@/src/components/AiDiscussionDetail";
+import MeetingPrepButton from "@/src/components/MeetingPrepButton";
 
 function isAgent(senderId: string) {
   return senderId?.startsWith("ai-");
@@ -1008,6 +1009,7 @@ export default function ChatScreen() {
         {chat && chat.type !== "personal_ai" ? (
           <>
             <QuickReactBar onReact={sendQuickReaction} />
+            <MeetingPrepButton chatId={chatId} title={chat?.name} icon />
             <TouchableOpacity
               testID="chat-call-audio-btn"
               onPress={() => startCall("audio")}

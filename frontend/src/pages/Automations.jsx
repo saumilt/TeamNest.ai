@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import AutomationNodeBuilder from "@/components/AutomationNodeBuilder";
 import { toast } from "sonner";
 import {
   Zap, Play, Pause, Clock, GitBranch, Wand2, X, AlertTriangle, CheckCircle2,
@@ -43,6 +44,12 @@ export default function Automations() {
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
   const [actingId, setActingId] = useState(null);
+  const [builderMode, setBuilderMode] = useState("nl"); // "nl" | "visual"
+
+  const startBlankCanvas = () => {
+    setPlan({ name: "New automation", risk: "low", trigger: { type: "manual", label: "Manually" }, steps: [] });
+    setBuilderMode("visual");
+  };
 
   const load = () => {
     api.get("/automations").then(({ data }) => setItems(data.items || [])).catch(() => {});
@@ -219,24 +226,62 @@ export default function Automations() {
           >
             <Sparkles className="w-4 h-4" /> {parsing ? "Thinking…" : "Generate plan"}
           </button>
+          <button
+            data-testid="automation-blank-canvas"
+            onClick={startBlankCanvas}
+            className="border border-white/10 text-zinc-200 hover:bg-white/5 text-sm font-semibold rounded-sm px-4 py-2 inline-flex items-center gap-2"
+          >
+            <GitBranch className="w-4 h-4" /> Build on canvas
+          </button>
         </div>
 
         {plan && (
           <div className="mt-5 border-t border-white/10 pt-4" data-testid="automation-plan">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="font-semibold text-zinc-100">{plan.name}</div>
-              <span className={`text-[10px] font-mono uppercase tracking-widest border rounded px-2 py-1 ${RISK[plan.risk]?.cls || RISK.low.cls}`}>
-                {RISK[plan.risk]?.label || plan.risk}
-              </span>
+              {builderMode === "visual" ? (
+                <input
+                  data-testid="automation-name-input"
+                  value={plan.name}
+                  onChange={(e) => setPlan({ ...plan, name: e.target.value })}
+                  className="font-semibold text-zinc-100 bg-transparent border-b border-white/10 focus:outline-none focus:border-yellow-400/40 px-0.5"
+                />
+              ) : (
+                <div className="font-semibold text-zinc-100">{plan.name}</div>
+              )}
+              <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-lg border border-white/10 overflow-hidden" data-testid="builder-mode-toggle">
+                  <button
+                    data-testid="builder-mode-nl"
+                    onClick={() => setBuilderMode("nl")}
+                    className={`text-[11px] font-semibold px-2.5 py-1 ${builderMode === "nl" ? "bg-yellow-500 text-black" : "text-zinc-400 hover:text-white"}`}
+                  >
+                    List
+                  </button>
+                  <button
+                    data-testid="builder-mode-visual"
+                    onClick={() => setBuilderMode("visual")}
+                    className={`text-[11px] font-semibold px-2.5 py-1 ${builderMode === "visual" ? "bg-yellow-500 text-black" : "text-zinc-400 hover:text-white"}`}
+                  >
+                    Canvas
+                  </button>
+                </div>
+                <span className={`text-[10px] font-mono uppercase tracking-widest border rounded px-2 py-1 ${RISK[plan.risk]?.cls || RISK.low.cls}`}>
+                  {RISK[plan.risk]?.label || plan.risk}
+                </span>
+              </div>
             </div>
 
-            <div className="mt-3 space-y-2">
-              <PlanRow badge="WHEN" icon={Clock} text={plan.trigger?.label} />
-              {plan.steps?.map((s, i) => {
-                const I = STEP_ICON[s.kind] || Zap;
-                return <PlanRow key={i} badge={s.kind === "get" ? "GET" : "THEN"} icon={I} text={s.label} />;
-              })}
-            </div>
+            {builderMode === "visual" ? (
+              <AutomationNodeBuilder plan={plan} onChange={setPlan} />
+            ) : (
+              <div className="mt-3 space-y-2">
+                <PlanRow badge="WHEN" icon={Clock} text={plan.trigger?.label} />
+                {plan.steps?.map((s, i) => {
+                  const I = STEP_ICON[s.kind] || Zap;
+                  return <PlanRow key={i} badge={s.kind === "get" ? "GET" : "THEN"} icon={I} text={s.label} />;
+                })}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">Post to</label>

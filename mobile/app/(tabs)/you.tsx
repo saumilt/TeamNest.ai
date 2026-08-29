@@ -227,6 +227,13 @@ export default function YouScreen() {
 
       {/* AI Employees */}
       <View style={[styles.card, { marginTop: spacing.md }]}>
+        <TouchableOpacity testID="you-ai-hub" style={styles.linkRow} onPress={() => router.push("/ai")}>
+          <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+          <Text style={styles.linkLabel}>AI Hub</Text>
+          <Text style={styles.betaTag}>Ask · Do · Watch</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
         <TouchableOpacity testID="you-ai-builder" style={styles.linkRow} onPress={() => router.push("/builder")}>
           <Ionicons name="construct-outline" size={18} color={colors.accent} />
           <Text style={styles.linkLabel}>AI Employee Builder</Text>

@@ -71,7 +71,8 @@ export default function HomeScreen() {
   const firstName = user?.name ? user.name.split(" ")[0] : null;
 
   const quickActions: QuickAction[] = [
-    { key: "research", title: "Start AI Research", subtitle: "Ask one AI or compare models", icon: "sparkles", onPress: () => router.push("/(tabs)/research") },
+    { key: "aihub", title: "Open AI Hub", subtitle: "Ask · Do · Watch in one place", icon: "sparkles", onPress: () => router.push("/ai") },
+    { key: "research", title: "Start AI Research", subtitle: "Ask one AI or compare models", icon: "search", onPress: () => router.push("/(tabs)/research") },
     { key: "chat", title: "Start a Conversation", subtitle: "Chat with people or an AI", icon: "chatbubbles", onPress: () => setShowNewChat(true) },
     { key: "meeting", title: "Host a Meeting", subtitle: "Meet, transcribe & summarize", icon: "videocam", onPress: () => say("Open a chat to start a meeting") },
     { key: "task", title: "Create a Task", subtitle: "Capture an action item", icon: "checkbox", onPress: () => router.push("/(tabs)/tasks") },
@@ -89,7 +90,8 @@ export default function HomeScreen() {
   ];
 
   const newOptions: NewOption[] = [
-    { key: "research", label: "AI Research", desc: "Ask one AI or compare models", icon: "sparkles", onPress: () => router.push("/(tabs)/research") },
+    { key: "aihub", label: "AI Hub", desc: "Ask · Do · Watch in one place", icon: "sparkles", onPress: () => router.push("/ai") },
+    { key: "research", label: "AI Research", desc: "Ask one AI or compare models", icon: "search", onPress: () => router.push("/(tabs)/research") },
     { key: "chat", label: "Chat", desc: "Message people or an AI", icon: "chatbubbles", onPress: () => setShowNewChat(true) },
     { key: "task", label: "Task", desc: "Capture an action item", icon: "checkbox", onPress: () => router.push("/(tabs)/tasks") },
     { key: "document", label: "Document Research", desc: "Upload & ask with citations", icon: "document-text", onPress: () => router.push("/documents") },

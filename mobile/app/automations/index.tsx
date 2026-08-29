@@ -30,7 +30,7 @@ const STEP_ICON: Record<string, any> = {
   condition: "alert-circle",
 };
 
-export default function AutomationsScreen() {
+export default function AutomationsScreen({ embedded = false }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
   const params = useLocalSearchParams<{ prompt?: string }>();
@@ -136,14 +136,16 @@ export default function AutomationsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable testID="autom-back" onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Automations</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && (
+        <View style={styles.header}>
+          <Pressable testID="autom-back" onPress={() => router.back()} hitSlop={10}>
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Automations</Text>
+          <View style={{ width: 24 }} />
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} testID="mobile-automations">
         <Text style={styles.sub}>Tell TeamNest what should happen automatically — in plain English.</Text>
