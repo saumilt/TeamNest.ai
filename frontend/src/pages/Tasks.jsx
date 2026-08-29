@@ -9,6 +9,7 @@ import Avatar from "@/components/ui-v2/Avatar";
 import SegmentedControl from "@/components/ui-v2/SegmentedControl";
 import FAB from "@/components/ui-v2/FAB";
 import EmptyState from "@/components/ui-v2/EmptyState";
+import DoThisForMe from "@/components/DoThisForMe";
 import { toast } from "sonner";
 
 /**
@@ -384,6 +385,11 @@ function TaskCard({ task, member, onCycle, onComplete, onDelete, onRestore, onPu
                                         </span>
                                 )}
                         </div>
+                        {!inDeleted && (
+                                <div className="mt-2 pt-2 border-t border-hairline flex justify-end" onClick={(e) => e.stopPropagation()}>
+                                        <DoThisForMe entityType="task" entityId={task.id} compact />
+                                </div>
+                        )}
                         {inDeleted ? (
                                 <div className="flex items-center justify-end gap-1.5 mt-2 pt-2 border-t border-hairline" data-testid={`task-deleted-actions-${task.id}`}>
                                         <button onClick={onRestore} disabled={busy} className="text-[11px] font-mono uppercase tracking-widest text-ink-dim hover:text-brand px-2 h-7 rounded-full hover:bg-brand/10 inline-flex items-center gap-1" data-testid={`task-restore-${task.id}`}>

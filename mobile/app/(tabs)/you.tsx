@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -17,7 +17,7 @@ import { Avatar } from "@/src/components/Avatar";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
 import { CreditLimitsCard } from "@/src/components/CreditLimitsCard";
 import { NotificationBell } from "@/src/components/NotificationBell";
-import { apiDelete } from "@/src/api";
+import { apiDelete, apiGet } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { colors, font, radius, spacing } from "@/src/theme";
 
@@ -58,9 +58,9 @@ const WHATS_NEW = [
     key: "connectors",
     icon: "git-network-outline",
     tag: "New",
-    title: "Live Connectors",
-    body: "Connect Gmail and Microsoft 365 / Teams (read-only) to train an AI employee in your real writing voice. Redacted, and you review before saving.",
-    to: "/builder",
+    title: "Apps",
+    body: "Connect your tools — Zapier (6,000+ apps), Gmail, Microsoft 365 — with plain-English Read/Act consent. Send events out and receive them in.",
+    to: "/apps",
   },
 ];
 
@@ -73,6 +73,13 @@ export default function YouScreen() {
   const [confirm, setConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [delError, setDelError] = useState("");
+
+  const isAdmin = ["owner", "admin"].includes(user?.role);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return;
+    apiGet("/api/automations/pending").then((d) => setPendingApprovals((d.items || []).length)).catch(() => {});
+  }, [isAdmin]);
 
   const activeWs =
     (user?.workspaces || []).find((w: any) => w.id === user?.workspace_id) ||
@@ -153,6 +160,19 @@ export default function YouScreen() {
           <Text style={styles.linkLabel}>Team & Members</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        {isAdmin ? (
+          <>
+            <View style={styles.divider} />
+            <TouchableOpacity testID="you-approvals" style={styles.linkRow} onPress={() => router.push("/approvals")}>
+              <Ionicons name="file-tray-full-outline" size={18} color={colors.accent} />
+              <Text style={styles.linkLabel}>Approval Inbox</Text>
+              {pendingApprovals > 0 ? (
+                <View style={styles.badge} testID="you-approvals-badge"><Text style={styles.badgeText}>{pendingApprovals > 9 ? "9+" : pendingApprovals}</Text></View>
+              ) : null}
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       <CreditLimitsCard />
@@ -384,6 +404,8 @@ const styles = StyleSheet.create({
   infoValue: { color: colors.textPrimary, fontSize: font.body, fontWeight: "600", maxWidth: "50%" },
   linkRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   linkLabel: { color: colors.textPrimary, fontSize: font.body, flex: 1 },
+  badge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center" },
+  badgeText: { color: "#09090b", fontSize: font.tiny, fontWeight: "800" },
   betaTag: { color: colors.accent, fontSize: font.tiny, fontWeight: "800" },
   sectionEyebrow: {
     color: colors.accent,

@@ -5,6 +5,7 @@ import Avatar from "@/components/ui-v2/Avatar";
 import { groupAvatarProps } from "@/components/web/groupAvatarPresets";
 import SmartHirePill from "@/components/chat/SmartHirePill";
 import DevProjectSwitcher from "@/components/chat/DevProjectSwitcher";
+import DoThisForMe from "@/components/DoThisForMe";
 
 /**
  * Sticky top bar for an open chat. Renders avatar, name, member subline,
@@ -211,6 +212,7 @@ export default function ChatHeader({
       </div>
 
       <div className="flex items-center gap-1 md:gap-1.5">
+        {!isAIChat && chatId && <DoThisForMe entityType="chat" entityId={chatId} icon />}
         {onOpenSearch && (
           <button
             data-testid="chat-search-btn"

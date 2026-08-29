@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 import CreditsWidget from "@/components/CreditsWidget";
 import NotificationBell from "@/components/NotificationBell";
 import ResizableEdge from "@/components/ui-v2/ResizableEdge";
@@ -26,6 +27,7 @@ import {
         PanelLeftClose,
         Pin,
         Search,
+        Inbox,
 } from "lucide-react";
 
 
@@ -58,6 +60,21 @@ export default function Sidebar() {
 
   const expanded = pinned || hovered;
   const collapsed = !expanded;
+
+  const isAdmin = ["owner", "admin"].includes(user?.role);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    const refresh = () => api.get("/automations/pending")
+      .then(({ data }) => { if (alive) setPendingApprovals((data.items || []).length); })
+      .catch(() => {});
+    refresh();
+    const id = setInterval(refresh, 60000);
+    const onChange = () => refresh();
+    window.addEventListener("tn:approvals-changed", onChange);
+    return () => { alive = false; clearInterval(id); window.removeEventListener("tn:approvals-changed", onChange); };
+  }, [isAdmin]);
   const overlay = hovered && !pinned; // expanded on hover only → float over content
 
   const activeWs = (workspaces || []).find((w) => w.workspace_id === user?.workspace_id);
@@ -279,9 +296,9 @@ export default function Sidebar() {
           )}
         </NavLink>
         <NavLink
-          to="/connectors"
-          data-testid="nav-connectors"
-          title="Connectors (connect email / CRM for AI style training)"
+          to="/apps"
+          data-testid="nav-apps"
+          title="Apps (connect your tools — Zapier, email, CRM)"
           className={({ isActive }) =>
             `flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
               isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
@@ -289,8 +306,30 @@ export default function Sidebar() {
           }
         >
           <Plug className="w-5 h-5 shrink-0" strokeWidth={1.8} />
-          {!collapsed && <span className="truncate">Connectors</span>}
+          {!collapsed && <span className="truncate">Apps</span>}
         </NavLink>
+        {isAdmin && (
+          <NavLink
+            to="/approvals-inbox"
+            data-testid="nav-approvals"
+            title="Approval Inbox (automations waiting on you)"
+            className={({ isActive }) =>
+              `relative flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-sm transition-colors ${
+                isActive ? "bg-ai-tint text-ai" : "text-ink-dim hover:bg-white/[0.03] hover:text-ink"
+              }`
+            }
+          >
+            <span className="relative shrink-0">
+              <Inbox className="w-5 h-5" strokeWidth={1.8} />
+              {pendingApprovals > 0 && (
+                <span data-testid="nav-approvals-badge" className={`absolute -top-1.5 ${collapsed ? "-right-1.5" : "-right-2"} min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center`}>
+                  {pendingApprovals > 9 ? "9+" : pendingApprovals}
+                </span>
+              )}
+            </span>
+            {!collapsed && <span className="truncate">Approvals</span>}
+          </NavLink>
+        )}
         <NavLink
           to="/ai-memory"
           data-testid="nav-ai-memory"

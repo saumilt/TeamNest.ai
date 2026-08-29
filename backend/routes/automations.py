@@ -386,6 +386,55 @@ async def automation_suggestions(current=Depends(require_user)):
     return {"suggestions": out}
 
 
+@router.get("/automations/insights")
+async def automation_insights(current=Depends(require_user)):
+    """Per-automation + workspace run analytics: totals, success rate, estimated
+    hours saved, and a 7-day daily run sparkline. Computed from recent runs."""
+    ws = current["workspace_id"]
+    runs = await db.automation_runs.find(
+        {"workspace_id": ws}, {"_id": 0, "automation_id": 1, "status": 1, "started_at": 1}
+    ).sort("started_at", -1).to_list(2000)
+
+    days = [(datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat() for i in range(6, -1, -1)]
+    day_idx = {d: i for i, d in enumerate(days)}
+
+    def _blank():
+        return {"runs": 0, "success": 0, "failed": 0, "pending": 0, "saved_hours": 0.0,
+                "success_rate": 0, "series": [0] * 7, "last_status": None, "last_run_at": None}
+
+    by: dict = {}
+    ws_roll = _blank()
+    for r in runs:
+        aid = r.get("automation_id")
+        st = r.get("status")
+        for bucket in (by.setdefault(aid, _blank()), ws_roll):
+            bucket["runs"] += 1
+            if st in ("success", "partial"):
+                bucket["success"] += 1
+            elif st == "failed":
+                bucket["failed"] += 1
+            elif st == "pending_approval":
+                bucket["pending"] += 1
+        d = (r.get("started_at") or "")[:10]
+        if d in day_idx:
+            by[aid]["series"][day_idx[d]] += 1
+            ws_roll["series"][day_idx[d]] += 1
+        if by[aid]["last_run_at"] is None:
+            by[aid]["last_run_at"] = r.get("started_at")
+            by[aid]["last_status"] = st
+
+    def _finalize(b):
+        completed = b["runs"] - b["pending"]
+        b["success_rate"] = round(100 * b["success"] / completed) if completed else 0
+        b["saved_hours"] = round(b["success"] * 0.25, 2)
+        return b
+
+    for b in by.values():
+        _finalize(b)
+    _finalize(ws_roll)
+    return {"by_automation": by, "workspace": ws_roll}
+
+
 @router.get("/automations/{automation_id}")
 async def get_automation(automation_id: str, current=Depends(require_user)):
     doc = await db.automations.find_one(
@@ -591,6 +640,14 @@ async def _do_run(automation, actor, source, started, run_id=None, approver=None
         doc["id"] = new_id()
         await db.automation_runs.insert_one(doc.copy())
     await db.automations.update_one({"id": automation["id"]}, {"$set": {"last_run_at": now_iso()}})
+    try:
+        from routes.apps import emit_zapier_event
+        await emit_zapier_event(
+            automation["workspace_id"], "automation.run",
+            {"automation": automation.get("name"), "status": status, "summary": reasoning},
+        )
+    except Exception:
+        pass
     return _clean(doc)
 
 

@@ -35,6 +35,7 @@ export default function Automations() {
   const [chats, setChats] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [pending, setPending] = useState([]);
+  const [insights, setInsights] = useState({ by_automation: {}, workspace: null });
   const [prompt, setPrompt] = useState(params.get("prompt") || "");
   const [plan, setPlan] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -48,6 +49,7 @@ export default function Automations() {
     api.get("/automations/stats").then(({ data }) => setStats(data)).catch(() => {});
     api.get("/automations/suggestions").then(({ data }) => setSuggestions(data.suggestions || [])).catch(() => {});
     api.get("/automations/pending").then(({ data }) => setPending(data.items || [])).catch(() => {});
+    api.get("/automations/insights").then(({ data }) => setInsights(data || { by_automation: {}, workspace: null })).catch(() => {});
   };
 
   useEffect(() => {
@@ -335,6 +337,11 @@ export default function Automations() {
                 </div>
               </button>
               <span className={`hidden sm:inline text-[9px] font-mono uppercase tracking-widest border rounded px-2 py-1 ${RISK[a.risk]?.cls || RISK.low.cls}`}>{a.risk}</span>
+              {insights.by_automation[a.id]?.runs > 0 && (
+                <span className="hidden md:inline text-[10px] text-zinc-500 font-mono" data-testid={`autom-insight-${a.id}`}>
+                  {insights.by_automation[a.id].runs} runs · {insights.by_automation[a.id].success_rate}% ok · ~{insights.by_automation[a.id].saved_hours}h
+                </span>
+              )}
               <button data-testid={`automation-run-${a.id}`} onClick={() => runNow(a.id)} title="Run now" className="p-2 rounded-lg hover:bg-white/10 text-yellow-300"><Play className="w-4 h-4" /></button>
               <button data-testid={`automation-toggle-${a.id}`} onClick={() => togglePause(a)} title={a.status === "active" ? "Pause" : "Activate"} className="p-2 rounded-lg hover:bg-white/10 text-zinc-300">
                 {a.status === "active" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -344,7 +351,7 @@ export default function Automations() {
         </div>
       )}
 
-      {detail && <DetailModal detail={detail} onClose={() => setDetail(null)} />}
+      {detail && <DetailModal detail={detail} insight={insights.by_automation[detail.automation?.id]} onClose={() => setDetail(null)} />}
     </div>
   );
 }
@@ -359,7 +366,18 @@ function PlanRow({ badge, icon: Icon, text }) {
   );
 }
 
-function DetailModal({ detail, onClose }) {
+function Sparkline({ series = [], className = "" }) {
+  const max = Math.max(1, ...series);
+  return (
+    <div className={`flex items-end gap-0.5 h-8 ${className}`} data-testid="autom-sparkline">
+      {series.map((v, i) => (
+        <div key={i} className="flex-1 bg-yellow-400/70 rounded-sm min-w-[3px]" style={{ height: `${Math.max(6, (v / max) * 100)}%` }} title={`${v} run(s)`} />
+      ))}
+    </div>
+  );
+}
+
+function DetailModal({ detail, insight, onClose }) {
   const { automation, runs } = detail;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" data-testid="automation-detail" onClick={onClose}>
@@ -369,6 +387,18 @@ function DetailModal({ detail, onClose }) {
           <button onClick={onClose} data-testid="automation-detail-close" className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5">
+          {insight && insight.runs > 0 && (
+            <div className="mb-5 rounded-xl border border-white/10 bg-[#121214] p-4" data-testid="automation-insights">
+              <div className="label-mono mb-3">INSIGHTS</div>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div><div className="font-display text-2xl font-bold">{insight.runs}</div><div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Runs</div></div>
+                <div><div className="font-display text-2xl font-bold text-emerald-400">{insight.success_rate}%</div><div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Success</div></div>
+                <div><div className="font-display text-2xl font-bold text-yellow-400">~{insight.saved_hours}h</div><div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Saved</div></div>
+              </div>
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-1">Last 7 days</div>
+              <Sparkline series={insight.series} />
+            </div>
+          )}
           <div className="label-mono mb-2">EXECUTION HISTORY</div>
           {(!runs || runs.length === 0) && <div className="text-zinc-500 text-sm">No runs yet.</div>}
           <div className="space-y-4">

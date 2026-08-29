@@ -28,6 +28,7 @@ from routes import (
     ai_employees,
     ai_employee_builder,
     ai_employee_marketplace,
+    apps,
     builder_program,
     ai_threads,
     approvals,
@@ -118,6 +119,7 @@ api.include_router(launch_admin.router)
 api.include_router(voice_notes.router)
 api.include_router(approvals.router)
 api.include_router(automations.router)   # Automation Builder (Drop 2)
+api.include_router(apps.router)          # Apps Marketplace (Phase 4) + Zapier
 api.include_router(exports.router)
 api.include_router(admin.router)
 api.include_router(superadmin.router)

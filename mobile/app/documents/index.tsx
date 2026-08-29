@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiDelete, apiGet, apiPost } from "@/src/api";
+import DoThisForMe from "@/src/components/DoThisForMe";
 import { useAuth } from "@/src/auth";
 import { MOBILE_MAX_SIZE, uploadZipChunked } from "@/src/chunkedUpload";
 import { Markdown } from "@/src/markdown";
@@ -240,6 +241,12 @@ function SourceDetail({ sourceId, insetsTop, insetsBottom, onBack }: any) {
             : src?.status === "failed" ? `Failed: ${src?.error || "unknown"}`
             : `Indexing ${src?.progress || 0}%…`}
         </Text>
+
+        {src?.status === "ready" ? (
+          <View style={{ marginTop: spacing.sm, alignSelf: "flex-start" }}>
+            <DoThisForMe entityType="document" entityId={src.id} />
+          </View>
+        ) : null}
 
         {/* Ask box */}
         <View style={styles.askBox}>

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiGet, apiPatch, apiPost } from "@/src/api";
 import { CreditsBadge } from "@/src/components/CreditsBadge";
+import DoThisForMe from "@/src/components/DoThisForMe";
 import { NotificationBell } from "@/src/components/NotificationBell";
 import { dueLabel } from "@/src/format";
 import { colors, font, radius, spacing } from "@/src/theme";
@@ -99,6 +100,7 @@ export default function TasksScreen() {
             ) : null}
           </View>
         </View>
+        <DoThisForMe entityType="task" entityId={item.id} icon />
       </View>
     );
   };

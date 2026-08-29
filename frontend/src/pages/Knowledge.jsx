@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { uploadFileChunked } from "@/lib/chunkedUpload";
+import DoThisForMe from "@/components/DoThisForMe";
 import { toast } from "sonner";
 import {
   FolderArchive, UploadCloud, Loader2, FileText, Trash2, Sparkles,
@@ -228,6 +229,7 @@ function SourceDetail({ detail }) {
               : `Indexing ${src.progress || 0}%…`}
           </div>
         </div>
+        {src.status === "ready" && <DoThisForMe entityType="document" entityId={src.id} />}
       </div>
 
       {/* Ask box */}

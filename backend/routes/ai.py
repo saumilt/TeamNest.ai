@@ -793,6 +793,100 @@ async def draft_email(payload: DraftEmailRequest, current=Depends(require_user))
     return {"subject": subject or "(no subject)", "body": body}
 
 
+class DoActionRequest(BaseModel):
+    entity_type: str  # task | document | chat
+    entity_id: str
+    action: str
+
+
+_DO_ACTIONS = {
+    "task": {
+        "summarize": ("Summarize this task into 2-4 skimmable bullets and one recommended next step.", "Summary"),
+        "subtasks": ("Break this task into 3-6 concrete, checkbox-style subtasks. Return only the checklist.", "Subtasks"),
+        "update": ("Draft a brief, friendly status-update message a teammate could post about this task.", "Status update"),
+        "draft_email": ("Draft a professional email about this task. First line 'SUBJECT: <subject>', blank line, then body.", "Email draft"),
+    },
+    "document": {
+        "summarize": ("Summarize this document into 3-5 skimmable bullets and one recommended next step.", "Summary"),
+        "action_items": ("Extract the concrete action items (and owners if mentioned) as a checklist.", "Action items"),
+        "draft_email": ("Draft a professional email that shares the key points of this document. First line 'SUBJECT: <subject>', blank line, then body.", "Email draft"),
+    },
+    "chat": {
+        "summarize": ("Summarize this conversation into 3-5 skimmable bullets.", "Summary"),
+        "reply": ("Draft a helpful, professional reply to the latest message in this conversation.", "Draft reply"),
+        "decisions": ("Extract the key decisions and any open questions from this conversation as two short lists.", "Decisions & questions"),
+        "draft_email": ("Draft a professional email recapping this conversation. First line 'SUBJECT: <subject>', blank line, then body.", "Email draft"),
+    },
+}
+
+
+async def _do_action_context(entity_type: str, entity_id: str, ws: str, uid: str):
+    """Return (title, context_text, automate_prompt) for the target entity, or raise 404."""
+    if entity_type == "task":
+        t = await db.tasks.find_one({"id": entity_id, "workspace_id": ws}, {"_id": 0})
+        if not t:
+            raise HTTPException(404, "Task not found")
+        ctx = (f"Task: {t.get('title', '')}\nDescription: {t.get('description', '') or '(none)'}\n"
+               f"Status: {t.get('status', '')}\nPriority: {t.get('priority', '') or 'normal'}\n"
+               f"Due: {(t.get('due_date') or '')[:10] or '(none)'}")
+        return t.get("title") or "Task", ctx, "When tasks like this are overdue, summarize them and post to our team chat."
+    if entity_type == "document":
+        s = await db.knowledge_sources.find_one({"id": entity_id, "workspace_id": ws}, {"_id": 0})
+        if not s:
+            raise HTTPException(404, "Document not found")
+        chunks = await db.knowledge_chunks.find(
+            {"source_id": entity_id}, {"_id": 0, "text": 1}
+        ).sort("chunk_index", 1).to_list(12)
+        body = "\n\n".join(c.get("text", "") for c in chunks)[:6000] or "(document is still processing or has no extracted text)"
+        return s.get("name") or "Document", f"Document: {s.get('name', '')}\n\n{body}", "Every week summarize new documents and post a digest to our team chat."
+    if entity_type == "chat":
+        chat = await db.chats.find_one({"id": entity_id, "member_ids": uid}, {"_id": 0, "id": 1, "name": 1})
+        if not chat:
+            raise HTTPException(404, "Chat not found")
+        msgs = await db.messages.find(
+            {"chat_id": entity_id, "deleted_at": None}, {"_id": 0, "body": 1, "sender_id": 1}
+        ).sort("created_at", -1).to_list(40)
+        msgs.reverse()
+        transcript = "\n".join(f"- {(m.get('body') or '')[:400]}" for m in msgs if m.get("body"))[:6000] or "(no messages yet)"
+        return chat.get("name") or "Chat", f"Conversation:\n{transcript}", "Every Monday summarize this chat and post a recap to the team."
+    raise HTTPException(400, "Unsupported entity type")
+
+
+@router.get("/ai/do-actions")
+async def do_actions_catalog(entity_type: str, current=Depends(require_user)):
+    """List the available 'Do this for me' actions for an entity type."""
+    acts = _DO_ACTIONS.get(entity_type)
+    if not acts:
+        raise HTTPException(400, "Unsupported entity type")
+    return {"actions": [{"key": k, "label": v[1]} for k, v in acts.items()]}
+
+
+@router.post("/ai/do-action")
+async def do_action(payload: DoActionRequest, current=Depends(require_user)):
+    """Contextual one-tap AI action ('Do this for me') on a task, document, or
+    chat. Draft-only — returns AI text plus follow-ups (copy / automate /
+    draft email). Never writes or sends on its own."""
+    acts = _DO_ACTIONS.get(payload.entity_type)
+    if not acts or payload.action not in acts:
+        raise HTTPException(400, "Unsupported action")
+    instruction, title = acts[payload.action]
+    ctx_title, context, automate_prompt = await _do_action_context(
+        payload.entity_type, payload.entity_id, current["workspace_id"], current["id"]
+    )
+    sys = "You are a concise, helpful operations assistant. Output only the requested content, no preamble."
+    result = await complete(sys, f"{instruction}\n\nCONTEXT:\n{context}", "claude")
+    followups = [{"kind": "copy", "label": "Copy"}]
+    if payload.action != "automate":
+        followups.append({"kind": "automate", "label": "Automate this", "prompt": automate_prompt})
+    if payload.action != "draft_email":
+        followups.append({"kind": "draft_email", "label": "Draft email", "content": result[:4000]})
+    return {
+        "entity_type": payload.entity_type, "entity_id": payload.entity_id,
+        "action": payload.action, "title": f"{title}: {ctx_title}"[:120],
+        "result": (result or "").strip(), "followups": followups,
+    }
+
+
 @router.get("/ai/activity")
 async def ai_activity(current=Depends(require_user)):
     """Recent AI activity for the AI hub 'Activity' tab: research completed,

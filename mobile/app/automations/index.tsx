@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -33,8 +33,12 @@ const STEP_ICON: Record<string, any> = {
 export default function AutomationsScreen() {
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
+  const params = useLocalSearchParams<{ prompt?: string }>();
   const isAdmin = ["owner", "admin"].includes(user?.role);
   const [prompt, setPrompt] = useState("");
+  useEffect(() => {
+    if (params.prompt && typeof params.prompt === "string") setPrompt(params.prompt);
+  }, [params.prompt]);
   const [plan, setPlan] = useState<any>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,6 +47,7 @@ export default function AutomationsScreen() {
   const [stats, setStats] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [pending, setPending] = useState<any[]>([]);
+  const [insights, setInsights] = useState<any>({ by_automation: {}, workspace: null });
   const [actingId, setActingId] = useState<string | null>(null);
   const [targetChatId, setTargetChatId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
@@ -52,6 +57,7 @@ export default function AutomationsScreen() {
     apiGet("/api/automations/stats").then(setStats).catch(() => {});
     apiGet("/api/automations/suggestions").then((d) => setSuggestions(d.suggestions || [])).catch(() => {});
     apiGet("/api/automations/pending").then((d) => setPending(d.items || [])).catch(() => {});
+    apiGet("/api/automations/insights").then((d) => setInsights(d || { by_automation: {}, workspace: null })).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -279,6 +285,11 @@ export default function AutomationsScreen() {
                     ? ` · next ${new Date(a.next_run_at).toLocaleDateString([], { month: "short", day: "numeric" })}`
                     : ""}
                 </Text>
+                {insights.by_automation[a.id]?.runs > 0 ? (
+                  <Text style={styles.rowInsight} numberOfLines={1} testID={`autom-insight-${a.id}`}>
+                    {insights.by_automation[a.id].runs} runs · {insights.by_automation[a.id].success_rate}% ok · ~{insights.by_automation[a.id].saved_hours}h
+                  </Text>
+                ) : null}
               </View>
               <Pressable testID={`automation-run-${a.id}`} onPress={() => runNow(a.id)} hitSlop={8} style={styles.runBtn}>
                 <Ionicons name="play" size={16} color={colors.accent} />
@@ -384,5 +395,6 @@ const styles = StyleSheet.create({
   rowIcon: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
   rowTitle: { color: colors.textPrimary, fontSize: font.body, fontWeight: "700" },
   rowSub: { color: colors.textMuted, fontSize: font.small, marginTop: 1 },
+  rowInsight: { color: colors.textSecondary, fontSize: font.tiny, marginTop: 2, fontVariant: ["tabular-nums"] },
   runBtn: { padding: 8 },
 });

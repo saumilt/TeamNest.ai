@@ -160,7 +160,7 @@ export default function CommandPalette() {
       { id: "nav-knowledge", label: "Documents", icon: FolderArchive, to: "/knowledge" },
       { id: "nav-employees", label: "AI Employees", icon: Bot, to: "/employees" },
       { id: "nav-builder", label: "AI Agent Builder", icon: Bot, to: "/ai-builder" },
-      { id: "nav-connectors", label: "Connectors", icon: Plug, to: "/connectors" },
+      { id: "nav-apps", label: "Apps", icon: Plug, to: "/apps" },
       { id: "nav-team", label: "Team", icon: Users, to: "/team" },
       { id: "nav-billing", label: "Billing & Plan", icon: CreditCard, to: "/billing" },
       { id: "nav-profile", label: "Profile", icon: UserIcon, to: "/you" },
