@@ -33,11 +33,13 @@ export default function AIEmployeesPanel() {
   const { show } = useToast();
   const isAdmin = user?.role === "owner" || user?.role === "admin";
   const [employees, setEmployees] = useState<any[] | null>(null);
+  const [digests, setDigests] = useState<any[]>([]);
   const [showIntro, setShowIntro] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
     apiGet("/api/ai-employees").then((d) => setEmployees(d.employees || [])).catch(() => setEmployees([]));
+    apiGet("/api/ai-employees/_/digests").then((d) => setDigests(d.digests || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -92,6 +94,26 @@ export default function AIEmployeesPanel() {
               </View>
             );
           })}
+        </View>
+      ) : null}
+
+      {digests.length > 0 ? (
+        <View testID="employee-digests">
+          <Text style={styles.section}>THIS WEEK WITH YOUR AI TEAM</Text>
+          {digests.map((d) => (
+            <View key={d.employee_key} style={styles.digestCard} testID={`digest-${d.employee_key}`}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={styles.digestName}>{d.display_full_name}</Text>
+                <Text style={styles.digestMeta}>{d.period}</Text>
+              </View>
+              <View style={styles.digestStats}>
+                <Text style={styles.digestStat}>{d.tasks} <Text style={styles.digestUnit}>tasks</Text></Text>
+                <Text style={[styles.digestStat, { color: colors.accent }]}>~{d.hours_saved}h <Text style={styles.digestUnit}>saved</Text></Text>
+                <Text style={[styles.digestStat, { color: colors.success }]}>${d.dollar_savings}</Text>
+              </View>
+              <Text style={styles.digestRecap}>{d.recap || "No activity yet this week."}</Text>
+            </View>
+          ))}
         </View>
       ) : null}
 
@@ -158,6 +180,13 @@ const styles = StyleSheet.create({
   groupBlurb: { color: colors.textSecondary, fontSize: font.tiny, marginTop: 1 },
   groupNames: { color: colors.accent, fontSize: font.tiny, fontWeight: "700", marginTop: 2 },
   section: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 1.5, marginTop: spacing.md, marginBottom: spacing.sm },
+  digestCard: { backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accentBorder, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
+  digestName: { color: colors.textPrimary, fontSize: font.small, fontWeight: "800" },
+  digestMeta: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "700", letterSpacing: 0.8 },
+  digestStats: { flexDirection: "row", gap: spacing.lg, marginTop: 6, marginBottom: 4, alignItems: "baseline" },
+  digestStat: { color: colors.textPrimary, fontSize: font.body, fontWeight: "800" },
+  digestUnit: { color: colors.textMuted, fontSize: font.tiny, fontWeight: "600" },
+  digestRecap: { color: colors.textSecondary, fontSize: font.tiny, lineHeight: 17 },
   card: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
   cardHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accentDim, alignItems: "center", justifyContent: "center" },

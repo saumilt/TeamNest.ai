@@ -16,6 +16,7 @@ from ai_employees_catalog import (
     get_employee,
     public_employee,
 )
+from ai_service import complete
 from deps import db, new_id, now_iso, require_user
 
 router = APIRouter()
@@ -471,6 +472,54 @@ async def deduct_employee_credits(
         "phase": sub.get("phase"),
         "credits_used_now": credits,
     }
+
+
+@router.get("/ai-employees/_/digests")
+async def employee_weekly_digests(current=Depends(require_user)):
+    """A 'this week' recap for each subscribed AI employee: tasks handled, hours
+    saved, estimated $ saved, top things it did, and a one-line AI summary."""
+    ws = current["workspace_id"]
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    subs = await db.ai_employee_subscriptions.find(
+        {"workspace_id": ws, "status": {"$nin": ["paused", "cancelled"]}}, {"_id": 0}
+    ).to_list(50)
+    digests = []
+    for sub in subs:
+        key = sub["employee_key"]
+        emp = get_employee(key)
+        if not emp:
+            continue
+        tasks = await db.ai_employee_tasks.find(
+            {"workspace_id": ws, "employee_key": key, "completed_at": {"$gte": since}}, {"_id": 0}
+        ).sort("completed_at", -1).to_list(100)
+        count = len(tasks)
+        hours = round(sum((t.get("estimated_hours_saved") or 0) for t in tasks), 2)
+        rate = emp.get("market_billable_rate_usd", 100)
+        highlights = [t.get("question") for t in tasks[:5] if t.get("question")]
+        recap = ""
+        if count:
+            try:
+                qs = "; ".join(highlights) or "several tasks"
+                recap = (await complete(
+                    "You write a single upbeat sentence recapping an AI teammate's week.",
+                    f"In ONE short sentence (max 24 words), recap what {emp['name']} handled this week based on these requests: {qs}",
+                    "claude",
+                )).strip()
+            except Exception:
+                recap = ""
+        digests.append({
+            "employee_key": key,
+            "employee_name": emp["name"],
+            "display_full_name": sub.get("display_full_name") or emp["name"],
+            "period": "Last 7 days",
+            "tasks": count,
+            "hours_saved": hours,
+            "dollar_savings": round(hours * rate, 2),
+            "highlights": highlights,
+            "recap": recap,
+        })
+    digests.sort(key=lambda d: (d["tasks"], d["hours_saved"]), reverse=True)
+    return {"digests": digests}
 
 
 @router.get("/ai-employees/_/savings")

@@ -956,45 +956,77 @@ async def ai_activity(current=Depends(require_user)):
 class MeetingPrepRequest(BaseModel):
     chat_id: Optional[str] = None
     call_id: Optional[str] = None
+    meeting_id: Optional[str] = None
 
 
 @router.post("/ai/meeting-prep")
 async def meeting_prep(payload: MeetingPrepRequest, current=Depends(require_user)):
-    """'Prepare me' — brief the user before a meeting using its chat history +
-    the workspace's documents. Read-only, low risk."""
+    """'Prepare me' — brief the user for the next upcoming meeting (from the
+    in-app calendar) using its chat history + the workspace's documents.
+    Falls back to the current chat when no meeting is scheduled. Read-only."""
     ws = current["workspace_id"]
-    chat_id = payload.chat_id
+    now_dt = datetime.now(timezone.utc).isoformat()
+
+    # Resolve the target meeting: explicit id > next upcoming (chat-scoped, then workspace).
+    meeting = None
+    if payload.meeting_id:
+        meeting = await db.meetings.find_one({"id": payload.meeting_id, "workspace_id": ws}, {"_id": 0})
+    if not meeting:
+        q = {"workspace_id": ws, "start_at": {"$gte": now_dt}}
+        if payload.chat_id:
+            q["chat_id"] = payload.chat_id
+        meeting = await db.meetings.find_one(q, {"_id": 0}, sort=[("start_at", 1)])
+    if not meeting and payload.chat_id:
+        # no chat-scoped meeting — try the soonest workspace meeting
+        meeting = await db.meetings.find_one(
+            {"workspace_id": ws, "start_at": {"$gte": now_dt}}, {"_id": 0}, sort=[("start_at", 1)]
+        )
+
+    chat_id = payload.chat_id or (meeting or {}).get("chat_id")
     if not chat_id and payload.call_id:
         call = await db.calls.find_one({"id": payload.call_id}, {"_id": 0, "chat_id": 1})
         chat_id = call.get("chat_id") if call else None
-    if not chat_id:
+    if not chat_id and not meeting:
         raise HTTPException(400, "No meeting context")
-    chat = await db.chats.find_one({"id": chat_id, "workspace_id": ws}, {"_id": 0})
-    if not chat:
-        raise HTTPException(404, "Meeting not found")
-    msgs = (
-        await db.messages.find(
-            {"chat_id": chat_id}, {"_id": 0, "body": 1, "created_at": 1}
+
+    chat = None
+    if chat_id:
+        chat = await db.chats.find_one({"id": chat_id, "workspace_id": ws}, {"_id": 0})
+
+    convo = "(no recent messages)"
+    if chat_id:
+        msgs = (
+            await db.messages.find({"chat_id": chat_id}, {"_id": 0, "body": 1, "created_at": 1})
+            .sort("created_at", -1).to_list(30)
         )
-        .sort("created_at", -1)
-        .to_list(30)
-    )
-    convo = "\n".join(
-        f"- {(m.get('body') or '')[:200]}" for m in reversed(msgs) if m.get("body")
-    )[:5000] or "(no recent messages)"
+        convo = "\n".join(f"- {(m.get('body') or '')[:200]}" for m in reversed(msgs) if m.get("body"))[:5000] or "(no recent messages)"
+
     docs = (
         await db.knowledge_sources.find({"workspace_id": ws}, {"_id": 0, "name": 1})
-        .sort("created_at", -1)
-        .to_list(8)
+        .sort("created_at", -1).to_list(8)
     )
     doclist = ", ".join(d.get("name", "") for d in docs) or "none"
+
+    title = (meeting or {}).get("title") or (chat.get("name") if chat else None) or "Meeting"
+    when_line = ""
+    if meeting:
+        att = ", ".join(meeting.get("attendees") or []) or "not specified"
+        when_line = f"Scheduled: {meeting.get('start_at')}\nAttendees: {att}\n"
+        if meeting.get("notes"):
+            when_line += f"Agenda notes: {meeting['notes']}\n"
+
     sys = "You are an executive assistant preparing someone for a meeting. Be concise and practical."
     prompt = (
-        f"Prepare me for an upcoming meeting in the chat '{chat.get('name') or 'Meeting'}'.\n"
-        f"Recent conversation:\n{convo}\n\nAvailable documents: {doclist}\n\n"
+        f"Prepare me for the upcoming meeting: '{title}'.\n{when_line}"
+        f"Related conversation:\n{convo}\n\nAvailable documents: {doclist}\n\n"
         "Produce, with short bold headings: (1) a 2-3 sentence context recap, "
         "(2) 3-5 likely talking points or open questions, (3) any pending decisions, "
         "(4) one suggested goal for the meeting."
     )
     brief = await complete(sys, prompt, "claude")
-    return {"chat_id": chat_id, "title": chat.get("name") or "Meeting", "brief": brief}
+    return {
+        "chat_id": chat_id,
+        "title": title,
+        "brief": brief,
+        "meeting": meeting,
+    }

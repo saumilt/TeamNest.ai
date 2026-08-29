@@ -20,6 +20,7 @@ import {
   Sparkles,
   CheckCircle2,
   PauseCircle,
+  CalendarDays,
 } from "lucide-react";
 
 const EMPLOYEE_ICONS = {
@@ -231,6 +232,7 @@ export default function AIEmployees() {
 
       <div className="max-w-6xl mx-auto px-4 md:px-8 mt-10 space-y-12">
         <RoleFirstIntro employees={employees} />
+        <WeeklyDigests />
         <AiSavingsDashboard />
         <CmoSocialConnections />
 
@@ -294,6 +296,46 @@ export default function AIEmployees() {
         />
       )}
     </div>
+  );
+}
+
+function WeeklyDigests() {
+  const [digests, setDigests] = useState(null);
+  useEffect(() => {
+    api.get("/ai-employees/_/digests").then(({ data }) => setDigests(data.digests || [])).catch(() => setDigests([]));
+  }, []);
+  if (!digests || digests.length === 0) return null;
+  return (
+    <section data-testid="employee-digests">
+      <div className="flex items-center gap-2 mb-4">
+        <CalendarDays className="w-4 h-4 text-brand" />
+        <h2 className="text-lg font-semibold tracking-tight">This week with your AI team</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {digests.map((d) => (
+          <div key={d.employee_key} data-testid={`digest-${d.employee_key}`} className="rounded-card border border-hairline bg-surface-1/60 p-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-sm font-semibold text-ink">{d.display_full_name}</div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-ink-dim">{d.period}</span>
+            </div>
+            <div className="flex items-baseline gap-4 mb-2">
+              <div><span className="text-xl font-bold text-ink">{d.tasks}</span> <span className="text-[11px] text-ink-dim">tasks</span></div>
+              <div><span className="text-xl font-bold text-brand">~{d.hours_saved}h</span> <span className="text-[11px] text-ink-dim">saved</span></div>
+              <div><span className="text-xl font-bold text-emerald-400">${d.dollar_savings}</span></div>
+            </div>
+            {d.recap ? <p className="text-[12px] text-ink-dim leading-relaxed">{d.recap}</p>
+              : <p className="text-[12px] text-ink-dim italic">No activity yet this week.</p>}
+            {d.highlights?.length > 0 && (
+              <ul className="mt-2 space-y-0.5">
+                {d.highlights.slice(0, 3).map((h, i) => (
+                  <li key={i} className="text-[11px] text-ink-dim/80 truncate">• {h}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -59,6 +59,7 @@ _WORKSPACE_SCOPED_COLLECTIONS = [
     "ai_employee_credit_ledger",
     "ai_credit_ledger",
     "ai_employee_waitlist",
+    "meetings",
     "agent_policies",
     "chat_ai_usage",
     "chat_ai_settings",
@@ -276,6 +277,55 @@ async def _reseed_sample(workspace_id: str, owner: dict, all_users: list[dict]) 
         "created_at": now,
         "completed_at": None,
     })
+
+    # ── AI Employee showcase: an active "Priya AI" (CMO) with a week of work ──
+    try:
+        from ai_employees_catalog import get_employee
+        emp = get_employee("cmo")
+        if emp:
+            await db.ai_employee_subscriptions.insert_one({
+                "id": new_id(), "workspace_id": workspace_id, "employee_key": "cmo",
+                "started_by": owner["id"], "display_first_name": "Priya", "display_full_name": "Priya AI",
+                "phase": "trial", "status": "trial_active",
+                "trial_started_at": now, "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                "trial_credits_total": emp.get("trial_credits", 0), "trial_credits_used": 0,
+                "monthly_credits_total": emp.get("monthly_credits", 0), "monthly_credits_used": 0,
+                "monthly_price": emp.get("monthly_price", 0), "auto_convert": True,
+                "credit_limit_override": None, "per_task_credit_limit": None,
+                "approval_threshold_credits": 50, "stripe_subscription_id": None,
+                "created_at": now, "updated_at": now,
+            })
+            hrs = emp.get("hours_saved_per_task", 0.5)
+            for i, q in enumerate([
+                "Draft the Q3 launch announcement for LinkedIn",
+                "Write 5 subject lines for the weekly newsletter",
+                "Summarize this week's marketing metrics",
+            ]):
+                await db.ai_employee_tasks.insert_one({
+                    "id": new_id(), "workspace_id": workspace_id, "employee_key": "cmo",
+                    "display_full_name": "Priya AI", "question": q, "answer_preview": "Done.",
+                    "credits_used": 2, "estimated_hours_saved": hrs,
+                    "completed_at": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat(),
+                    "completed_by_user": owner["id"],
+                })
+    except Exception as e:
+        logger.warning("[demo-reset] ai employee sample seed failed: %s", e)
+
+    # ── An upcoming meeting so 'Prepare me' has a real call to brief ──
+    try:
+        first_group = await db.chats.find_one(
+            {"workspace_id": workspace_id, "type": {"$ne": "personal_ai"}}, {"_id": 0, "id": 1},
+        )
+        await db.meetings.insert_one({
+            "id": new_id(), "workspace_id": workspace_id,
+            "chat_id": first_group["id"] if first_group else None,
+            "title": "Weekly Team Sync",
+            "start_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            "attendees": ["Amit", "Priya", "Raj"], "notes": "Review roadmap, blockers, and this week's numbers.",
+            "created_by": owner["id"], "created_at": now,
+        })
+    except Exception as e:
+        logger.warning("[demo-reset] meeting sample seed failed: %s", e)
 
     # ── Dev OS showcase (idempotent on its own) ──────────────────────
     try:

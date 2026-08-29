@@ -57,6 +57,7 @@ from routes import (
     knowledge,
     launch,
     launch_admin,
+    meetings,
     memory,
     mfa,
     notifications,
@@ -120,6 +121,7 @@ api.include_router(voice_notes.router)
 api.include_router(approvals.router)
 api.include_router(automations.router)   # Automation Builder (Drop 2)
 api.include_router(apps.router)          # Apps Marketplace (Phase 4) + Zapier
+api.include_router(meetings.router)      # In-app meeting scheduling (Meeting Prep)
 api.include_router(exports.router)
 api.include_router(admin.router)
 api.include_router(superadmin.router)

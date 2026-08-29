@@ -272,7 +272,7 @@ export default function Automations() {
             </div>
 
             {builderMode === "visual" ? (
-              <AutomationNodeBuilder plan={plan} onChange={setPlan} />
+              <AutomationNodeBuilder plan={plan} onChange={setPlan} chats={chats} />
             ) : (
               <div className="mt-3 space-y-2">
                 <PlanRow badge="WHEN" icon={Clock} text={plan.trigger?.label} />
