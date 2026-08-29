@@ -8,12 +8,9 @@ import safeStorage from "@/lib/safeStorage";
 import { toast } from "sonner";
 import { openShowMeHow } from "@/lib/showMeHow";
 import { openCommandPalette } from "@/components/CommandPalette";
+import NewMenu from "@/components/NewMenu";
+import { primaryNav } from "@/lib/nav";
 import {
-        MessageSquare,
-        LayoutDashboard,
-        Sparkles,
-        CheckSquare,
-        Phone,
         User as UserIcon,
         Building2,
         Plug,
@@ -31,15 +28,7 @@ import {
         Search,
 } from "lucide-react";
 
-const PRIMARY = [
-        { to: "/dashboard", label: "Home", icon: LayoutDashboard, testid: "nav-dashboard" },
-        { to: "/chats",    label: "Chats", icon: MessageSquare, testid: "nav-chats", end: true },
-        { to: "/research", label: "AI",    icon: Sparkles,      testid: "nav-research", accent: true },
-        { to: "/employees", label: "Hire", icon: Bot,           testid: "nav-employees", accent: true },
-        { to: "/tasks",    label: "Tasks", icon: CheckSquare,   testid: "nav-tasks" },
-        { to: "/calls",    label: "Calls", icon: Phone,         testid: "nav-calls" },
-        { to: "/you",      label: "You",   icon: UserIcon,      testid: "nav-you" },
-];
+
 
 const PINNED_KEY = "sidebar-pinned";
 const WIDTH_KEY = "sidebar-width";
@@ -233,6 +222,7 @@ export default function Sidebar() {
 
       {/* Primary nav */}
       <nav className={`flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-3"} space-y-0.5`}>
+        <NewMenu collapsed={collapsed} />
         <button
           type="button"
           data-testid="nav-command-palette"
@@ -250,7 +240,7 @@ export default function Sidebar() {
             </>
           )}
         </button>
-        {PRIMARY.map((n) => (
+        {primaryNav(user).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}

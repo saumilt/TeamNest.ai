@@ -81,12 +81,85 @@ async def home_summary(current=Depends(require_user)):
     decisions = await db.memory_items.count_documents(
         {"workspace_id": ws_id, "memory_type": "decision", "status": active}
     )
+    my_memory = await db.learned_memories.count_documents(
+        {"workspace_id": ws_id, "user_id": current["id"], "scope": "personal", "active": True}
+    )
     return {
         "saved_facts": saved_facts,
         "decisions": decisions,
         "research_threads": research_threads,
         "documents": documents,
+        "my_memory": my_memory,
+        "team_knowledge": saved_facts,
     }
+
+
+@router.get("/home/overview")
+async def home_overview(current=Depends(require_user)):
+    """Everything the guided Home needs in one call: the five "TeamNest
+    remembers" counts + recent meetings and documents for Continue Working."""
+    uid = current["id"]
+    ws_id = current["workspace_id"]
+    active = {"$in": ["active", "outdated"]}
+    chat_ids = [
+        c["id"]
+        async for c in db.chats.find(
+            {"workspace_id": ws_id, "member_ids": uid}, {"id": 1, "_id": 0}
+        )
+    ]
+    remembers = {
+        "my_memory": await db.learned_memories.count_documents(
+            {"workspace_id": ws_id, "user_id": uid, "scope": "personal", "active": True}
+        ),
+        "team_knowledge": await db.memory_items.count_documents(
+            {"workspace_id": ws_id, "status": active}
+        ),
+        "research": (
+            await db.ai_threads.count_documents({"chat_id": {"$in": chat_ids}})
+            if chat_ids else 0
+        ),
+        "decisions": await db.memory_items.count_documents(
+            {"workspace_id": ws_id, "memory_type": "decision", "status": active}
+        ),
+        "documents": await db.knowledge_sources.count_documents({"workspace_id": ws_id}),
+    }
+
+    meetings = []
+    if chat_ids:
+        raw = (
+            await db.calls.find({"chat_id": {"$in": chat_ids}}, {"_id": 0})
+            .sort("started_at", -1)
+            .to_list(6)
+        )
+        names = {}
+        cids = list({m["chat_id"] for m in raw if m.get("chat_id")})
+        if cids:
+            async for c in db.chats.find(
+                {"id": {"$in": cids}}, {"_id": 0, "id": 1, "name": 1}
+            ):
+                names[c["id"]] = c.get("name")
+        meetings = [
+            {
+                "id": m.get("id"),
+                "chat_id": m.get("chat_id"),
+                "title": names.get(m.get("chat_id")) or "Meeting",
+                "status": m.get("status"),
+                "started_at": m.get("started_at"),
+                "ended_at": m.get("ended_at"),
+            }
+            for m in raw
+        ]
+
+    documents = (
+        await db.knowledge_sources.find(
+            {"workspace_id": ws_id},
+            {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1},
+        )
+        .sort("created_at", -1)
+        .to_list(6)
+    )
+
+    return {"remembers": remembers, "continue": {"meetings": meetings, "documents": documents}}
 
 
 @router.get("/home/checklist")

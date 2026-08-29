@@ -26,6 +26,7 @@ import Memory from "@/pages/Memory";
 import Knowledge from "@/pages/Knowledge";
 import MemoryPage from "@/pages/MemoryPage";
 import Decisions from "@/pages/Decisions";
+import Automations from "@/pages/Automations";
 import AuditLog from "@/pages/AuditLog";
 import ImportWhatsApp from "@/pages/ImportWhatsApp";
 import ProjectMemoryTimeline from "@/pages/ProjectMemoryTimeline";
@@ -194,6 +195,7 @@ export default function App() {
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/ai-memory" element={<MemoryPage />} />
             <Route path="/decisions" element={<Decisions />} />
+            <Route path="/automations" element={<Automations />} />
             <Route path="/audit-log" element={<AuditLog />} />
             <Route path="/import/whatsapp" element={<ImportWhatsApp />} />
             <Route path="/projects/:folderId/memory" element={<ProjectMemoryTimeline />} />

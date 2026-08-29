@@ -12,6 +12,8 @@ import {
   Brain,
   Bot,
   Library,
+  Zap,
+  GitBranch,
   ArrowRight,
   Layers,
 } from "lucide-react";
@@ -30,6 +32,17 @@ const CARDS = [
   { key: "memory", title: "Ask My Memory", desc: "Ask what TeamNest remembers about your work.", icon: Brain, to: "/ai-memory" },
   { key: "employee", title: "Hire / Build an AI Employee", desc: "Add an AI teammate that works in your chats.", icon: Bot, to: "/employees" },
   { key: "knowledge", title: "Explore Team Knowledge", desc: "Browse and query your team's shared knowledge.", icon: Library, to: "/knowledge" },
+  { key: "automate", title: "Automate Something", desc: "Tell TeamNest what should happen automatically.", icon: Zap, to: "/automations" },
+];
+
+// "What TeamNest Remembers" — makes perpetual memory visible. Counts come from
+// GET /api/home/overview.
+const REMEMBERS = [
+  { key: "my_memory", label: "My Memory", desc: "personal learned memories", btn: "Ask My Memory", icon: Brain, to: "/ai-memory" },
+  { key: "team_knowledge", label: "Team Knowledge", desc: "workspace knowledge items", btn: "Ask Team Knowledge", icon: Library, to: "/knowledge" },
+  { key: "research", label: "Research", desc: "saved AI research threads", btn: "Browse Research", icon: Sparkles, to: "/research" },
+  { key: "decisions", label: "Decisions", desc: "saved decisions", btn: "View Decisions", icon: GitBranch, to: "/decisions" },
+  { key: "documents", label: "Documents", desc: "indexed knowledge files", btn: "Ask Documents", icon: FileUp, to: "/knowledge" },
 ];
 
 function ActionCard({ card, onClick }) {
@@ -75,9 +88,11 @@ export default function StartCenterHome({ variant, onChangeLook }) {
   const { user } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState(null);
+  const [overview, setOverview] = useState(null);
 
   useEffect(() => {
     api.get("/dashboard").then(({ data }) => setData(data)).catch(() => {});
+    api.get("/home/overview").then(({ data }) => setOverview(data)).catch(() => {});
   }, []);
 
   const cfg = personaConfig(user?.persona);
@@ -96,7 +111,7 @@ export default function StartCenterHome({ variant, onChangeLook }) {
         <div>
           <div className="label-mono mb-3">WORKSPACE / HOME</div>
           <h1 className="font-display text-4xl lg:text-5xl font-bold tracking-tighter">
-            What do you want to work on{user?.name ? `, ${user.name.split(" ")[0]}` : ""}?
+            What do you want to do{user?.name ? `, ${user.name.split(" ")[0]}` : ""}?
           </h1>
           <p className="text-zinc-500 mt-3 max-w-xl">
             Start with AI, people, a meeting, a document, or a task.
@@ -218,9 +233,91 @@ export default function StartCenterHome({ variant, onChangeLook }) {
               ))
             : null}
         </ContinueColumn>
+
+        <ContinueColumn label="Open tasks" to="/tasks" empty="No open tasks.">
+          {data?.open_tasks?.length
+            ? data.open_tasks.slice(0, 5).map((t) => (
+                <Link
+                  key={t.id}
+                  to="/tasks"
+                  data-testid={`continue-task-${t.id}`}
+                  className="flex items-center gap-2 p-3 border-b border-white/5 hover:bg-white/[0.03]"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-[13px] truncate">{t.title}</span>
+                </Link>
+              ))
+            : null}
+        </ContinueColumn>
+
+        <ContinueColumn label="Meetings" to="/calls" empty="No meetings yet.">
+          {overview?.continue?.meetings?.length
+            ? overview.continue.meetings.slice(0, 5).map((m) => (
+                <Link
+                  key={m.id}
+                  to={m.chat_id ? `/chats/${m.chat_id}` : "/calls"}
+                  data-testid={`continue-meeting-${m.id}`}
+                  className="flex items-center gap-2 p-3 border-b border-white/5 hover:bg-white/[0.03]"
+                >
+                  <Video className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="text-[13px] truncate flex-1">{m.title}</span>
+                  {m.status === "active" && (
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400">Live</span>
+                  )}
+                </Link>
+              ))
+            : null}
+        </ContinueColumn>
+
+        <ContinueColumn label="Recent documents" to="/knowledge" empty="No documents yet.">
+          {overview?.continue?.documents?.length
+            ? overview.continue.documents.slice(0, 5).map((d) => (
+                <Link
+                  key={d.id}
+                  to="/knowledge"
+                  data-testid={`continue-doc-${d.id}`}
+                  className="flex items-center gap-2 p-3 border-b border-white/5 hover:bg-white/[0.03]"
+                >
+                  <FileUp className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span className="text-[13px] truncate">{d.name || "Document"}</span>
+                </Link>
+              ))
+            : null}
+        </ContinueColumn>
       </div>
 
-      {/* Continue working ends here — memory/intelligence now lives up top. */}
+      {/* What TeamNest Remembers — perpetual memory made visible */}
+      <div className="label-mono mb-3">WHAT TEAMNEST REMEMBERS</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-12" data-testid="home-remembers">
+        {REMEMBERS.map((m) => {
+          const I = m.icon;
+          const count = overview?.remembers?.[m.key] ?? 0;
+          return (
+            <div
+              key={m.key}
+              data-testid={`remember-${m.key}`}
+              className="rounded-2xl border border-white/10 bg-[#121214] p-5 flex flex-col"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white/5 text-zinc-200 flex items-center justify-center mb-3">
+                <I className="w-5 h-5" strokeWidth={1.8} />
+              </div>
+              <div className="font-display text-3xl font-bold tracking-tight" data-testid={`remember-count-${m.key}`}>
+                {count}
+              </div>
+              <div className="text-sm font-semibold mt-0.5">{m.label}</div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 flex-1 leading-relaxed">{m.desc}</div>
+              <button
+                type="button"
+                data-testid={`remember-btn-${m.key}`}
+                onClick={() => nav(m.to)}
+                className="mt-3 text-xs font-semibold rounded-lg border border-white/15 bg-black/20 px-3 py-1.5 hover:bg-white/10 transition-colors self-start"
+              >
+                {m.btn}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

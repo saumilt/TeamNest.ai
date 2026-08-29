@@ -13,6 +13,19 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Phase 1 — UX Simplification: Navigation + Home IA (web + mobile + backend) — 2026-08-29
+Part of the multi-phase "Simplicity + AI Actions + Automation + Integration UX" upgrade. User chose web + mobile together; full automation engine deferred to Phase 3 (start with center/builder/manual then real triggers); LLM reuse via Emergent key = yes; one real partner integration to be wired in Phase 4.
+- **Backend** (`routes/dashboard.py`, additive): `GET /api/home/overview` → `{remembers:{my_memory,team_knowledge,research,decisions,documents}, continue:{meetings[],documents[]}}` (sources: learned_memories personal, memory_items workspace + decision, ai_threads, knowledge_sources, calls). `GET /api/home/summary` extended with `my_memory` + `team_knowledge` (regression-safe).
+- **Web**: Enhanced `StartCenterHome.jsx` (NOT duplicated) — now the DEFAULT Home look (`homeVariant.getHomeVariant` → "start"). Header "What do you want to do?", added "Automate Something" card, added "What TeamNest Remembers" section (5 count cards + deep-link buttons), extended Continue Working with tasks/meetings/documents. Global "+ New" menu = `components/NewMenu.jsx` + `lib/nav.js` (`createOptions`); persona-aware primary nav = `lib/nav.js` `primaryNav(user)` (reorders the same 7 items, preserves all testids). `/automations` placeholder page (`pages/Automations.jsx`, route in `App.js`).
+- **Mobile**: New Home tab (first tab) `app/(tabs)/home.tsx` — quick actions, "What TeamNest Remembers" row, Continue Working (chats/tasks/meetings/documents), global "+ New" bottom sheet `src/components/NewMenuSheet.tsx` (research/chat/task/document/automation/AI employee). Tab bar now Home | Chats | Research | Tasks | You.
+- **Tested**: testing_agent iteration 144 — backend 4/4 pass; web + mobile target flows pass; mobile parity gaps (meetings/docs columns, AI Employee option) then closed. Report: `/app/test_reports/iteration_144.json`.
+- **Known follow-ups**: mobile still opens on Chats (index) not Home (landing change deferred); mobile "+ New" omits meeting/project (no create flow on mobile yet); Automation is a placeholder (Phase 3).
+
+### ROADMAP (remaining phases, user-approved)
+- **Phase 2** — AI as Ask / Do / Watch: AI landing tabs (Research/Employees/Automations/Activity), AI Response Action Bar ("Do something with this"), contextual "Do This for Me" (reuse credit governance + approvals).
+- **Phase 3** — Automation engine: model + executor (reuse 1h tick-loop), NL→workflow builder (LLM), templates gallery, suggested automations, execution timeline, risk/approval policies, provider abstraction. Start with center + NL builder + manual Run/Test, then real scheduled/event triggers.
+- **Phase 4** — Apps marketplace: rebrand Connectors → "Apps", categories + search, Read vs Act permissions, plain-English consent UX, native/partner architecture + wire one real partner (TBD with user).
+
 ### Iteration 159 (CI/CD) — Monorepo GitHub Actions + foundational test infra
 - Added three path-filtered GitHub Actions workflows under `.github/workflows/` so a change to one surface only runs that surface's pipeline:
   - `backend-ci.yml` (push paths `backend/**`; PRs run always): installs a slim public-only pinned subset (`backend/requirements-ci.txt` — the full `requirements.txt` needs the private `emergentintegrations` package which isn't resolvable on GitHub runners), runs `flake8` syntax/undefined-name check (`--select=E9,F63,F7,F82`, scans without importing), and the pure unit tests (`tests/test_unit_resolve_app_base.py`, 6 tests — `deps` import chain needs no private pkg; verified in a clean venv with `env -i`). Full integration suite intentionally NOT in this pass.

@@ -30,7 +30,9 @@ export function isBrandNew(user) {
 export function getHomeVariant(user) {
   const v = normalize(safeStorage.get(KEY));
   if (v) return v;
-  return isBrandNew(user) ? "start" : "classic";
+  // Default everyone (no stored choice) to the guided Start Center — the
+  // "What do you want to do?" hub. Users can still switch looks.
+  return "start";
 }
 
 export function setHomeVariant(v) {
