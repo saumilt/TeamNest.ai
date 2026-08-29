@@ -13,6 +13,11 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Canvas Templates — start the visual builder from ready-made workflows — 2026-08-29
+- Web-only. New `GET /api/automations/canvas-templates` returns 5 full workflow plans (Daily overdue-task digest, Weekly research digest, New CRM lead → welcome email, Stalled-projects alert, New task → notify team) matching the exact plan schema the canvas + create API use.
+- `Automations.jsx`: an "Or start on the canvas from a template" chip row (`canvas-templates`, `canvas-template-<key>`) shown when no plan is in progress; clicking loads the template plan and opens Canvas mode with pre-filled, pre-configured trigger + step nodes. Distinct from the existing NL Template Gallery.
+- Self-tested (small web-only change): 5 templates render; loading "Weekly research digest" pre-fills WHEN (Mon 09:00) → GET recent research → Summarize → Post; a template-loaded plan (new_task_notify) saved+activated successfully via the existing create path.
+
 ### Canvas Node Configs + Employee Weekly Digest + Meeting Prep Calendar — 2026-08-29
 - **Canvas Node Configs (web)**: `AutomationNodeBuilder.jsx` rewritten so each node opens a config settings panel mirroring the backend plan schema. Trigger node: type (manual/scheduled/condition/event) + sub-config (schedule freq/time/weekday, condition, event). Step nodes: Get data (source) · Summarize (AI) · Draft email (AI) · Post to a chat (chat picker) · App action (update_crm/notify/create_task). Labels auto-suggest from config; reorder/add/delete; saves a working automation via the existing create API. Testids: `node-settings`, `trigger-type-select`, `trigger-sched-*`, `node-type-select-<i>`, `node-source/op/post-target/app-action`, etc.
 - **Employee Activity Digest (backend + web + mobile)**: `GET /api/ai-employees/_/digests` → per subscribed employee (last 7 days): tasks, hours_saved, dollar_savings, highlights, and an AI one-line recap (`complete()`). Web `WeeklyDigests` section ("This week with your AI team", `digest-<key>`) on `AIEmployees.jsx`; mobile digest section in `AIEmployeesPanel`.

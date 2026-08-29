@@ -45,10 +45,17 @@ export default function Automations() {
   const [detail, setDetail] = useState(null);
   const [actingId, setActingId] = useState(null);
   const [builderMode, setBuilderMode] = useState("nl"); // "nl" | "visual"
+  const [canvasTemplates, setCanvasTemplates] = useState([]);
 
   const startBlankCanvas = () => {
     setPlan({ name: "New automation", risk: "low", trigger: { type: "manual", label: "Manually" }, steps: [] });
     setBuilderMode("visual");
+  };
+
+  const startFromTemplate = (t) => {
+    setPlan(JSON.parse(JSON.stringify(t.plan)));
+    setBuilderMode("visual");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const load = () => {
@@ -62,6 +69,7 @@ export default function Automations() {
   useEffect(() => {
     load();
     api.get("/automations/templates").then(({ data }) => setTemplates(data.templates || [])).catch(() => {});
+    api.get("/automations/canvas-templates").then(({ data }) => setCanvasTemplates(data.templates || [])).catch(() => {});
     api.get("/chats").then(({ data }) => {
       setChats(data || []);
       const ai = (data || []).find((c) => c.type === "personal_ai");
@@ -234,6 +242,28 @@ export default function Automations() {
             <GitBranch className="w-4 h-4" /> Build on canvas
           </button>
         </div>
+
+        {!plan && canvasTemplates.length > 0 && (
+          <div className="mt-4" data-testid="canvas-templates">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+              <GitBranch className="w-3.5 h-3.5" /> Or start on the canvas from a template
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {canvasTemplates.map((t) => (
+                <button
+                  key={t.key}
+                  data-testid={`canvas-template-${t.key}`}
+                  onClick={() => startFromTemplate(t)}
+                  title={t.description}
+                  className="text-left rounded-lg border border-white/10 hover:border-yellow-400/40 hover:bg-yellow-500/[0.04] px-3 py-2 transition-colors max-w-[260px]"
+                >
+                  <div className="text-[13px] font-semibold text-zinc-100 truncate">{t.title}</div>
+                  <div className="text-[11px] text-zinc-500 truncate">{t.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {plan && (
           <div className="mt-5 border-t border-white/10 pt-4" data-testid="automation-plan">

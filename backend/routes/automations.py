@@ -435,6 +435,79 @@ async def automation_insights(current=Depends(require_user)):
     return {"by_automation": by, "workspace": ws_roll}
 
 
+CANVAS_TEMPLATES = [
+    {
+        "key": "daily_overdue_digest", "title": "Daily overdue-task digest",
+        "description": "Every morning, summarize overdue tasks and post to a chat.", "category": "Productivity",
+        "plan": {
+            "name": "Daily overdue-task digest", "risk": "low",
+            "trigger": {"type": "scheduled", "label": "Every day at 08:00", "config": {"schedule": {"freq": "daily", "time": "08:00", "weekday": None}}},
+            "steps": [
+                {"kind": "get", "label": "Get overdue tasks", "config": {"source": "overdue_tasks"}},
+                {"kind": "ai", "label": "Summarize with AI", "config": {"op": "summarize"}},
+                {"kind": "post", "label": "Post to a chat", "config": {"target": ""}},
+            ],
+        },
+    },
+    {
+        "key": "weekly_research_digest", "title": "Weekly research digest",
+        "description": "Every Monday, recap recent AI research to a chat.", "category": "Knowledge",
+        "plan": {
+            "name": "Weekly research digest", "risk": "low",
+            "trigger": {"type": "scheduled", "label": "Every Monday at 09:00", "config": {"schedule": {"freq": "weekly", "time": "09:00", "weekday": "mon"}}},
+            "steps": [
+                {"kind": "get", "label": "Get recent AI research", "config": {"source": "recent_research"}},
+                {"kind": "ai", "label": "Summarize with AI", "config": {"op": "summarize"}},
+                {"kind": "post", "label": "Post to a chat", "config": {"target": ""}},
+            ],
+        },
+    },
+    {
+        "key": "new_lead_welcome", "title": "New CRM lead → draft welcome email",
+        "description": "When a new CRM lead appears, draft a welcome email.", "category": "Sales",
+        "plan": {
+            "name": "New lead welcome email", "risk": "medium",
+            "trigger": {"type": "event", "label": "When a CRM lead is created", "config": {"event": "crm_lead_created"}},
+            "steps": [
+                {"kind": "get", "label": "Get CRM leads", "config": {"source": "crm_leads"}},
+                {"kind": "ai", "label": "Draft an email", "config": {"op": "draft_email"}},
+            ],
+        },
+    },
+    {
+        "key": "stalled_projects_alert", "title": "Stalled-projects alert",
+        "description": "When work stalls, summarize it and notify the team.", "category": "Ops",
+        "plan": {
+            "name": "Stalled-projects alert", "risk": "low",
+            "trigger": {"type": "condition", "label": "When projects stall", "config": {"condition": "stalled_projects"}},
+            "steps": [
+                {"kind": "get", "label": "Get overdue tasks", "config": {"source": "overdue_tasks"}},
+                {"kind": "ai", "label": "Summarize with AI", "config": {"op": "summarize"}},
+                {"kind": "post", "label": "Post to a chat", "config": {"target": ""}},
+            ],
+        },
+    },
+    {
+        "key": "new_task_notify", "title": "New task → notify team",
+        "description": "When a task is created, summarize it and post to a chat.", "category": "Productivity",
+        "plan": {
+            "name": "New task notification", "risk": "low",
+            "trigger": {"type": "event", "label": "When a task is created", "config": {"event": "task_created"}},
+            "steps": [
+                {"kind": "ai", "label": "Summarize with AI", "config": {"op": "summarize"}},
+                {"kind": "post", "label": "Post to a chat", "config": {"target": ""}},
+            ],
+        },
+    },
+]
+
+
+@router.get("/automations/canvas-templates")
+async def canvas_templates(current=Depends(require_user)):
+    """Ready-made full workflow plans that open directly in the visual canvas."""
+    return {"templates": CANVAS_TEMPLATES}
+
+
 @router.get("/automations/{automation_id}")
 async def get_automation(automation_id: str, current=Depends(require_user)):
     doc = await db.automations.find_one(
