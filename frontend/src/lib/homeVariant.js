@@ -43,6 +43,22 @@ export function setHomeVariant(v) {
   }
 }
 
+// True once the user has an explicit stored layout choice (vs the default).
+export function hasStoredVariant() {
+  return !!normalize(safeStorage.get(KEY));
+}
+
+const ONBOARD_KEY = (uid) => `layout:onboarded:${uid || "anon"}`;
+
+// First-run layout picker: shown once until the user picks (or skips).
+export function isLayoutOnboarded(user) {
+  return safeStorage.get(ONBOARD_KEY(user?.id)) === "1";
+}
+
+export function markLayoutOnboarded(user) {
+  safeStorage.set(ONBOARD_KEY(user?.id), "1");
+}
+
 // Post-login landing route — always the Home page so users land directly on
 // their chosen layout (Chat View / Start Center / ChatGPT / Claude).
 export function homeLanding() {

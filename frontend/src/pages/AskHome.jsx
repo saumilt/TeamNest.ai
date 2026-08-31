@@ -1,5 +1,4 @@
 import { useAuth } from "@/context/AuthContext";
-import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
 import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
@@ -16,17 +15,13 @@ const CHIPS = [
 
 /** "Ask AI" Home — ChatGPT-style prompt-first landing. One big composer, a
  *  few example prompts, then every feature one tap away. */
-export default function AskHome({ variant, onChangeLook }) {
+export default function AskHome() {
   const { user } = useAuth();
   const first = user?.name?.split(" ")[0];
   const cfg = personaConfig(user?.persona);
 
   return (
     <div className="p-6 lg:p-10 max-w-[1000px] mx-auto w-full" data-testid="home-ask">
-      <div className="flex justify-end mb-5">
-        <HomeLookSwitcher current={variant} onChange={onChangeLook} />
-      </div>
-
       <IntelligenceBanner />
       <PersonaNudge />
       <SetupChecklist />

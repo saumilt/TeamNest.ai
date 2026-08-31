@@ -3,6 +3,14 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 157 (Jun 2026) — Home layout: first-run picker + consistent "Change Layout" button (web) — VERIFIED (5/5 frontend)
+Two Home UX changes (web-only), both tested green.
+- **First-run layout picker** (`components/HomeLayoutOnboarding.jsx`, rendered in `pages/Home.jsx`): a new user's first Home visit shows a centered modal with all 4 looks (Chat View / Start Center / ChatGPT / Claude) to set their default. Shows once (localStorage `tn:layout:onboarded:<uid>` + only when no explicit `tn:home:variant`). Skip keeps the default. On finish it dispatches `tn:layout-onboarded` so the welcome-tips tour opens afterwards (no more double-asking — removed the buried 3-option `w-layout` slide + picker from `WelcomeTour.jsx`).
+- **Consistent switcher placement** — root cause: each of the 4 layout pages rendered `HomeLookSwitcher` in its own differently-sized header, so it jumped every switch. Fix: made `HomeLookSwitcher` self-contained (reads/writes layout itself, syncs via `tn:home-variant`) and hoisted it into a single fixed top-bar container in `AppShell.jsx` next to the Buy Credits pill (`data-testid=top-right-controls`), shown only on `/dashboard` and `md+`. Removed the switcher + its props from Dashboard/StartCenterHome/AskHome/FocusHome. `CreditsBadge` lost its own fixed wrapper (now positioned by the shared container). QA: switcher is pixel-identical across all 4 layouts (x-range=0, y-range=0), no overlap with the dashboard action buttons.
+- New helpers in `lib/homeVariant.js`: `hasStoredVariant()`, `isLayoutOnboarded(user)`, `markLayoutOnboarded(user)`.
+- Report `/app/test_reports/iteration_157.json`. Non-blocking note: pre-existing `KEY="tn:home:variant"` is double-prefixed by safeStorage (`tn:tn:home:variant`) — left as-is to avoid resetting existing users' saved layout.
+
+
 ## Iteration 156 (Jun 2026) — Digest Schedule Control + production deploy unblocked — VERIFIED (backend 10/10 + web + mobile)
 P1 done: workspace owners/admins now choose the DAY, TIME (hour, UTC) and RECIPIENTS of the weekly AI-employee digest email (previously hardcoded to Monday 08:00 UTC → all owners/admins).
 - **Backend** (`routes/ai_employees.py`):

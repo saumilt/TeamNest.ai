@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, Navigate } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import Sidebar from "@/components/Sidebar";
 import MobileTabBar from "@/components/MobileTabBar";
@@ -7,6 +7,7 @@ import ChangelogModal from "@/components/ChangelogModal";
 import EmployeeCrossSell from "@/components/EmployeeCrossSell";
 import CreditSplash from "@/components/CreditSplash";
 import CreditsBadge from "@/components/CreditsBadge";
+import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import BudgetNudge from "@/components/BudgetNudge";
 import ForcePasswordChange from "@/components/ForcePasswordChange";
 import ShowMeHow from "@/components/ShowMeHow";
@@ -24,6 +25,8 @@ import useUnreadTitle from "@/hooks/useUnreadTitle";
  */
 export default function AppShell() {
   const { user, loading } = useAuth();
+  const { pathname } = useLocation();
+  const isHome = pathname === "/dashboard";
   // Post-login redirect (e.g. "Use this template" while logged out).
   // useState initializer: read+clear localStorage exactly once per mount.
   const [nextPath] = useState(() => safeNextPath());
@@ -55,7 +58,19 @@ export default function AppShell() {
       <ChangelogModal />
       <EmployeeCrossSell />
       <CreditSplash />
-      <CreditsBadge />
+      {/* Consistent top-right controls: the Home layout switcher (Home only)
+          always sits next to the Buy Credits pill so it never moves. */}
+      <div
+        className="fixed top-2.5 right-3 z-40 flex items-center gap-2"
+        data-testid="top-right-controls"
+      >
+        {isHome && (
+          <div className="hidden md:block">
+            <HomeLookSwitcher />
+          </div>
+        )}
+        <CreditsBadge />
+      </div>
       <BudgetNudge />
       <ShowMeHow />
       <ChecklistNudge />

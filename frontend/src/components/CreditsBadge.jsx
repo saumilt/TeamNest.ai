@@ -50,7 +50,7 @@ export default function CreditsBadge() {
   const openSplash = () => window.dispatchEvent(new Event("teamnest:open-credit-splash"));
 
   return (
-    <div className="fixed top-2.5 right-3 z-40" data-testid="credits-badge">
+    <div data-testid="credits-badge">
       <button
         type="button"
         data-testid="credits-badge-buy"

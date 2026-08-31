@@ -1,10 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Check, Layout } from "lucide-react";
-import { HOME_LOOKS } from "@/lib/homeVariant";
+import { useAuth } from "@/context/AuthContext";
+import { HOME_LOOKS, getHomeVariant, setHomeVariant } from "@/lib/homeVariant";
 
-/** Small popover to switch the Home look (Classic / Start Center / Ask AI / Focus). */
-export default function HomeLookSwitcher({ current, onChange }) {
+/**
+ * Self-contained Home-layout switcher. Lives in one fixed spot (top bar, next
+ * to Buy Credits) so it never moves between the four Home looks. Reads/writes
+ * the layout itself and stays in sync via the `tn:home-variant` event, so no
+ * page needs to pass props.
+ */
+export default function HomeLookSwitcher() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState(() => getHomeVariant(user));
+
+  useEffect(() => {
+    const onChange = (e) => { if (e?.detail) setCurrent(e.detail); };
+    window.addEventListener("tn:home-variant", onChange);
+    return () => window.removeEventListener("tn:home-variant", onChange);
+  }, []);
+
+  const choose = (v) => {
+    setHomeVariant(v);
+    setCurrent(v);
+    setOpen(false);
+  };
 
   return (
     <div className="relative" data-testid="home-look-switcher">
@@ -12,7 +32,7 @@ export default function HomeLookSwitcher({ current, onChange }) {
         type="button"
         data-testid="home-look-btn"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 border border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-[11px] h-9 px-3 text-zinc-400 hover:text-white transition-colors"
+        className="flex items-center gap-2 border border-white/10 bg-black/40 backdrop-blur hover:bg-white/10 rounded-full font-mono uppercase tracking-widest text-[11px] h-9 px-3 text-zinc-300 hover:text-white transition-colors shadow-lg"
       >
         <Layout className="w-3.5 h-3.5" />
         Change layout
@@ -34,10 +54,7 @@ export default function HomeLookSwitcher({ current, onChange }) {
                   key={l.value}
                   type="button"
                   data-testid={`home-look-${l.value}`}
-                  onClick={() => {
-                    onChange(l.value);
-                    setOpen(false);
-                  }}
+                  onClick={() => choose(l.value)}
                   className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-white/5 ${
                     active ? "text-yellow-300" : "text-zinc-200"
                   }`}

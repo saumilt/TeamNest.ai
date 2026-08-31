@@ -4,7 +4,6 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import TopActionBar from "@/components/TopActionBar";
-import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
 import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
@@ -46,7 +45,7 @@ function relativeTime(iso) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export default function Dashboard({ variant, onChangeLook }) {
+export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [memberCount, setMemberCount] = useState(null);
@@ -107,7 +106,6 @@ export default function Dashboard({ variant, onChangeLook }) {
           </h1>
         </div>
         <div className="hidden lg:flex gap-3">
-          {onChangeLook && <HomeLookSwitcher current={variant} onChange={onChangeLook} />}
           <Button
             data-testid="dash-new-chat"
             onClick={() => nav("/chats?new=group")}

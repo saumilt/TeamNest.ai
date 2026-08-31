@@ -17,7 +17,6 @@ import {
   ArrowRight,
   Layers,
 } from "lucide-react";
-import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
 import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
@@ -84,7 +83,7 @@ function ContinueColumn({ label, to, empty, children }) {
 
 /** "Start Center" Home — organizes the whole product around
  *  "What do you want to work on?" rather than a chat list. */
-export default function StartCenterHome({ variant, onChangeLook }) {
+export default function StartCenterHome() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState(null);
@@ -117,7 +116,6 @@ export default function StartCenterHome({ variant, onChangeLook }) {
             Start with AI, people, a meeting, a document, or a task.
           </p>
         </div>
-        <HomeLookSwitcher current={variant} onChange={onChangeLook} />
       </div>
 
       <IntelligenceBanner />

@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Sparkles, MessageSquare, Layers, ArrowRight } from "lucide-react";
-import HomeLookSwitcher from "@/components/HomeLookSwitcher";
 import IntelligenceBanner from "@/components/IntelligenceBanner";
 import PersonaNudge from "@/components/PersonaNudge";
 import SetupChecklist from "@/components/SetupChecklist";
@@ -28,7 +27,7 @@ function greeting() {
 
 /** "Focus" Home — Claude-style calm workspace. Warm greeting + composer, then
  *  a two-column "jump back in" + all features. */
-export default function FocusHome({ variant, onChangeLook }) {
+export default function FocusHome() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState(null);
@@ -41,10 +40,6 @@ export default function FocusHome({ variant, onChangeLook }) {
 
   return (
     <div className="p-6 lg:p-10 max-w-[1100px] mx-auto w-full" data-testid="home-focus">
-      <div className="flex justify-end mb-5">
-        <HomeLookSwitcher current={variant} onChange={onChangeLook} />
-      </div>
-
       <IntelligenceBanner />
       <PersonaNudge />
       <SetupChecklist />
