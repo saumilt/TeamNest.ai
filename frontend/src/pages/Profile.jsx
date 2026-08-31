@@ -1,17 +1,19 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles, Zap, Wand2 } from "lucide-react";
+import { User, Mail, Phone, Lock, Image as ImageIcon, Sparkles, Zap, Wand2, LayoutGrid } from "lucide-react";
 import MfaSettings from "@/components/MfaSettings";
 import safeStorage from "@/lib/safeStorage";
 import { QUICKBAR_HIDDEN_KEY } from "@/components/TopActionBar";
 
 export default function Profile() {
   const { user, refresh } = useAuth();
+  const navigate = useNavigate();
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
@@ -291,6 +293,28 @@ export default function Profile() {
             className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-xs h-10 px-5 shrink-0"
           >
             Show welcome again
+          </Button>
+        </div>
+        <div className="p-6 flex items-center justify-between gap-4 border-t border-white/5" data-testid="profile-layout-pref">
+          <div>
+            <div className="text-sm text-zinc-200 flex items-center gap-1.5">
+              <LayoutGrid className="w-3.5 h-3.5 text-yellow-300" /> Home layout
+            </div>
+            <div className="text-[13px] text-zinc-500 mt-0.5">
+              Re-open the picker to preview and choose a different Home style.
+            </div>
+          </div>
+          <Button
+            type="button"
+            data-testid="reopen-layout-picker-btn"
+            onClick={() => {
+              try { window.sessionStorage.setItem("tn:reopen-layout-picker", "1"); } catch { /* ignore */ }
+              navigate("/dashboard");
+            }}
+            variant="outline"
+            className="border-white/10 bg-transparent hover:bg-white/5 rounded-sm font-mono uppercase tracking-widest text-xs h-10 px-5 shrink-0"
+          >
+            Choose layout
           </Button>
         </div>
         <div className="p-6 flex items-center justify-between gap-4 border-t border-white/5">

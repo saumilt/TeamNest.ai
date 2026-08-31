@@ -3,6 +3,12 @@
 (Migrated from PRD.md on 2026-06 to keep PRD lean.)
 
 
+## Iteration 158 (Jun 2026) — Layout picker thumbnails + Profile "reopen picker" (web) — self-tested (screenshots)
+- **Live thumbnails**: each option in the first-run layout picker (`components/HomeLayoutOnboarding.jsx`) now shows a CSS mini-mockup of that layout (`LayoutThumb`) — classic = sidebar+card grid, start = title + action tiles, ask = heading + prompt composer + chips, focus = greeting + calm composer — with amber accents when selected, so people preview before choosing.
+- **Reopen from Profile**: added a "Home layout → Choose layout" row in `pages/Profile.jsx` Preferences (`data-testid=reopen-layout-picker-btn`). It sets a one-shot `sessionStorage['tn:reopen-layout-picker']` flag and navigates to `/dashboard`; `HomeLayoutOnboarding` reads the flag on mount (also listens for a `tn:open-layout-picker` event) and reopens the picker pre-selected to the current layout. Reopen path sets `firstRun=false` (button label "Cancel", and does NOT re-trigger the welcome-tips tour); first-run keeps "Skip" + the `tn:layout-onboarded` handoff.
+- Self-tested via screenshots: thumbnails render for all 4 looks; Profile → Choose layout reopens the picker successfully. Compiles clean. (Not run through testing_agent — incremental UI addition on top of the iter157 flow which passed 5/5.)
+
+
 ## Iteration 157 (Jun 2026) — Home layout: first-run picker + consistent "Change Layout" button (web) — VERIFIED (5/5 frontend)
 Two Home UX changes (web-only), both tested green.
 - **First-run layout picker** (`components/HomeLayoutOnboarding.jsx`, rendered in `pages/Home.jsx`): a new user's first Home visit shows a centered modal with all 4 looks (Chat View / Start Center / ChatGPT / Claude) to set their default. Shows once (localStorage `tn:layout:onboarded:<uid>` + only when no explicit `tn:home:variant`). Skip keeps the default. On finish it dispatches `tn:layout-onboarded` so the welcome-tips tour opens afterwards (no more double-asking — removed the buried 3-option `w-layout` slide + picker from `WelcomeTour.jsx`).
