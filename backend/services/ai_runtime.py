@@ -58,6 +58,23 @@ async def _refresh_conversation_summary(chat_id: str, user_id: str, history_ctx:
 
 
 
+async def _post_ai_error(chat_id: str, thread_id: str, parent_msg_id: Optional[str], reason: str) -> dict:
+    """Post a visible error answer so the chat never stays stuck on 'thinking'."""
+    await db.ai_threads.update_one(
+        {"id": thread_id, "status": {"$ne": "canceled"}}, {"$set": {"status": "error"}}
+    )
+    msg = {
+        "id": new_id(), "chat_id": chat_id, "sender_id": "ai-system",
+        "message_type": "ai_answer", "body": f"⚠️ {reason}",
+        "parent_message_id": parent_msg_id,
+        "metadata": {"thread_id": thread_id, "status": "error", "ai_error": True},
+        "reactions": {}, "created_at": now_iso(), "edited_at": None, "deleted_at": None,
+    }
+    await db.messages.insert_one(msg.copy())
+    await _broadcast_message(chat_id, msg)
+    return msg
+
+
 async def _finalize_research(
     thread: dict,
     responses: List[dict],
@@ -516,10 +533,17 @@ async def handle_ai_command(
                 project_folder_id=(chat or {}).get("project_folder_id"),
             )
 
-    answer_msg = await _finalize_research(
-        thread, responses, chat_id, placeholder["id"],
-        favorite_model=favorite, compare=compare,
-    )
+    try:
+        answer_msg = await _finalize_research(
+            thread, responses, chat_id, placeholder["id"],
+            favorite_model=favorite, compare=compare,
+        )
+    except Exception as e:
+        logger.exception("[ai] finalize failed: %s", e)
+        answer_msg = await _post_ai_error(
+            chat_id, thread["id"], placeholder["id"],
+            "I hit an error composing the final answer. Please try again.",
+        )
 
     # Canceled during finalize — answer was discarded; skip session/learning.
     if answer_msg is None:

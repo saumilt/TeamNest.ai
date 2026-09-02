@@ -20,7 +20,7 @@ export default function Bubble({
 	let radius = "";
 
 	if (variant === "sent") {
-		bg = "bg-bubble-out border border-brand/30 text-ink";
+		bg = "bg-amber-400/[0.18] border border-amber-400/40 text-ink";
 		radius = `rounded-[18px] ${isGroupStart ? "" : "rounded-tr-[6px]"} ${isGroupEnd ? "" : "rounded-br-[6px]"}`;
 	} else if (variant === "ai") {
 		bg = "bg-ai-tint text-ink";

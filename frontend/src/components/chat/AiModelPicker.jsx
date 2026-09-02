@@ -60,40 +60,42 @@ export default function AiModelPicker({
           setSel(new Set(models && models.length ? models : [RECOMMENDED_KEY]))
         }
       />
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      <div className="flex flex-col gap-0.5 mb-2 max-h-[240px] overflow-y-auto -mx-1 px-1">
         {ALL_MODELS.map((m) => {
           const on = sel.has(m.key);
           return (
-            <button
+            <label
               key={m.key}
-              type="button"
               data-testid={`ai-model-option-${m.key}`}
-              aria-pressed={on}
               title={m.hint}
               onMouseEnter={() => setHoverKey(m.key)}
               onMouseLeave={() => setHoverKey(null)}
-              onClick={() => toggle(m.key)}
-              className={`px-2.5 h-8 rounded-full border text-[12px] inline-flex items-center gap-1.5 transition-colors ${
-                on
-                  ? "bg-ai text-black border-ai"
-                  : "border-hairline text-ink-dim hover:text-ink hover:border-ai/40"
+              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                on ? "bg-ai/10" : "hover:bg-surface-2"
               }`}
             >
-              {m.fast && <Zap className={`w-3 h-3 ${on ? "text-black" : "text-ai"}`} />}
-              {m.name}
-              {on && <Check className="w-3 h-3" />}
+              <input
+                type="checkbox"
+                data-testid={`ai-model-checkbox-${m.key}`}
+                checked={on}
+                onChange={() => toggle(m.key)}
+                className="accent-ai w-4 h-4 shrink-0"
+              />
+              {m.fast && <Zap className="w-3 h-3 text-ai shrink-0" />}
+              <span className={`text-[13px] flex-1 min-w-0 truncate ${on ? "text-ink font-medium" : "text-ink-dim"}`}>
+                {m.name}
+              </span>
               {m.recommended && (
                 <span
                   data-testid={`ai-model-recommended-badge-${m.key}`}
                   title="Recommended"
-                  className={`ml-0.5 text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded ${
-                    on ? "bg-black/20 text-black" : "bg-ai/15 text-ai"
-                  }`}
+                  className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-ai/15 text-ai shrink-0"
                 >
                   Rec
                 </span>
               )}
-            </button>
+              {on && <Check className="w-3.5 h-3.5 text-ai shrink-0" />}
+            </label>
           );
         })}
       </div>

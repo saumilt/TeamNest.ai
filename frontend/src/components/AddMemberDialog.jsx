@@ -25,6 +25,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
 
   const [wsMembers, setWsMembers] = useState([]);
   const [addingId, setAddingId] = useState(null);
+  const [addedIds, setAddedIds] = useState(() => new Set());
   const [resendingId, setResendingId] = useState(null);
   const { user } = useAuth();
   const canInvite = ["owner", "admin"].includes(user?.role);
@@ -112,6 +113,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
     if (!open) {
       setQuery(""); setResults([]); setSearchHint(null);
       setNewForm({ name: "", email: "", phone: "" }); setCreatedMember(null);
+      setAddedIds(new Set());
     }
   }, [open]);
 
@@ -144,9 +146,11 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
       if (data.created_new_account) {
         setCreatedMember(data);
       } else {
+        // Keep the dialog OPEN so several people can be added in a row; just
+        // mark this one Added. The dialog closes only on Done/X.
         toast.success(`Added ${data.name} to the chat.`);
+        setAddedIds((prev) => { const n = new Set(prev); n.add(id || data.id); return n; });
         onAdded?.();
-        onOpenChange(false);
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not add member");
@@ -167,8 +171,9 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
         setCreatedMember(data);
       } else {
         toast.success(`Added ${data.name} to the chat.`);
+        if (data.id) setAddedIds((prev) => { const n = new Set(prev); n.add(data.id); return n; });
+        setNewForm({ name: "", email: "", phone: "" });
         onAdded?.();
-        onOpenChange(false);
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not invite member");
@@ -184,7 +189,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
     } catch { toast.error("Clipboard write failed"); }
   };
 
-  const wsCandidates = wsMembers.filter((u) => !memberSet.has(u.id));
+  const wsCandidates = wsMembers.filter((u) => !memberSet.has(u.id) || addedIds.has(u.id));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -301,7 +306,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
                     <button
                       key={u.id}
                       data-testid={`add-member-ws-${u.id}`}
-                      disabled={addingId === u.id}
+                      disabled={addingId === u.id || addedIds.has(u.id)}
                       onClick={() => addMember({ user_id: u.id }, u.name, u.id)}
                       className="w-full flex items-center gap-2.5 px-2 h-11 rounded-md hover:bg-white/5 text-left"
                     >
@@ -331,7 +336,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
                         <div className="text-[11px] text-zinc-500 truncate">{u.email}</div>
                       </div>
                       <span className="text-emerald-400 text-[11px] font-mono uppercase tracking-widest inline-flex items-center gap-1">
-                        {addingId === u.id ? "…" : (<><UserPlus className="w-3.5 h-3.5" /> Add</>)}
+                        {addingId === u.id ? "…" : addedIds.has(u.id) ? (<><CheckCircle2 className="w-3.5 h-3.5" /> Added</>) : (<><UserPlus className="w-3.5 h-3.5" /> Add</>)}
                       </span>
                     </button>
                   ))}
@@ -355,7 +360,7 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
               <div className="max-h-56 overflow-y-auto -mx-2 mt-2" data-testid="add-member-results">
                 {searchBusy && <div className="px-2 py-3 text-xs font-mono uppercase tracking-widest text-zinc-500">Searching…</div>}
                 {!searchBusy && searchHint && <div className="px-2 py-2 text-xs text-zinc-500">{searchHint}</div>}
-                {!searchBusy && results.filter((r) => !memberSet.has(r.id)).map((r) => (
+                {!searchBusy && results.filter((r) => !memberSet.has(r.id) || addedIds.has(r.id)).map((r) => (
                   <div key={r.id} data-testid={`add-member-result-${r.id}`} className="flex items-center gap-3 px-2 py-2.5 border-b border-white/5 last:border-0">
                     <div className="w-9 h-9 bg-zinc-800 rounded-sm flex items-center justify-center text-xs font-bold shrink-0">{r.name?.charAt(0) || "?"}</div>
                     <div className="flex-1 min-w-0">
@@ -368,11 +373,11 @@ export default function AddMemberDialog({ open, onOpenChange, chatId, chatName, 
                     <Button
                       data-testid={`add-member-add-${r.id}`}
                       onClick={() => addMember({ user_id: r.id }, r.name, r.id)}
-                      disabled={addingId === r.id}
+                      disabled={addingId === r.id || addedIds.has(r.id)}
                       size="sm"
-                      className="bg-emerald-500 hover:bg-emerald-400 text-black rounded-sm font-mono uppercase tracking-widest text-[10px] h-8 px-3"
+                      className="bg-emerald-500 hover:bg-emerald-400 text-black rounded-sm font-mono uppercase tracking-widest text-[10px] h-8 px-3 disabled:opacity-100"
                     >
-                      {addingId === r.id ? "Adding…" : (<><UserPlus className="w-3 h-3 mr-1" /> Add</>)}
+                      {addingId === r.id ? "Adding…" : addedIds.has(r.id) ? (<><CheckCircle2 className="w-3 h-3 mr-1" /> Added</>) : (<><UserPlus className="w-3 h-3 mr-1" /> Add</>)}
                     </Button>
                   </div>
                 ))}

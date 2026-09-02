@@ -120,6 +120,12 @@ def _build_strengths_weaknesses(model_key: str) -> Dict[str, List[str]]:
     return {"strengths": s, "weaknesses": w}
 
 
+# Hard ceiling per model call so one slow/stalled provider can never hang the
+# whole multi-model run (the reported "stuck on thinking" bug). Env-tunable.
+MODEL_TIMEOUT_SECONDS = int(os.environ.get("AI_MODEL_TIMEOUT", "90"))
+SYNTH_TIMEOUT_SECONDS = int(os.environ.get("AI_SYNTH_TIMEOUT", "45"))
+
+
 async def _call_emergent_model(
     model_key: str,
     question: str,
@@ -182,8 +188,11 @@ async def call_model(
                 "strengths": [], "weaknesses": [], "confidence_score": 0, "real": False, "error": "unknown_model"}
     try:
         if cfg["engine"] == "emergent":
-            answer = await _call_emergent_model(
-                model_key, question, session_id, image_bytes_list=image_bytes_list
+            answer = await asyncio.wait_for(
+                _call_emergent_model(
+                    model_key, question, session_id, image_bytes_list=image_bytes_list
+                ),
+                timeout=MODEL_TIMEOUT_SECONDS,
             )
         else:
             # OpenAI-compat models (DeepSeek/Perplexity/Grok) don't reliably
@@ -194,9 +203,19 @@ async def call_model(
                     "[Note: user attached image(s) but this model does not "
                     "support vision. Reply based on the text only.]\n\n" + question
                 )
-            answer = await _call_openai_compat(model_key, text_q, session_id)
+            answer = await asyncio.wait_for(
+                _call_openai_compat(model_key, text_q, session_id),
+                timeout=MODEL_TIMEOUT_SECONDS,
+            )
         confidence = secrets.randbelow(24) + 72
         real = True
+    except asyncio.TimeoutError:
+        answer = (
+            f"[{cfg['display']} took too long to respond (over {MODEL_TIMEOUT_SECONDS}s) "
+            "and was skipped. Try again, or deselect it if this keeps happening.]"
+        )
+        confidence = 0
+        real = False
     except Exception as e:
         answer = f"[Error calling {cfg['display']}: {e}]"
         confidence = 0
@@ -224,7 +243,21 @@ async def ask_models_parallel(
         call_model(m, question, session_id, image_bytes_list=image_bytes_list)
         for m in models
     ]
-    return await asyncio.gather(*tasks)
+    # return_exceptions so a single failing task can never blow up the whole
+    # batch — coerce any stray error into a graceful per-model result.
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    out: List[Dict] = []
+    for m, r in zip(models, results):
+        if isinstance(r, Exception):
+            cfg = MODEL_CONFIG.get(m, {})
+            out.append({
+                "model_key": m, "model_name": cfg.get("display", m),
+                "answer": f"[Error calling {cfg.get('display', m)}: {r}]",
+                "strengths": [], "weaknesses": [], "confidence_score": 0, "real": False,
+            })
+        else:
+            out.append(r)
+    return out
 
 
 async def synthesize_answer(question: str, responses: List[Dict], session_id: str, preferred_best: Optional[Dict] = None) -> str:
@@ -251,9 +284,16 @@ async def synthesize_answer(question: str, responses: List[Dict], session_id: st
             session_id=f"{session_id}-synth",
             system_message="You are an expert synthesizer of multiple AI model outputs.",
         ).with_model("openai", "gpt-5.4-mini")
-        return str(await chat.send_message(UserMessage(text=prompt)))
-    except Exception as e:
-        return f"[Synthesis error: {e}]\n\n" + bullet_blocks[:600]
+        return str(await asyncio.wait_for(
+            chat.send_message(UserMessage(text=prompt)),
+            timeout=SYNTH_TIMEOUT_SECONDS,
+        ))
+    except Exception:
+        # Never hang or fail the answer on synthesis — fall back to the best
+        # single answer (or the stacked outputs) so the user always gets a reply.
+        if preferred_best and preferred_best.get("answer"):
+            return preferred_best["answer"]
+        return bullet_blocks[:1200]
 
 
 IMPROVE_PROMPTS = {

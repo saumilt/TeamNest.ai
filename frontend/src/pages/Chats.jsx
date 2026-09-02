@@ -1204,10 +1204,14 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   };
 
   const onFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     e.target.value = "";
-    await uploadFile(file);
+    // Upload sequentially so each appends to the attachment list — supports
+    // selecting several files at once.
+    for (const file of files) {
+      await uploadFile(file);
+    }
   };
 
   const doSend = async (models, remember) => {

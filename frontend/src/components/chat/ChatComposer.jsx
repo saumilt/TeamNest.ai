@@ -322,6 +322,7 @@ export default function ChatComposer({
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               className="hidden"
               onChange={onFileChange}
               data-testid="file-input"
