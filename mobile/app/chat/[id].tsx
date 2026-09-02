@@ -41,6 +41,7 @@ import { AiDiscussionsDashboard } from "@/src/components/AiDiscussionsDashboard"
 import { AiComposeModal } from "@/src/components/AiComposeModal";
 import { AiDiscussionDetail } from "@/src/components/AiDiscussionDetail";
 import MeetingPrepButton from "@/src/components/MeetingPrepButton";
+import { ReadReceipt } from "@/src/components/ReadReceipt";
 
 function isAgent(senderId: string) {
   return senderId?.startsWith("ai-");
@@ -57,6 +58,66 @@ function agentLabel(msg: any) {
 
 const isAiTrigger = (t: string) => /^\s*@ai\b/i.test(t || "");
 
+/** Streaming multi-model @ai answer — one row per model, spinner until it lands. */
+function StreamingBubble({ message }: { message: any }) {
+  const models: string[] = message?.metadata?.models || [];
+  const partials: any[] = message?.metadata?.partials || [];
+  const byKey: Record<string, any> = {};
+  for (const p of partials) byKey[p.model_key] = p;
+  const allIn = partials.length >= models.length && models.length > 0;
+  return (
+    <View style={[streamStyles.row]} testID={`streaming-${message.id}`}>
+      <View style={streamStyles.bubble}>
+        <Text style={streamStyles.header}>
+          AI · {partials.length}/{models.length} models responded
+        </Text>
+        {models.map((mk) => {
+          const p = byKey[mk];
+          return (
+            <View key={mk} style={streamStyles.modelRow} testID={`streaming-model-${mk}`}>
+              <View style={streamStyles.modelHead}>
+                {p ? (
+                  <Ionicons name="checkmark-circle" size={13} color="#34d399" />
+                ) : (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                )}
+                <Text style={streamStyles.modelName}>{p?.model_name || mk}</Text>
+                {!p && <Text style={streamStyles.thinking}>thinking…</Text>}
+              </View>
+              {p ? (
+                <Text style={streamStyles.answer} numberOfLines={6}>
+                  {p.answer}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {allIn ? <Text style={streamStyles.synth}>Synthesizing the best answer…</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+const streamStyles = StyleSheet.create({
+  row: { marginBottom: spacing.md, flexDirection: "row", justifyContent: "flex-start" },
+  bubble: {
+    maxWidth: "88%",
+    backgroundColor: colors.bubbleAI,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: radius.md,
+    borderTopLeftRadius: 4,
+    padding: spacing.md,
+  },
+  header: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginBottom: spacing.sm },
+  modelRow: { marginBottom: spacing.sm },
+  modelHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
+  modelName: { color: colors.textPrimary, fontSize: 13, fontWeight: "700" },
+  thinking: { color: colors.textMuted, fontSize: 11, fontStyle: "italic" },
+  answer: { color: colors.textSecondary, fontSize: 13, paddingLeft: 19 },
+  synth: { color: colors.accent, fontSize: 11, fontStyle: "italic", marginTop: 4 },
+});
+
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const chatId = String(id);
@@ -65,6 +126,7 @@ export default function ChatScreen() {
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [members, setMembers] = useState<Record<string, any>>({});
+  const [readState, setReadState] = useState<Record<string, { read_at?: string | null; delivered_at?: string | null }>>({});
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -121,6 +183,17 @@ export default function ChatScreen() {
   // Clear the unread badge for this chat (chat list reloads on focus).
   const markRead = useCallback(() => {
     apiPost(`/api/chats/${chatId}/read`, {}).catch(() => {});
+  }, [chatId]);
+
+  // Per-member read/delivered receipts for this chat (WhatsApp-style ticks).
+  const loadReadState = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const d = await apiGet(`/api/chats/${chatId}/read-state`);
+      if (d?.states) setReadState(d.states);
+    } catch {
+      /* best-effort */
+    }
   }, [chatId]);
 
   // AI discussions (research threads) linked to this chat — powers the AI view
@@ -340,6 +413,7 @@ export default function ChatScreen() {
         setMessages(Array.isArray(msgs) ? msgs.filter((m) => !m.deleted_at) : []);
         refreshAiSession();
         markRead();
+        loadReadState();
       } catch {
         // leave empty
       } finally {
@@ -369,6 +443,26 @@ export default function ChatScreen() {
               if (payload.data.user_id !== user?.id) {
                 reactionOverlayRef.current?.spawn(payload.data.emoji);
               }
+              return;
+            }
+            if (payload.event === "read" && payload.data) {
+              const { user_id, last_read_at, last_delivered_at } = payload.data;
+              setReadState((s) => ({
+                ...s,
+                [user_id]: {
+                  ...(s[user_id] || {}),
+                  read_at: last_read_at,
+                  delivered_at: last_delivered_at || s[user_id]?.delivered_at,
+                },
+              }));
+              return;
+            }
+            if (payload.event === "delivered" && payload.data) {
+              const { user_id, last_delivered_at } = payload.data;
+              setReadState((s) => ({
+                ...s,
+                [user_id]: { ...(s[user_id] || {}), delivered_at: last_delivered_at },
+              }));
               return;
             }
             if (payload.event === "message" || payload.event === "message_updated") {
@@ -414,6 +508,7 @@ export default function ChatScreen() {
             ((!a && !b) || (a && b && a.id === b.id && a.edited_at === b.edited_at));
           return unchanged ? prev : next;
         });
+        loadReadState();
       } catch {}
     };
     const iv = setInterval(tick, 4000);
@@ -421,7 +516,7 @@ export default function ChatScreen() {
       closed = true;
       clearInterval(iv);
     };
-  }, [chatId]);
+  }, [chatId, loadReadState]);
 
 
   useEffect(() => {
@@ -632,7 +727,18 @@ export default function ChatScreen() {
     const out: any[] = [];
     for (const m of messages) {
       if (m.deleted_at) continue;
-      if (m.message_type === "ai_question") continue;
+      if (m.message_type === "ai_question") {
+        // Stream a multi-model @ai's per-model answers in place until the
+        // final synthesized answer lands (partial results).
+        const tid = m.metadata?.thread_id;
+        const answered =
+          tid && messages.some((x) => x.message_type === "ai_answer" && x.metadata?.thread_id === tid && !x.deleted_at);
+        const partials = Array.isArray(m.metadata?.partials) ? m.metadata.partials : [];
+        if (!isHuman && !answered && partials.length > 0) {
+          out.push({ __streaming: true, id: `stream-${m.id}`, _msg: m });
+        }
+        continue;
+      }
       if (isHuman && m.message_type === "ai_answer") {
         const tid = m.metadata?.thread_id;
         if (tid && !seen.has(tid)) {
@@ -650,6 +756,9 @@ export default function ChatScreen() {
     if (item.__card) {
       const d = threadById[item.thread_id] || { id: item.thread_id, title: "AI research" };
       return <AiDiscussionCard discussion={d} onPress={() => setOpenThread(item.thread_id)} />;
+    }
+    if (item.__streaming) {
+      return <StreamingBubble message={item._msg} />;
     }
     const agent = isAgent(item.sender_id);
     const mine = item.sender_id === user?.id;
@@ -799,7 +908,18 @@ export default function ChatScreen() {
             color={mine ? "#faf7ef" : colors.textPrimary}
             size={15}
           />
-          <Text style={styles.msgTime}>{shortTime(item.created_at)}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.msgTime}>{shortTime(item.created_at)}</Text>
+            {mine && !agent && !item.metadata?.event &&
+              ["text", "file", "voice_note", "task"].includes(item.message_type) && (
+                <ReadReceipt
+                  message={item}
+                  members={Object.values(members)}
+                  readState={readState}
+                  myId={user?.id}
+                />
+              )}
+          </View>
 
           {/* AI Conversation Mode — follow-up chips under AI answers */}
           {item.message_type === "ai_answer" &&
@@ -1754,6 +1874,7 @@ const styles = StyleSheet.create({
   stopText: { color: "#f87171", fontSize: 11, fontWeight: "800" },
   senderName: { fontSize: font.tiny, fontWeight: "700", color: colors.textSecondary, marginBottom: 3 },
   msgTime: { fontSize: 10, color: colors.textMuted, alignSelf: "flex-end", marginTop: 4 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", marginTop: 4 },
   followRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   followChip: {
     borderWidth: 1,

@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { Sparkles } from "lucide-react";
 import MessageBubble from "@/components/MessageBubble";
 import AiResearchCard from "@/components/chat/AiResearchCard";
+import StreamingAiBubble from "@/components/chat/StreamingAiBubble";
 
 /** Centered Today/Yesterday/date pill between message clusters. */
 function DaySeparator({ label }) {
@@ -28,10 +29,11 @@ function labelForDay(d) {
  * and day separators. Pure presentational; receives the full ordered list.
  */
 const MessageList = forwardRef(function MessageList(
-        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction, onReply, pendingAI = false, onStopAI, view = "combined", discussions = [], onOpenDiscussion },
+        { messages, memberMap, userId, typingUsers, onOpenThread, onCreateTask, onPickIdea, topSlot, bottomSlot, comparisonAllowed = true, onFollowUp, onRouteChoice, onAiAction, onReply, pendingAI = false, onStopAI, view = "combined", discussions = [], onOpenDiscussion, readState = {}, chatType = "group" },
         scrollRef,
 ) {
         const isHuman = view === "human";
+        const members = Object.values(memberMap || {});
         const threadById = {};
         for (const d of discussions) threadById[d.id] = d;
         // Discussions started from a specific human message → "AI Research: N".
@@ -48,7 +50,21 @@ const MessageList = forwardRef(function MessageList(
         const seenThreads = new Set();
         const visible = [];
         for (const m of messages) {
-                if (m.message_type === "ai_question") continue;
+                if (m.message_type === "ai_question") {
+                        // While a multi-model @ai is still running, stream its per-model
+                        // answers in place via a StreamingAiBubble until the final
+                        // synthesized answer lands (then it's replaced by that answer).
+                        const tid = m.metadata?.thread_id;
+                        const answered =
+                                tid && messages.some(
+                                        (x) => x.message_type === "ai_answer" && x.metadata?.thread_id === tid && !x.deleted_at,
+                                );
+                        const partials = Array.isArray(m.metadata?.partials) ? m.metadata.partials : [];
+                        if (!isHuman && !m.deleted_at && !answered && partials.length > 0) {
+                                visible.push({ __streaming: true, id: `stream-${m.id}`, created_at: m.created_at, sender_id: "ai-system", _msg: m });
+                        }
+                        continue;
+                }
                 if (isHuman && m.message_type === "ai_answer") {
                         const tid = m.metadata?.thread_id;
                         if (tid && !seenThreads.has(tid)) {
@@ -87,6 +103,12 @@ const MessageList = forwardRef(function MessageList(
                 const showAvatar = prevSender !== m.sender_id;
                 const showTimestamp = !sameNextSender;
                 prevSender = m.sender_id;
+
+                if (m.__streaming) {
+                        out.push(<StreamingAiBubble key={m.id} message={m._msg} />);
+                        prevSender = null;
+                        continue;
+                }
 
                 if (m.__card) {
                         out.push(
@@ -141,6 +163,10 @@ const MessageList = forwardRef(function MessageList(
                                 onAiAction={onAiAction}
                                 onReply={onReply}
                                 parentPreview={parentPreview}
+                                chatType={chatType}
+                                members={members}
+                                readState={readState}
+                                myId={userId}
                         />,
                 );
 
@@ -231,7 +257,7 @@ const MessageList = forwardRef(function MessageList(
                                         </div>
                                 );
                         })()}
-                        {pendingAI && (
+                        {pendingAI && !visible.some((v) => v.__streaming) && (
                                 <div
                                         data-testid="ai-thinking-indicator"
                                         className="inline-flex items-center gap-2 mx-3 px-3 py-1.5 rounded-2xl rounded-bl-md text-xs bg-ai-tint text-ai ring-1 ring-ai/25"

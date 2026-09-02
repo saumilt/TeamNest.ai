@@ -30,6 +30,7 @@ from services.ai_conversation import (
     start_or_refresh_session,
     summary_block,
 )
+from ws_manager import manager
 
 
 _SUMMARY_SYSTEM = (
@@ -312,6 +313,40 @@ async def _thread_canceled(thread_id: str) -> bool:
     return bool(t and t.get("status") == "canceled")
 
 
+def _make_partial_streamer(chat_id: str, thread_id: str, placeholder: dict, models: List[str]):
+    """Return an `on_result` callback that streams each model's answer into the
+    chat as it lands (partial results). No-op for single-model runs — those post
+    their one answer directly with no perceptible wait. Accumulates partials on
+    the running placeholder's metadata and broadcasts a `message_updated` so
+    every client renders answers the moment they arrive."""
+    if len(models) <= 1:
+        return None
+    partials: List[dict] = []
+
+    async def _on_result(r: dict) -> None:
+        if await _thread_canceled(thread_id):
+            return
+        partials.append({
+            "model_key": r.get("model_key"),
+            "model_name": r.get("model_name"),
+            "answer": r.get("answer") or "",
+            "real": bool(r.get("real")),
+        })
+        await db.messages.update_one(
+            {"id": placeholder["id"], "deleted_at": None},
+            {"$set": {
+                "metadata.partials": partials,
+                "metadata.partial_done": len(partials),
+                "metadata.partial_total": len(models),
+            }},
+        )
+        fresh = await db.messages.find_one({"id": placeholder["id"]}, {"_id": 0})
+        if fresh:
+            await manager.broadcast(chat_id, {"event": "message_updated", "data": fresh})
+
+    return _on_result
+
+
 async def handle_ai_command(
     chat_id: str, user_id: str, question: str, models: List[str],
     compare: bool = False, attachments: Optional[List[dict]] = None,
@@ -499,6 +534,7 @@ async def handle_ai_command(
 
     responses = await ask_models_parallel(
         prompt_question, allowed_models, thread["id"], image_bytes_list=image_bytes,
+        on_result=_make_partial_streamer(chat_id, thread["id"], placeholder, allowed_models),
     )
     # ── "Stop AI" checkpoint ─────────────────────────────────────────────
     # If the user hit Stop while the models were running, discard the result:

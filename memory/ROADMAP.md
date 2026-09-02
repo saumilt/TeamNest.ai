@@ -1,5 +1,17 @@
 # TeamNest.ai — Roadmap
 
+## Recently shipped
+- (DONE 2026-09-02) Chat Read Receipts (sent/delivered/read ticks + group "Read by" sheet) + Partial AI Streaming (multi-model answers stream in as they land) — web + mobile + backend. testing_agent iter159 backend 7/7. See PRD.md.
+
+## Deferred (needs green-light)
+- **P1 — Backend complexity refactor** (user chose DEFER): break down `routes/ai.py:meeting_prep()`, `routes/admin.py:_compute_ai_usage()`, `routes/ai.py:_do_action_context()`, `routes/ai.py:run_models()`, `routes/ai.py:ai_activity()` into helpers. Maintainability only; test backend after.
+- **Refactor** — `backend/routes/chats.py` ~2280 lines; split into focused routers when convenient.
+
+## Future (P2 — blocked on user tokens)
+- Slack App (live) — post/read messages for automations + AI employees. Needs user Slack token.
+- HubSpot CRM — currently MOCKED. Needs user HubSpot token.
+
+
 ## P1 — Upcoming
 - (DONE iter 156) Digest Schedule Control — owners pick day/time (UTC)/recipients for the weekly AI-team email (web + mobile + per-workspace tick loop).
 - (DONE iter 156) Production deploy unblocked — removed `packageManager` field causing Cloud Build `yarn: not found`; deployment_agent PASS.

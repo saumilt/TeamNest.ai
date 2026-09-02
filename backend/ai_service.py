@@ -238,11 +238,23 @@ async def ask_models_parallel(
     models: List[str],
     session_id: str,
     image_bytes_list: Optional[List[bytes]] = None,
+    on_result=None,
 ) -> List[Dict]:
-    tasks = [
-        call_model(m, question, session_id, image_bytes_list=image_bytes_list)
-        for m in models
-    ]
+    """Run every model concurrently. `on_result`, when given, is awaited with
+    each per-model result the moment it lands (partial-results streaming) —
+    letting callers surface answers as they arrive instead of waiting for the
+    slowest model."""
+
+    async def _run(m: str) -> Dict:
+        r = await call_model(m, question, session_id, image_bytes_list=image_bytes_list)
+        if on_result is not None:
+            try:
+                await on_result(r)
+            except Exception:
+                pass
+        return r
+
+    tasks = [asyncio.create_task(_run(m)) for m in models]
     # return_exceptions so a single failing task can never blow up the whole
     # batch — coerce any stray error into a graceful per-model result.
     results = await asyncio.gather(*tasks, return_exceptions=True)

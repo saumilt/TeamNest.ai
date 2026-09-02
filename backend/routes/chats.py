@@ -1490,25 +1490,90 @@ async def list_messages(
     msg_query = {"chat_id": chat_id}
     state = await db.user_chat_states.find_one(
         {"user_id": current["id"], "chat_id": chat_id},
-        {"_id": 0, "cleared_at": 1},
+        {"_id": 0, "cleared_at": 1, "last_delivered_at": 1},
     )
     if state and state.get("cleared_at"):
         msg_query["created_at"] = {"$gt": state["cleared_at"]}
     msgs = await db.messages.find(msg_query, {"_id": 0}).sort("created_at", 1).to_list(limit)
+    # Delivery receipt: this user's client has now downloaded everything up to
+    # the newest message from someone else → advance last_delivered_at (once)
+    # and let senders' clients flip their ticks to "delivered".
+    await _mark_delivered(chat_id, current["id"], msgs, state)
     return msgs
+
+
+async def _mark_delivered(chat_id: str, user_id: str, msgs: list, state: Optional[dict]) -> None:
+    """Advance the user's `last_delivered_at` if they've just downloaded a
+    message newer than what was previously delivered, and broadcast it. Only
+    considers messages from OTHER senders so a user fetching their own sends
+    doesn't self-mark. Idempotent — no-ops once the newest message is covered."""
+    newest_other = None
+    for m in msgs:
+        if m.get("sender_id") == user_id:
+            continue
+        ca = m.get("created_at")
+        if ca and (newest_other is None or ca > newest_other):
+            newest_other = ca
+    if not newest_other:
+        return
+    prev = (state or {}).get("last_delivered_at")
+    if prev and prev >= newest_other:
+        return
+    stamp = now_iso()
+    await db.user_chat_states.update_one(
+        {"user_id": user_id, "chat_id": chat_id},
+        {"$set": {"last_delivered_at": stamp},
+         "$setOnInsert": {"user_id": user_id, "chat_id": chat_id}},
+        upsert=True,
+    )
+    await manager.broadcast(
+        chat_id,
+        {"event": "delivered", "data": {"user_id": user_id, "last_delivered_at": stamp}},
+    )
+
+
+@router.get("/chats/{chat_id}/read-state")
+async def chat_read_state(chat_id: str, current=Depends(require_user)):
+    """Per-member read/delivered timestamps for this chat, so senders can render
+    WhatsApp-style receipts (sent → delivered → read) on their own messages."""
+    chat = await db.chats.find_one(
+        {"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "member_ids": 1}
+    )
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    rows = await db.user_chat_states.find(
+        {"chat_id": chat_id, "user_id": {"$in": chat.get("member_ids") or []}},
+        {"_id": 0, "user_id": 1, "last_read_at": 1, "last_delivered_at": 1},
+    ).to_list(2000)
+    states = {
+        r["user_id"]: {
+            "read_at": r.get("last_read_at"),
+            "delivered_at": r.get("last_delivered_at"),
+        }
+        for r in rows
+    }
+    return {"states": states}
 
 
 @router.post("/chats/{chat_id}/read")
 async def mark_chat_read(chat_id: str, current=Depends(require_user)):
-    """Mark a chat as read for the current user (clears its unread badge)."""
+    """Mark a chat as read for the current user (clears its unread badge) and
+    broadcast a `read` receipt so senders' ticks flip to read live."""
     chat = await db.chats.find_one({"id": chat_id, "member_ids": current["id"]}, {"_id": 0, "id": 1})
     if not chat:
         raise HTTPException(404, "Chat not found")
+    stamp = now_iso()
     await db.user_chat_states.update_one(
         {"user_id": current["id"], "chat_id": chat_id},
-        {"$set": {"last_read_at": now_iso()},
+        {"$set": {"last_read_at": stamp, "last_delivered_at": stamp},
          "$setOnInsert": {"user_id": current["id"], "chat_id": chat_id}},
         upsert=True,
+    )
+    await manager.broadcast(
+        chat_id,
+        {"event": "read", "data": {
+            "user_id": current["id"], "last_read_at": stamp, "last_delivered_at": stamp,
+        }},
     )
     return {"ok": True}
 

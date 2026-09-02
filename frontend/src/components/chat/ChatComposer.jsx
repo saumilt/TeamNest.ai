@@ -45,7 +45,8 @@ export default function ChatComposer({
   onPickCamera,
   onFileChange,
   uploading,
-  uploadPct = 0,
+  uploads = [],
+  onDismissUpload,
   showAI,
   onCancelAI,
   onAIResearch,
@@ -294,6 +295,46 @@ export default function ChatComposer({
               ))}
             </div>
           )}
+          {uploads.length > 0 && (
+            <div className="flex flex-col gap-1.5 mb-2" data-testid="upload-progress-list">
+              {uploads.map((u) => (
+                <div
+                  key={u.id}
+                  data-testid={`upload-row-${u.id}`}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] ${u.error ? "bg-tn-red/10" : "bg-surface-2"}`}
+                >
+                  <Paperclip className={`w-3 h-3 shrink-0 ${u.error ? "text-tn-red" : "text-brand"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate max-w-[180px] text-ink-dim">{u.name}</span>
+                      <span className={`shrink-0 font-mono ${u.error ? "text-tn-red" : "text-ink-mute"}`}>
+                        {u.error ? u.error : `${u.pct}%`}
+                      </span>
+                    </div>
+                    {!u.error && (
+                      <div className="mt-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-brand transition-all duration-200"
+                          style={{ width: `${u.pct}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {u.error && (
+                    <button
+                      type="button"
+                      data-testid={`upload-dismiss-${u.id}`}
+                      onClick={() => onDismissUpload?.(u.id)}
+                      className="text-ink-mute hover:text-tn-red shrink-0"
+                      aria-label="Dismiss upload"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {/* One-tap document actions — appear only when files are attached */}
           {attachments.length > 0 && onQuickAction && (
             <div className="flex flex-wrap gap-2 mb-2" data-testid="file-quick-actions">
@@ -381,7 +422,7 @@ export default function ChatComposer({
             </button>
             {uploading && (
               <span className="text-[11px] text-brand ml-1" data-testid="upload-progress">
-                {uploadPct > 0 ? `Uploading ${uploadPct}%` : "Uploading…"}
+                Uploading…
               </span>
             )}
           </div>

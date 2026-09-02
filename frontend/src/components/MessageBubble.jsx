@@ -39,6 +39,7 @@ import Pill from "@/components/ui-v2/Pill";
 import BuildProgressCard from "@/components/chat/BuildProgressCard";
 import ApprovalActionCard from "@/components/chat/ApprovalActionCard";
 import HirePromptCard from "@/components/chat/HirePromptCard";
+import ReadReceipt from "@/components/chat/ReadReceipt";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "✅"];
 
@@ -75,6 +76,10 @@ export default function MessageBubble({
         onAiAction,
         onReply,
         parentPreview,
+        chatType = "group",
+        members = [],
+        readState = {},
+        myId,
 }) {
         const isAI =
                 message.sender_id === "ai-system" ||
@@ -491,6 +496,16 @@ export default function MessageBubble({
                                         <div className={`flex items-center gap-1 mt-1 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
                                                 <span className="text-[10px] text-ink-mute">{timeStr}</span>
                                                 {message.edited_at && <span className="text-[10px] text-ink-mute italic">edited</span>}
+                                                {isMe && !isAI && !message.metadata?.event &&
+                                                        ["text", "file", "voice_note", "task"].includes(message.message_type) && (
+                                                        <ReadReceipt
+                                                                message={message}
+                                                                chatType={chatType}
+                                                                members={members}
+                                                                readState={readState}
+                                                                myId={myId}
+                                                        />
+                                                )}
                                                 {!isAI && !editing && (
                                                         <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>

@@ -869,6 +869,7 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   const [aiSession, setAiSession] = useState({ active: false });
   const [showSaveRole, setShowSaveRole] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
+  const [readState, setReadState] = useState({});
   const typingTimersRef = useRef({});
   const wsRef = useRef(null);
   const scrollRef = useRef(null);
@@ -1067,9 +1068,11 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
     setReplyTo(null);
     setStoppedThreads(new Set());
     setNextToTeam(false);
+    setReadState({});
     setActiveThread(initialThread || null);
     loadChat();
     api.get(`/chats/${chatId}/messages`).then(({ data }) => setMessages(data));
+    api.get(`/chats/${chatId}/read-state`).then(({ data }) => setReadState(data.states || {})).catch(() => {});
   }, [chatId, initialThread, loadChat]);
 
   // Clear the unread badge when the chat is open and whenever a new message
@@ -1090,6 +1093,16 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
           setMessages((prev) => (prev.find((m) => m.id === data.id) ? prev : [...prev, data]));
         } else if (event === "message_updated") {
           setMessages((prev) => prev.map((m) => (m.id === data.id ? data : m)));
+        } else if (event === "read") {
+          setReadState((s) => ({
+            ...s,
+            [data.user_id]: { ...(s[data.user_id] || {}), read_at: data.last_read_at, delivered_at: data.last_delivered_at || (s[data.user_id] || {}).delivered_at },
+          }));
+        } else if (event === "delivered") {
+          setReadState((s) => ({
+            ...s,
+            [data.user_id]: { ...(s[data.user_id] || {}), delivered_at: data.last_delivered_at },
+          }));
         } else if (event === "typing") {
           setTypingUsers((t) => ({ ...t, [data.user_id]: data.typing }));
           // Reset (not stack) the auto-clear timer so backend pulses every
@@ -1132,6 +1145,10 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
             ((!a && !b) || (a && b && a.id === b.id && a.edited_at === b.edited_at && a.deleted_at === b.deleted_at));
           return unchanged ? prev : data;
         });
+        // Refresh read receipts alongside messages (safety net when WS is blocked).
+        api.get(`/chats/${chatId}/read-state`)
+          .then(({ data: rs }) => { if (!cancelled && rs?.states) setReadState(rs.states); })
+          .catch(() => {});
       } catch {
         /* transient — try again next tick */
       }
@@ -1150,8 +1167,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
   }, [messages]);
 
   const [attachments, setAttachments] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadPct, setUploadPct] = useState(0);
+  const [uploads, setUploads] = useState([]); // in-flight uploads: {id,name,size,pct,error}
+  const uploading = uploads.some((u) => !u.error);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -1161,29 +1178,35 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
 
   const uploadFile = async (file) => {
     if (!file) return;
-    setUploading(true);
-    setUploadPct(0);
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Friendly, immediate guard for oversized files (1GB is the chunked ceiling).
+    if (file.size > 1024 * 1024 * 1024) {
+      setUploads((prev) => [...prev, { id: uid, name: file.name, size: file.size, pct: 0, error: "Too large (max 1GB)" }]);
+      return;
+    }
+    setUploads((prev) => [...prev, { id: uid, name: file.name, size: file.size, pct: 0, error: null }]);
+    const setPct = (pct) =>
+      setUploads((prev) => prev.map((u) => (u.id === uid ? { ...u, pct } : u)));
     try {
       let data;
       if (file.size > CHUNKED_THRESHOLD || file.name.toLowerCase().endsWith(".zip")) {
         // Large files + all ZIPs stream in parts to object storage (the simple
         // endpoint doesn't accept .zip).
-        data = await uploadFileChunked(file, {
-          chatId: chat?.id,
-          onProgress: setUploadPct,
-        });
+        data = await uploadFileChunked(file, { chatId: chat?.id, onProgress: setPct });
       } else {
         const form = new FormData();
         form.append("file", file);
-        // Stamp the upload with the active chat so the backend can auto-link it
-        // to that chat's project folder (so it appears under the folder's
-        // Documents tab without any extra action).
+        // Stamp the upload with the active chat so the backend can auto-link it.
         if (chat?.id) form.append("chat_id", chat.id);
         ({ data } = await api.post("/uploads", form, {
           headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (e) => {
+            if (e.total) setPct(Math.round((e.loaded / e.total) * 100));
+          },
         }));
       }
       setAttachments((prev) => [...prev, data]);
+      setUploads((prev) => prev.filter((u) => u.id !== uid)); // done → chip takes over
       // A ZIP uploaded into a chat becomes a knowledge source linked to that
       // chat, so @ai can answer questions about its contents (Phase 4).
       if (data?.is_archive && chat?.id) {
@@ -1196,12 +1219,14 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
           .catch(() => {});
       }
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Upload failed");
-    } finally {
-      setUploading(false);
-      setUploadPct(0);
+      const msg = err?.response?.data?.detail || "Upload failed";
+      setUploads((prev) => prev.map((u) => (u.id === uid ? { ...u, error: msg } : u)));
+      toast.error(msg);
     }
   };
+
+  const dismissUpload = (id) =>
+    setUploads((prev) => prev.filter((u) => u.id !== id));
 
   const onFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -1422,6 +1447,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         view={view}
         discussions={discussions}
         onOpenDiscussion={openDiscussion}
+        readState={readState}
+        chatType={chat.type}
         typingUsers={typingUsers}
         onOpenThread={(tid) => {
           if (!comparisonAllowed) {
@@ -1612,7 +1639,8 @@ function ChatPanel({ chatId, onChatChange, initialThread }) {
         onPickCamera={onPickCamera}
         onFileChange={onFileChange}
         uploading={uploading}
-        uploadPct={uploadPct}
+        uploads={uploads}
+        onDismissUpload={dismissUpload}
         showAI={showAI}
         onCancelAI={() => setShowAI(false)}
         onAIResearch={onAIResearch}
