@@ -34,6 +34,7 @@ const FILTERS = [
   { value: "group", label: "Groups" },
   { value: "ai", label: "AI" },
   { value: "unread", label: "Unread" },
+  { value: "awaiting", label: "Awaiting" },
 ];
 
 function chatTitle(c: any): string {
@@ -137,6 +138,13 @@ export default function ChatsScreen() {
     else if (filter === "group") list = list.filter((c) => c.type === "group");
     else if (filter === "ai") list = list.filter((c) => c.type === "personal_ai");
     else if (filter === "unread") list = list.filter((c) => c.unread_count > 0);
+    else if (filter === "awaiting")
+      list = list.filter((c) => {
+        const lm = c.last_message;
+        if (!lm) return false;
+        const sid = lm.sender_id;
+        return !!sid && sid !== user?.id && !String(sid).startsWith("ai");
+      });
     if (activeFolder) list = list.filter((c) => c.project_folder_id === activeFolder);
     if (search.trim()) {
       const q = search.toLowerCase();

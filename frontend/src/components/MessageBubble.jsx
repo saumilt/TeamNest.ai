@@ -40,6 +40,7 @@ import BuildProgressCard from "@/components/chat/BuildProgressCard";
 import ApprovalActionCard from "@/components/chat/ApprovalActionCard";
 import HirePromptCard from "@/components/chat/HirePromptCard";
 import ReadReceipt from "@/components/chat/ReadReceipt";
+import ReactionReceipts from "@/components/chat/ReactionReceipts";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "✅"];
 
@@ -475,20 +476,15 @@ export default function MessageBubble({
                                         </div>
                                 )}
 
-                                {/* Reactions */}
+                                {/* Reactions — tap to see who reacted */}
                                 {Object.keys(message.reactions || {}).length > 0 && (
-                                        <div className={`flex gap-1 mt-1 flex-wrap ${isMe ? "justify-end" : ""}`}>
-                                                {Object.entries(message.reactions).map(([emoji, users]) => (
-                                                        <button
-                                                                key={emoji}
-                                                                onClick={() => onReact(emoji)}
-                                                                className="bg-surface border border-hairline px-2 h-6 text-[11px] rounded-full hover:border-brand/40 inline-flex items-center gap-1"
-                                                        >
-                                                                <span>{emoji}</span>
-                                                                <span className="text-ink-dim">{users.length}</span>
-                                                        </button>
-                                                ))}
-                                        </div>
+                                        <ReactionReceipts
+                                                reactions={message.reactions}
+                                                members={members}
+                                                myId={myId}
+                                                isMe={isMe}
+                                                onReact={onReact}
+                                        />
                                 )}
 
                                 {/* Footer: timestamp + overflow menu (no more always-visible "Convert to task") */}
@@ -525,6 +521,7 @@ export default function MessageBubble({
                                                                                 {QUICK_REACTIONS.map((e) => (
                                                                                         <button
                                                                                                 key={e}
+                                                                                                data-testid={`quick-react-${e}-${message.id}`}
                                                                                                 onClick={() => onReact(e)}
                                                                                                 className="text-base hover:bg-white/10 w-7 h-7 rounded-full transition-colors"
                                                                                         >

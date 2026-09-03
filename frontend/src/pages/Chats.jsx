@@ -88,6 +88,7 @@ const FILTERS = [
   { value: "group",  label: "Groups" },
   { value: "ai",     label: "AI" },
   { value: "unread", label: "Unread" },
+  { value: "awaiting", label: "Awaiting" },
 ];
 
 /** Compact workspace selector shown in the chat list header. Displays the
@@ -249,6 +250,16 @@ export default function Chats() {
     else if (filter === "group") list = list.filter((c) => c.type === "group");
     else if (filter === "ai") list = list.filter((c) => c.type === "personal_ai");
     else if (filter === "unread") list = list.filter((c) => c.unread_count > 0);
+    else if (filter === "awaiting") {
+      // Chats where the last message is from someone else (a human, not AI) —
+      // i.e. the ball is in your court and it's waiting on your reply.
+      list = list.filter((c) => {
+        const lm = c.last_message;
+        if (!lm) return false;
+        const sid = lm.sender_id;
+        return !!sid && sid !== user?.id && !String(sid).startsWith("ai");
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((c) => (c.name || "").toLowerCase().includes(q));
@@ -260,7 +271,7 @@ export default function Chats() {
       const bT = new Date(b.last_message?.created_at || b.created_at || 0).getTime();
       return bT - aT;
     });
-  }, [chats, search, filter]);
+  }, [chats, search, filter, user?.id]);
 
   const aiChat = chats.find((c) => c.type === "personal_ai");
   const otherChats = filtered.filter((c) => c.type !== "personal_ai");

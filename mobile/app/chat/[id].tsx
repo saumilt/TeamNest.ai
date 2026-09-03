@@ -42,6 +42,9 @@ import { AiComposeModal } from "@/src/components/AiComposeModal";
 import { AiDiscussionDetail } from "@/src/components/AiDiscussionDetail";
 import MeetingPrepButton from "@/src/components/MeetingPrepButton";
 import { ReadReceipt } from "@/src/components/ReadReceipt";
+import { ReactionReceipts } from "@/src/components/ReactionReceipts";
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "✅"];
 
 function isAgent(senderId: string) {
   return senderId?.startsWith("ai-");
@@ -195,6 +198,16 @@ export default function ChatScreen() {
       /* best-effort */
     }
   }, [chatId]);
+
+  // Toggle a persisted emoji reaction on a message (WhatsApp/Slack-style).
+  const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      const updated = await apiPost(`/api/messages/${messageId}/react`, { emoji });
+      if (updated?.id) setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    } catch {
+      /* best-effort */
+    }
+  }, []);
 
   // AI discussions (research threads) linked to this chat — powers the AI view
   // + the compact research cards shown in the Human view.
@@ -962,6 +975,15 @@ export default function ChatScreen() {
           )}
         </TouchableOpacity>
         </View>
+        {item.reactions && Object.keys(item.reactions).length > 0 && (
+          <ReactionReceipts
+            reactions={item.reactions}
+            members={Object.values(members)}
+            myId={user?.id}
+            mine={mine}
+            onReact={(emoji) => toggleReaction(item.id, emoji)}
+          />
+        )}
         {linked ? (
           <TouchableOpacity
             testID={`ai-linked-indicator-${item.id}`}
@@ -1525,6 +1547,22 @@ export default function ChatScreen() {
           <View style={styles.modalCard} testID="msg-action-modal">
             <Text style={styles.modalTitle}>Message actions</Text>
             <Text style={styles.modalSub} numberOfLines={2}>{msgAction?.body}</Text>
+            <View style={styles.reactRow}>
+              {QUICK_REACTIONS.map((e) => (
+                <TouchableOpacity
+                  key={e}
+                  testID={`msg-react-${e}`}
+                  style={styles.reactBtn}
+                  onPress={() => {
+                    const m = msgAction;
+                    setMsgAction(null);
+                    if (m) toggleReaction(m.id, e);
+                  }}
+                >
+                  <Text style={styles.reactEmoji}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <TouchableOpacity
               testID="msg-action-reply"
               style={styles.roleRow}
@@ -1875,6 +1913,9 @@ const styles = StyleSheet.create({
   senderName: { fontSize: font.tiny, fontWeight: "700", color: colors.textSecondary, marginBottom: 3 },
   msgTime: { fontSize: 10, color: colors.textMuted, alignSelf: "flex-end", marginTop: 4 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", marginTop: 4 },
+  reactRow: { flexDirection: "row", justifyContent: "space-around", paddingVertical: spacing.sm, marginBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  reactBtn: { padding: spacing.xs },
+  reactEmoji: { fontSize: 24 },
   followRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   followChip: {
     borderWidth: 1,

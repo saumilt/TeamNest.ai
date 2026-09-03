@@ -13,6 +13,13 @@ invite-your-friends flows.
 - **Real-time**: WS at `/api/ws/{chat_id}?token=` with reconnecting client.
 
 ## Implemented Features
+### Awaiting Filter + Reaction Receipts (web + mobile + backend) — 2026-09-02
+Two chat-list/message enhancements, both surfaces.
+- **Awaiting filter**: new chat-list chip ("Awaiting", `chat-filter-awaiting`) showing only chats whose `last_message.sender_id` is another human (not you, not `ai*`) — i.e. conversations waiting on your reply. Web `pages/Chats.jsx` (added to FILTERS + `filtered` predicate) and mobile `app/(tabs)/index.tsx`.
+- **Reaction Receipts**: tapping a message's emoji reaction pill opens a "Reactions" sheet listing who reacted per emoji (avatar + name), with a one-tap "Remove" on your own reaction. Web `components/chat/ReactionReceipts.jsx` (replaces the old inline toggle-only pills in `MessageBubble.jsx`); per-emoji quick-react buttons in the message menu got `quick-react-<emoji>-<msgId>` testids. Mobile `src/components/ReactionReceipts.tsx` — and mobile now RENDERS persisted reactions for the first time (previously only ephemeral header reactions) plus a quick-react emoji row (`msg-react-<emoji>`) in the long-press action modal, toggling via `POST /api/messages/{id}/react`. Testids/testIDs: `reaction-pill-<emoji>`, `reactions-info`, `reaction-user-<emoji>-<userId>`, `reaction-remove-<emoji>`.
+- **Tested**: testing_agent iteration_160 — backend 5/5 pytest PASS (react toggle/persist/remove/404/two-user accumulate; `last_message.sender_id` exposed). Web full flow verified (Awaiting filters 8→2; react→pill→sheet→remove clean). Mobile verified: persisted pill renders + sheet/remove clean; long-press quick-react not UI-drivable on Expo web preview (Playwright can't synthesize RN onLongPress — tooling limit, wiring calls the same proven toggleReaction).
+
+
 ### Chat Read Receipts + Partial AI Streaming (web + mobile + backend) — 2026-09-02
 WhatsApp-style read receipts and streaming multi-model AI answers, on both surfaces. User approved: both features, web+mobile parity, group receipts = "all-read" ticks PLUS a tap-to-see "Read by" list.
 - **Read Receipts (backend)**: `user_chat_states` gained `last_delivered_at`. New `GET /api/chats/{id}/read-state` → `{states:{user_id:{read_at,delivered_at}}}` (404 non-member). `POST /api/chats/{id}/read` now also sets `last_delivered_at` and broadcasts a `read` WS event. `GET /api/chats/{id}/messages` advances the caller's `last_delivered_at` when a newer message from another sender was downloaded and broadcasts a `delivered` WS event (idempotent — no re-broadcast once caught up; only counts other senders' messages). Helper `_mark_delivered()` in `routes/chats.py`.
